@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Pencil, RotateCcw, ShieldOff, ShieldCheck, Trash2 } from "lucide-react";
 import {
   deleteLicenseAction,
   resetActivationAction,
@@ -9,6 +9,8 @@ import {
   revokeLicenseAction,
   type LicenseActionState,
 } from "@/app/dashboard/products/[productId]/licenses/actions";
+import { EditLicenseDialog } from "@/components/licenses/edit-license-dialog";
+import { SubmitButton, useActionFeedback } from "@/components/dashboard/feedback";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,144 +24,224 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { idleAction } from "@/lib/actions/state";
+import type { LicenseListItem } from "@/lib/licenses/types";
+import { licenseDisplayName } from "@/lib/licenses/display";
+import { maskedLicenseKey } from "@/lib/crypto/license-key";
 
-const INITIAL: LicenseActionState = { error: null };
+const INITIAL: LicenseActionState = idleAction();
+
+/**
+ * Which single action this license most likely needs next.
+ *
+ * A locked license bound to a device is almost always being looked at because
+ * the customer changed machines, so Reset activation is the useful button. A
+ * license that is not bound is being revoked or restored. Putting that one
+ * action in the row saves a menu round trip for the overwhelmingly common
+ * case, while the menu still holds everything.
+ *
+ * Reset is deliberately absent for an unlocked license: its activation row
+ * records recent activity, not an exclusive claim, so there is nothing to
+ * release and the button would imply a binding that does not exist.
+ */
+export function primaryActionFor(
+  license: Pick<LicenseListItem, "status" | "hwidLocked" | "activation">,
+): "reset" | "revoke" | "restore" {
+  if (license.status === "revoked") return "restore";
+  if (license.hwidLocked && license.activation !== null) return "reset";
+  return "revoke";
+}
+
+export function canResetActivation(
+  license: Pick<LicenseListItem, "hwidLocked" | "activation">,
+): boolean {
+  return license.hwidLocked && license.activation !== null;
+}
 
 export function LicenseRowActions({
-  licenseId,
+  license,
   productId,
-  status,
-  hasActivation,
-  maskedKey,
 }: {
-  licenseId: string;
+  license: LicenseListItem;
   productId: string;
-  status: "active" | "revoked";
-  hasActivation: boolean;
-  maskedKey: string;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [typed, setTyped] = useState("");
 
-  const [, revoke, revokePending] = useActionState(revokeLicenseAction, INITIAL);
-  const [, restore, restorePending] = useActionState(restoreLicenseAction, INITIAL);
-  const [, reset, resetPending] = useActionState(resetActivationAction, INITIAL);
-  const [deleteState, remove, deletePending] = useActionState(deleteLicenseAction, INITIAL);
+  const [revokeState, revoke] = useActionState(revokeLicenseAction, INITIAL);
+  const [restoreState, restore] = useActionState(restoreLicenseAction, INITIAL);
+  const [resetState, reset] = useActionState(resetActivationAction, INITIAL);
+  const [deleteState, remove] = useActionState(deleteLicenseAction, INITIAL);
 
-  const busy = revokePending || restorePending || resetPending;
+  // Alpha_v1 discarded three of these four states entirely, so revoking,
+  // restoring and resetting were silent whether they worked or not.
+  useActionFeedback(revokeState);
+  useActionFeedback(restoreState);
+  useActionFeedback(resetState);
+  useActionFeedback(deleteState, { onSuccess: () => setDeleteOpen(false) });
 
-  function hidden() {
+  // Cleared in the handler rather than an effect, so closing the dialog does
+  // not cascade an extra render — and so the next opening never starts with
+  // DELETE already typed.
+  function setDeleteOpen(next: boolean) {
+    setConfirmDelete(next);
+    if (!next) setTyped("");
+  }
+
+  const name = licenseDisplayName(license);
+  const masked = maskedLicenseKey(license.keyLast4);
+  const primary = primaryActionFor(license);
+  const resettable = canResetActivation(license);
+
+  function identity() {
     return (
       <>
-        <input type="hidden" name="licenseId" value={licenseId} />
+        <input type="hidden" name="licenseId" value={license.id} />
         <input type="hidden" name="productId" value={productId} />
       </>
     );
   }
 
   return (
-    <>
+    <div className="flex items-center justify-end gap-1">
+      {/* The contextual action, one click away rather than behind a menu. */}
+      <form action={primary === "reset" ? reset : primary === "revoke" ? revoke : restore}>
+        {identity()}
+        <SubmitButton
+          variant="outline"
+          size="sm"
+          className="h-8"
+          pendingLabel="Working…"
+          icon={
+            primary === "reset" ? (
+              <RotateCcw className="size-3.5" />
+            ) : primary === "revoke" ? (
+              <ShieldOff className="size-3.5" />
+            ) : (
+              <ShieldCheck className="size-3.5" />
+            )
+          }
+        >
+          {primary === "reset" ? "Reset" : primary === "revoke" ? "Revoke" : "Restore"}
+        </SubmitButton>
+      </form>
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             size="icon"
             className="size-8"
-            disabled={busy}
-            aria-label={`Actions for license ending ${maskedKey.slice(-4)}`}
+            aria-label={`More actions for ${name}`}
           >
             <MoreHorizontal className="size-4" />
           </Button>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent align="end" className="w-52">
-          {status === "active" ? (
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem onSelect={() => setEditing(true)}>
+            <Pencil className="size-4" />
+            Edit details
+          </DropdownMenuItem>
+
+          {license.status === "active" ? (
             <DropdownMenuItem asChild>
-              <form action={revoke}>
-                {hidden()}
-                <button type="submit" className="w-full cursor-pointer text-left">
+              <form action={revoke} className="w-full">
+                {identity()}
+                <button type="submit" className="flex w-full cursor-pointer items-center gap-2 text-left">
+                  <ShieldOff className="size-4" />
                   Revoke
                 </button>
               </form>
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem asChild>
-              <form action={restore}>
-                {hidden()}
-                <button type="submit" className="w-full cursor-pointer text-left">
+              <form action={restore} className="w-full">
+                {identity()}
+                <button type="submit" className="flex w-full cursor-pointer items-center gap-2 text-left">
+                  <ShieldCheck className="size-4" />
                   Restore
                 </button>
               </form>
             </DropdownMenuItem>
           )}
 
-          <DropdownMenuItem asChild disabled={!hasActivation}>
-            <form action={reset}>
-              {hidden()}
-              <button
-                type="submit"
-                disabled={!hasActivation}
-                className="w-full cursor-pointer text-left disabled:cursor-not-allowed"
-              >
-                Reset activation
-              </button>
-            </form>
-          </DropdownMenuItem>
+          {resettable ? (
+            <DropdownMenuItem asChild>
+              <form action={reset} className="w-full">
+                {identity()}
+                <button type="submit" className="flex w-full cursor-pointer items-center gap-2 text-left">
+                  <RotateCcw className="size-4" />
+                  Reset activation
+                </button>
+              </form>
+            </DropdownMenuItem>
+          ) : null}
 
-          <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
+            <Trash2 className="size-4" />
             Delete permanently
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      <EditLicenseDialog
+        license={license}
+        productId={productId}
+        open={editing}
+        onOpenChange={setEditing}
+      />
+
+      <Dialog open={confirmDelete} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <form action={remove}>
-            {hidden()}
+            {identity()}
             <DialogHeader>
               <DialogTitle>Delete this license permanently?</DialogTitle>
               <DialogDescription>
-                <span className="font-mono text-xs">{maskedKey}</span> will be erased along
-                with its device activation. Any software using it stops authenticating
-                immediately and will receive LICENSE_INVALID. This cannot be undone — if
-                you only want to disable it temporarily, revoke it instead.
+                <span className="font-mono text-xs">{masked}</span>
+                {license.label ? ` (${license.label})` : ""} will be erased along with its
+                device activation. Any software using it stops authenticating immediately
+                and will receive LICENSE_INVALID. This cannot be undone — if you only want
+                to disable it temporarily, revoke it instead.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-2 py-5">
-              <Label htmlFor={`del-${licenseId}`}>
+              <Label htmlFor={`del-${license.id}`}>
                 Type <span className="font-mono text-foreground">DELETE</span> to confirm
               </Label>
               <Input
-                id={`del-${licenseId}`}
+                id={`del-${license.id}`}
                 value={typed}
                 onChange={(event) => setTyped(event.target.value)}
                 autoComplete="off"
               />
-              {deleteState.error ? (
-                <p className="text-sm text-destructive">{deleteState.error}</p>
-              ) : null}
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setConfirmDelete(false)}>
+              <Button type="button" variant="ghost" onClick={() => setDeleteOpen(false)}>
                 Cancel
               </Button>
-              <Button
-                type="submit"
+              <SubmitButton
                 variant="destructive"
-                disabled={deletePending || typed !== "DELETE"}
+                pendingLabel="Deleting…"
+                disabled={typed !== "DELETE"}
               >
-                {deletePending ? "Deleting…" : "Delete permanently"}
-              </Button>
+                Delete permanently
+              </SubmitButton>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

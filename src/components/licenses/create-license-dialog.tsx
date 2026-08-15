@@ -28,18 +28,32 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { idleAction } from "@/lib/actions/state";
 
-const INITIAL: CreateLicenseState = { error: null, plaintextKey: null };
+const INITIAL: CreateLicenseState = idleAction();
 
 type Mode = "permanent" | "date" | "duration";
 
-export function CreateLicenseDialog({ productId }: { productId: string }) {
+export function CreateLicenseDialog({
+  productId,
+}: {
+  productId: string;
+  productSlug: string;
+}) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("permanent");
   const [hwidLocked, setHwidLocked] = useState(true);
   const [acknowledged, setAcknowledged] = useState(false);
 
-  const [state, formAction, pending] = useActionState(createLicenseAction, INITIAL);
+  const [rawState, formAction, pending] = useActionState(createLicenseAction, INITIAL);
+
+  const state = {
+    error: rawState.status === "error" ? rawState.message : null,
+    plaintextKey:
+      rawState.status === "success"
+        ? (rawState.data?.licenses[0]?.licenseKey ?? null)
+        : null,
+  };
 
   // Reset the acknowledgement whenever a new key arrives, so the developer
   // cannot carry a previous confirmation over to a key they have not saved.

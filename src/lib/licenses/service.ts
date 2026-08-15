@@ -253,11 +253,15 @@ export async function resetActivation(
   db: Database,
   ownerId: string,
   licenseId: string,
-): Promise<void> {
+): Promise<LicenseView> {
   const owned = await findOwnedLicense(db, ownerId, licenseId);
   if (!owned) throw notFound("License");
 
   await db.delete(activations).where(eq(activations.licenseId, licenseId));
+
+  // Returned so the caller can name the license in its confirmation without a
+  // second lookup. The activation is gone, hence null.
+  return toLicenseView(owned, null);
 }
 
 /**
@@ -270,9 +274,13 @@ export async function deleteLicense(
   db: Database,
   ownerId: string,
   licenseId: string,
-): Promise<void> {
+): Promise<LicenseView> {
   const owned = await findOwnedLicense(db, ownerId, licenseId);
   if (!owned) throw notFound("License");
 
   await db.delete(licenses).where(eq(licenses.id, licenseId));
+
+  // The row is gone, so its label and masked key are captured here — the
+  // caller could not look them up afterwards to say what it deleted.
+  return toLicenseView(owned, null);
 }

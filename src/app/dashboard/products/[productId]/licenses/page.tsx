@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
 import { getProduct } from "@/lib/products/service";
-import { listLicenses } from "@/lib/licenses/service";
+import { queryLicenses } from "@/lib/licenses/query";
+import { DEFAULT_LICENSE_QUERY } from "@/lib/licenses/types";
 import { maskedLicenseKey } from "@/lib/crypto/license-key";
 import { CreateLicenseDialog } from "@/components/licenses/create-license-dialog";
 import { LicenseRowActions } from "@/components/licenses/license-row-actions";
@@ -32,7 +33,12 @@ export default async function LicensesPage({
   const product = await getProduct(db, ownerId, productId);
   if (!product) notFound();
 
-  const licenses = await listLicenses(db, ownerId, productId);
+  const { rows: licenses } = await queryLicenses(
+    db,
+    ownerId,
+    productId,
+    DEFAULT_LICENSE_QUERY,
+  );
 
   return (
     <div className="space-y-6">
@@ -43,7 +49,7 @@ export default async function LicensesPage({
             Keys are shown once at creation and cannot be retrieved afterwards.
           </p>
         </div>
-        <CreateLicenseDialog productId={product.id} />
+        <CreateLicenseDialog productId={product.id} productSlug={product.slug} />
       </div>
 
       {licenses.length === 0 ? (
@@ -105,13 +111,7 @@ export default async function LicensesPage({
                   </TableCell>
 
                   <TableCell>
-                    <LicenseRowActions
-                      licenseId={license.id}
-                      productId={product.id}
-                      status={license.status}
-                      hasActivation={license.activation !== null}
-                      maskedKey={maskedLicenseKey(license.keyLast4)}
-                    />
+                    <LicenseRowActions license={license} productId={product.id} />
                   </TableCell>
                 </TableRow>
               ))}

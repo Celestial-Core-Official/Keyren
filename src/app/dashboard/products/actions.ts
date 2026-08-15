@@ -4,8 +4,20 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
+import {
+  actionFailure,
+  actionSuccess,
+  fieldErrorsFrom,
+  firstIssueMessage,
+  safeErrorMessage,
+  type ActionState,
+} from "@/lib/actions/state";
 import { createProduct, deleteProduct, renameProduct } from "@/lib/products/service";
-import { createProductSchema, productIdSchema, renameProductSchema } from "@/lib/validation/dashboard";
+import {
+  createProductSchema,
+  productIdSchema,
+  renameProductSchema,
+} from "@/lib/validation/dashboard";
 
 /**
  * Server actions are thin: authenticate, validate, delegate.
@@ -15,29 +27,33 @@ import { createProductSchema, productIdSchema, renameProductSchema } from "@/lib
  * fact that only the dashboard UI calls it, so it re-authorizes from scratch.
  */
 
-export type ActionState = { error: string } | { error: null };
+export type ProductActionState = ActionState<null>;
 
 export async function createProductAction(
-  _previous: ActionState,
+  _previous: ProductActionState,
   formData: FormData,
-): Promise<ActionState> {
+): Promise<ProductActionState> {
   const ownerId = await requireDeveloperId();
 
   const parsed = createProductSchema.safeParse({ name: formData.get("name") });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return actionFailure(firstIssueMessage(parsed.error), fieldErrorsFrom(parsed.error));
   }
 
   const product = await createProduct(db, ownerId, { name: parsed.data.name });
 
   revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard");
+  // Straight to the new product rather than back to the list: the developer
+  // created it in order to do something with it, and the next step — generate
+  // a license, copy the integration — is there.
   redirect(`/dashboard/products/${product.id}`);
 }
 
 export async function renameProductAction(
-  _previous: ActionState,
+  _previous: ProductActionState,
   formData: FormData,
-): Promise<ActionState> {
+): Promise<ProductActionState> {
   const ownerId = await requireDeveloperId();
 
   const parsed = renameProductSchema.safeParse({
@@ -45,36 +61,37 @@ export async function renameProductAction(
     name: formData.get("name"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return actionFailure(firstIssueMessage(parsed.error), fieldErrorsFrom(parsed.error));
   }
 
   try {
     await renameProduct(db, ownerId, parsed.data.productId, parsed.data.name);
-  } catch {
+  } catch (error) {
     // Includes the "belongs to another developer" case, reported identically.
-    return { error: "Product not found." };
+    return actionFailure(safeErrorMessage(error, "Could not rename that product."));
   }
 
   revalidatePath("/dashboard/products");
   revalidatePath(`/dashboard/products/${parsed.data.productId}`);
-  return { error: null };
+  return actionSuccess(`Renamed to ${parsed.data.name}.`, null);
 }
 
 export async function deleteProductAction(
-  _previous: ActionState,
+  _previous: ProductActionState,
   formData: FormData,
-): Promise<ActionState> {
+): Promise<ProductActionState> {
   const ownerId = await requireDeveloperId();
 
   const parsed = productIdSchema.safeParse(formData.get("productId"));
-  if (!parsed.success) return { error: "Invalid product." };
+  if (!parsed.success) return actionFailure("That product is no longer available.");
 
   try {
     await deleteProduct(db, ownerId, parsed.data);
-  } catch {
-    return { error: "Product not found." };
+  } catch (error) {
+    return actionFailure(safeErrorMessage(error, "Could not delete that product."));
   }
 
   revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard");
   redirect("/dashboard/products");
 }

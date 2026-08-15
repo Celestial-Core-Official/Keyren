@@ -105,7 +105,23 @@ describe("resetActivation", () => {
   it("succeeds on a license that was never activated", async () => {
     const product = await makeProduct(db, { ownerId: DEVELOPER_A });
     const license = await makeLicense(db, { productId: product.id });
-    await expect(resetActivation(db, DEVELOPER_A, license.id)).resolves.toBeUndefined();
+
+    // The developer's intent is "this license should be claimable", and it
+    // already is, so resetting nothing is a success rather than an error.
+    const view = await resetActivation(db, DEVELOPER_A, license.id);
+    expect(view.id).toBe(license.id);
+    expect(view.activation).toBeNull();
+  });
+
+  it("returns the license so the caller can name what it reset", async () => {
+    // Without this the action would need a second lookup purely to build a
+    // confirmation message.
+    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { productId: product.id, label: "Acme Corp" });
+    await seedActivation(license.id);
+
+    const view = await resetActivation(db, DEVELOPER_A, license.id);
+    expect(view.label).toBe("Acme Corp");
   });
 });
 
