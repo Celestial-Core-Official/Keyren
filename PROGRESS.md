@@ -1,10 +1,35 @@
 # Keyren — Build Progress & Handoff
 
 **Last updated:** 2026-08-15
-**Release being built:** `Alpha_v1` (private/testing release — never call it "v1" in product UI)
+**Current release:** `Alpha_v2` (package `0.1.2`) — private/testing release.
+Never call it "v2" in product UI; `/api/v1/...` is versioned separately and did
+not move.
 
 > **If you are a new assistant picking this up (ChatGPT, a fresh Claude session, a human):**
-> read this whole file first. **All 35 tasks are complete.** Alpha_v1 is built, tested, and reviewed.
+>
+> - **`Alpha_v2` is complete.** What it changed is in
+>   [`docs/alpha-v2.md`](docs/alpha-v2.md); its security review is in
+>   [`docs/security-review-alpha-v2.md`](docs/security-review-alpha-v2.md).
+> - **The rest of this file describes the `Alpha_v1` build** and is kept as the
+>   record of how the foundation was made. Its architecture, layering rules and
+>   security invariants all still apply — `Alpha_v2` added to them and weakened
+>   none. Its *counts* (35 tasks, 194 tests, 20 files) describe `Alpha_v1` as it
+>   stood; run `npm test` for the current figure.
+> - The release name and version live in `src/lib/release.ts` and nowhere else.
+
+---
+
+## `Alpha_v2` at a glance
+
+| | |
+|---|---|
+| **Status** | complete — 15 of 15 tasks |
+| **Theme** | quality of life; no change to the product's shape or its API |
+| **Migration** | one additive migration (`drizzle/0001_*.sql`): nullable `label`, `notes`, one index |
+| **Public API** | unchanged — same fields, envelopes, codes and statuses |
+| **Headline changes** | labels and notes · batch generation (1–100, atomic) · one-time CSV/JSON key export · URL-driven search, filters, sort, pagination · bulk actions with metadata export · JS/Python/cURL/C# examples · in-dashboard API tester · onboarding checklist · mobile navigation and cards · keyboard shortcuts · corrected Active/Bound-device counts |
+
+---
 
 ---
 

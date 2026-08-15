@@ -40,7 +40,7 @@ export function resolveExpiresAt(input: ExpirationInput, now: Date = new Date())
       const option = DURATION_OPTIONS.find((candidate) => candidate.value === input.duration);
       if (!option) throw new Error(`Unknown duration: ${String(input.duration)}`);
 
-      // Alpha_v1 counts duration from creation, not from first activation.
+      // Duration counts from creation, not from first activation.
       // Activation-anchored expiry needs a separate stored field and is
       // deliberately out of scope.
       return new Date(now.getTime() + option.days * MS_PER_DAY);

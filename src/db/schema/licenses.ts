@@ -9,7 +9,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { products } from "./products";
 
-/** Alpha_v1 supports exactly these two states. Revoking is reversible and
+/** A license is in exactly one of these two states. Revoking is reversible and
  *  never destroys the record. */
 export const licenseStatus = pgEnum("license_status", ["active", "revoked"]);
 

@@ -18,11 +18,11 @@ import { verifyRequestSchema } from "@/lib/validation/verify-request";
  * decision is made in this file.
  *
  * The URL is versioned `/v1/` on normal semantic-versioning grounds. That is
- * intentionally decoupled from the `Alpha_v1` release name — the marketing
- * name can advance to Alpha_v2 or Beta_v1 without breaking a single deployed
- * client.
+ * intentionally decoupled from the marketing release name, which can advance
+ * without breaking a single deployed client. Alpha_v2 is the proof: the
+ * dashboard changed substantially and this file's contract did not move.
  *
- * Alpha_v1 is online-only. There is no offline grant, no cached token, and no
+ * Keyren is online-only. There is no offline grant, no cached token, and no
  * grace period: if Keyren is unreachable, integrating software cannot obtain
  * a positive answer. A future release can add server-signed grace tokens by
  * extending this response, which is why the success envelope is an object

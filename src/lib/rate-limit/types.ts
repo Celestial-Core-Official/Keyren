@@ -1,7 +1,7 @@
 /**
  * A single axis a request can be limited on.
  *
- * Alpha_v1 checks IP and product. The shape allows more axes — a license
+ * Keyren checks IP and product. The shape allows more axes — a license
  * lookup fingerprint, a request-pattern signature — to be added later
  * without changing the interface or the call site in the route handler.
  *

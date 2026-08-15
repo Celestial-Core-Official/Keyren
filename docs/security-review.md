@@ -6,6 +6,14 @@
 
 This is a deliberate pass over the finished system, not a re-run of the test suite. Findings are recorded whether or not they were fixed.
 
+> **This document is a historical record of the `Alpha_v1` review** and is
+> deliberately left as it was written. Its findings and its accepted risks
+> remain accurate for the parts of the system it covers. Everything `Alpha_v2`
+> added is reviewed separately in
+> [`security-review-alpha-v2.md`](security-review-alpha-v2.md); the test and
+> assertion counts below describe `Alpha_v1` as it stood, not the current
+> suite.
+
 ---
 
 ## Summary

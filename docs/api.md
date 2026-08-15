@@ -1,8 +1,10 @@
-# Keyren API Reference — Alpha_v1
+# Keyren API Reference — `v1`
 
 This document describes the public license verification API. It is the **only** endpoint customer software talks to, and the **only** endpoint in Keyren that requires no developer authentication of any kind — no Clerk session, no API key, no bearer token.
 
-The URL path is versioned (`/api/v1/...`) on ordinary semantic-versioning grounds, which is intentionally a separate thing from the `Alpha_v1` product release name. The two can move independently: this API can stay at `v1` while the product itself advances to `Alpha_v2` or beyond.
+The URL path is versioned (`/api/v1/...`) on ordinary semantic-versioning grounds, which is intentionally a separate thing from the product's release name. The two move independently, and this release is the demonstration: the product advanced from `Alpha_v1` to **`Alpha_v2`** (package version `0.1.2`) and **nothing in this document changed** — same request fields, same response envelopes, same error codes, same status codes. Software integrated against `v1` under `Alpha_v1` keeps working untouched.
+
+`Alpha_v2` added per-license labels and notes in the dashboard. Neither is returned here, deliberately: this endpoint is unauthenticated and anyone holding a key can call it, so internal commercial context — a customer name, an order reference, a private remark — must not be readable by the customer. The success envelope remains exactly `{ status, expiresAt }`, and a regression test asserts it.
 
 ---
 
@@ -145,5 +147,5 @@ Read this before you ship an integration.
 - **Never ship any Keyren dashboard credential, session token, or the HMAC secret inside end-user software.** Assume anything present in a distributed binary or a JavaScript bundle will be read by anyone who has a copy of it. The dashboard's own generated integration snippet only ever includes your product ID for exactly this reason.
 - **Send a fingerprint you have already computed and hashed on the client, not raw hardware identifiers.** Keyren never asks for and never interprets raw hardware serials — treat `deviceId` as an opaque value you control the derivation of.
 - **A device fingerprint is an identifier, not tamper-proof hardware identity.** HWID locking raises the cost of casually sharing a license key between machines; it does not make spoofing impossible against a motivated attacker.
-- **Alpha_v1 is online-only.** There is no offline license, no cached grace token, and no bundled fallback. If Keyren is unreachable — network failure, an outage, a timeout — your software cannot obtain a positive verification result from this API. Decide **deliberately**, ahead of time, what your application does in that situation (for example: fail closed and block usage, fail open with a warning, or use a short-lived local cache with a policy you control) — do not let it be whatever your HTTP client happens to do by default.
+- **Keyren is online-only.** There is no offline license, no cached grace token, and no bundled fallback. If Keyren is unreachable — network failure, an outage, a timeout — your software cannot obtain a positive verification result from this API. Decide **deliberately**, ahead of time, what your application does in that situation (for example: fail closed and block usage, fail open with a warning, or use a short-lived local cache with a policy you control) — do not let it be whatever your HTTP client happens to do by default.
 - **Handle every error code**, not just the happy path and one generic failure. `LICENSE_REVOKED` and `LICENSE_EXPIRED` are typically worth a specific, actionable message to the end user; `RATE_LIMITED` should back off and retry; `INTERNAL_ERROR` is safe to retry; `LICENSE_INVALID`, `PRODUCT_INVALID`, and `DEVICE_MISMATCH` mean the current key/device combination will not succeed without developer or end-user action and should not be retried in a loop.
