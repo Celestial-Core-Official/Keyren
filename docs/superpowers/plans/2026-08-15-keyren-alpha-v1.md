@@ -16,6 +16,7 @@
 2. **Tests need no external services.** The whole test suite runs against PGlite — a real Postgres compiled to WASM, in-memory, created fresh per test file. No Docker, no local Postgres install, no network. This matters because neither `psql` nor `docker` is available on this machine.
 3. **Rate limiting uses Postgres**, not Redis. The spec forbids Redis unless clearly necessary; a fixed-window counter table is adequate for Alpha_v1 and sits behind a `RateLimiter` interface so it can be swapped without touching the verification path.
 4. **Clerk keys and a `DATABASE_URL` are required to run the app**, but not to run the test suite or the typecheck. Verification of the live dashboard is gated on the user supplying those.
+5. **This machine's npm enforces `min-release-age=3`** (a supply-chain safeguard: no package published in the last 3 days may be installed). Exact version pins in this plan may 404 with "no matching version with a date before ...". When that happens, install the newest version that predates the cutoff rather than disabling the policy. Check with `npm view <pkg> time --json` against `npm config get before`. Actual installed versions are recorded in `PROGRESS.md`.
 
 ---
 
@@ -121,23 +122,25 @@ The spec lists 17 mandatory scenarios. Each is bound to a task here so none can 
 **Files:**
 - Create: whole scaffold at repo root
 
-- [ ] **Step 1: Scaffold into the existing empty directory**
+- [x] **Step 1: Scaffold into the existing empty directory**
 
 The repo root is empty. `create-next-app` refuses a non-empty dir only if it has conflicting files, so scaffold into a temp dir and move it in, which avoids surprises with the `docs/` folder.
 
 ```bash
 cd /Users/marcin_alan/Documents/Github/Keyren
-npx --yes create-next-app@16.3.1 .keyren-scaffold \
+npx --yes create-next-app@16.3.0 "$TMPDIR/keyren-scaffold" \
   --typescript --tailwind --eslint --app --src-dir \
   --import-alias "@/*" --no-turbopack --use-npm --yes
-rsync -a --exclude node_modules --exclude .git .keyren-scaffold/ ./
-rm -rf .keyren-scaffold
+rsync -a --exclude node_modules --exclude .git "$TMPDIR/keyren-scaffold/" ./
+rm -rf "$TMPDIR/keyren-scaffold"
 npm install
 ```
 
+> **Corrected during execution.** The scaffold directory must NOT start with a dot — npm rejects `.keyren-scaffold` as an invalid package name before create-next-app runs. Also set `"name": "keyren"` in the generated `package.json`, since create-next-app names the project after the directory.
+
 Expected: `src/app/layout.tsx`, `src/app/page.tsx`, `package.json`, `tsconfig.json` exist at root.
 
-- [ ] **Step 2: Initialise git and make the first commit**
+- [x] **Step 2: Initialise git and make the first commit**
 
 ```bash
 git init
@@ -145,21 +148,21 @@ git add -A
 git commit -m "chore: scaffold Next.js 16 + TypeScript + Tailwind 4"
 ```
 
-- [ ] **Step 3: Install runtime and dev dependencies**
+- [x] **Step 3: Install runtime and dev dependencies**
 
 ```bash
 npm install @clerk/nextjs@7.7.5 drizzle-orm@0.45.2 postgres@3.4.9 zod@4.4.3
 npm install -D drizzle-kit@0.31.10 vitest@4.1.10 @electric-sql/pglite@0.5.5 dotenv@17.2.3 tsx@4.20.6
 ```
 
-- [ ] **Step 4: Verify the toolchain builds**
+- [x] **Step 4: Verify the toolchain builds**
 
 ```bash
 npx tsc --noEmit
 ```
 Expected: exits 0, no output.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "chore: add Clerk, Drizzle, Zod, Vitest, PGlite"
@@ -174,7 +177,7 @@ git add -A && git commit -m "chore: add Clerk, Drizzle, Zod, Vitest, PGlite"
 - Create: `vitest.config.ts`
 - Modify: `package.json` (scripts)
 
-- [ ] **Step 1: Tighten `tsconfig.json` compilerOptions**
+- [x] **Step 1: Tighten `tsconfig.json` compilerOptions**
 
 Merge these into the existing `compilerOptions` (keep the Next.js-generated keys such as `plugins`, `jsx`, `paths`):
 
@@ -191,7 +194,7 @@ Merge these into the existing `compilerOptions` (keep the Next.js-generated keys
 
 `noUncheckedIndexedAccess` is the one that matters most here: it forces explicit handling of `array[i]` being possibly `undefined`, which is exactly the class of bug that turns into a silent auth bypass.
 
-- [ ] **Step 2: Create `vitest.config.ts`**
+- [x] **Step 2: Create `vitest.config.ts`**
 
 ```ts
 import { defineConfig } from "vitest/config";
@@ -212,7 +215,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 3: Add scripts to `package.json`**
+- [x] **Step 3: Add scripts to `package.json`**
 
 ```json
 {
@@ -231,14 +234,14 @@ export default defineConfig({
 }
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```bash
 npm run typecheck && npx vitest run --passWithNoTests
 ```
 Expected: typecheck exits 0; vitest reports "No test files found" and exits 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "chore: strict TypeScript and Vitest config"
@@ -254,7 +257,7 @@ git add -A && git commit -m "chore: strict TypeScript and Vitest config"
 - Create: `tests/env.test.ts`
 - Modify: `.gitignore`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/env.test.ts`:
 
@@ -304,14 +307,14 @@ describe("parseEnv", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 ```bash
 npx vitest run tests/env.test.ts
 ```
 Expected: FAIL — cannot resolve module `@/env`.
 
-- [ ] **Step 3: Implement `src/env.ts`**
+- [x] **Step 3: Implement `src/env.ts`**
 
 ```ts
 import { z } from "zod";
@@ -367,7 +370,7 @@ export const env: Env = parseEnv(process.env);
 
 Note `parseEnv` is exported separately from `env` so tests can exercise validation without needing a valid ambient environment.
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/env.test.ts
@@ -376,7 +379,7 @@ Expected: 5 passed.
 
 > If importing `@/env` in the test triggers the module-level `parseEnv(process.env)` and throws, add a `tests/setup.ts` that sets the four required vars and register it via `test.setupFiles` in `vitest.config.ts`. Do not weaken the schema to make the test pass.
 
-- [ ] **Step 5: Create `.env.example`**
+- [x] **Step 5: Create `.env.example`**
 
 ```bash
 # --- Database -------------------------------------------------------------
@@ -401,11 +404,23 @@ RATE_LIMIT_VERIFY_PER_MINUTE="60"
 RATE_LIMIT_VERIFY_PER_PRODUCT_PER_MINUTE="600"
 ```
 
-- [ ] **Step 6: Confirm `.gitignore` covers secrets**
+- [x] **Step 6: Confirm `.gitignore` covers secrets**
 
-Ensure `.gitignore` contains `.env`, `.env.local`, `.env*.local`. The create-next-app template includes these; verify with `grep -n "env" .gitignore` and add any that are missing.
+The create-next-app template ships a blanket `.env*` rule, which also matches `.env.example` and would silently drop it from the commit. Add a negation immediately after it:
 
-- [ ] **Step 7: Commit**
+```
+.env*
+!.env.example
+```
+
+Verify both halves actually behave:
+
+```bash
+git check-ignore -v .env .env.local   # must report both as ignored
+git ls-files | grep '^\.env\.example' # must print .env.example
+```
+
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A && git commit -m "feat: fail-fast environment validation"
@@ -423,7 +438,7 @@ This phase has no database and no framework. It is pure functions, so the tests 
 - Create: `src/lib/crypto/random.ts`
 - Create: `tests/crypto/random.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/crypto/random.test.ts`:
 
@@ -487,14 +502,14 @@ describe("randomAlphabetString", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/crypto/random.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/crypto/random`.
 
-- [ ] **Step 3: Implement `src/lib/crypto/random.ts`**
+- [x] **Step 3: Implement `src/lib/crypto/random.ts`**
 
 ```ts
 import { randomBytes } from "node:crypto";
@@ -529,14 +544,14 @@ export function randomAlphabetString(length: number): string {
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/crypto/random.test.ts
 ```
 Expected: 8 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: unbiased Crockford Base32 random generator"
@@ -550,7 +565,7 @@ git add -A && git commit -m "feat: unbiased Crockford Base32 random generator"
 - Create: `src/lib/crypto/ids.ts`
 - Create: `tests/crypto/ids.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/crypto/ids.test.ts`:
 
@@ -588,14 +603,14 @@ describe("generateLicenseId", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/crypto/ids.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/crypto/ids`.
 
-- [ ] **Step 3: Implement `src/lib/crypto/ids.ts`**
+- [x] **Step 3: Implement `src/lib/crypto/ids.ts`**
 
 ```ts
 import { randomAlphabetString } from "./random";
@@ -617,14 +632,14 @@ export function generateLicenseId(): string {
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/crypto/ids.test.ts
 ```
 Expected: 5 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: immutable prod_/lic_ resource identifiers"
