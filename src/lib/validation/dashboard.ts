@@ -160,6 +160,25 @@ export const createLicenseSchema = z.discriminatedUnion("mode", [
 
 export const licenseActionSchema = z.object({ licenseId: licenseIdSchema });
 
+export const BULK_ACTIONS = ["revoke", "restore", "reset", "delete"] as const;
+export type BulkAction = (typeof BULK_ACTIONS)[number];
+
+/**
+ * A bulk submission.
+ *
+ * The id list is capped at the largest page size, because selection is
+ * per-page by design — a larger list did not come from the UI, and an
+ * unbounded `IN (...)` is a cheap way to make one request do a lot of work.
+ */
+export const bulkLicenseActionSchema = z.object({
+  productId: productIdSchema,
+  action: z.enum(BULK_ACTIONS),
+  licenseIds: z
+    .array(licenseIdSchema)
+    .min(1, "Select at least one license")
+    .max(Math.max(...PAGE_SIZES), "Too many licenses selected"),
+});
+
 // ---------------------------------------------------------------------------
 // URL search parameters
 // ---------------------------------------------------------------------------

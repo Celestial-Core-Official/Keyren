@@ -9,9 +9,8 @@ import { parseLicenseQuery, type RawSearchParams } from "@/lib/validation/dashbo
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Pagination } from "@/components/dashboard/pagination";
 import { CreateLicenseDialog } from "@/components/licenses/create-license-dialog";
-import { LicenseCardList } from "@/components/licenses/license-card-list";
 import { LicenseFilters } from "@/components/licenses/license-filters";
-import { LicenseTable } from "@/components/licenses/license-table";
+import { LicenseList } from "@/components/licenses/license-list";
 import { ClearFiltersLink } from "@/components/licenses/clear-filters-link";
 
 export default async function LicensesPage({
@@ -71,8 +70,11 @@ export default async function LicensesPage({
         />
       ) : (
         <div className="space-y-4">
-          <LicenseTable licenses={page.rows} productId={product.id} />
-          <LicenseCardList licenses={page.rows} productId={product.id} />
+          <LicenseList
+            licenses={page.rows}
+            productId={product.id}
+            productSlug={product.slug}
+          />
 
           <Pagination
             page={page.page}
