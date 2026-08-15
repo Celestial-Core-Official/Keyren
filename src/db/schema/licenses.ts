@@ -30,6 +30,16 @@ export const licenses = pgTable(
      *  stable non-secret way to refer to a key it can never redisplay. */
     keyLast4: text("key_last4").notNull(),
 
+    /** Optional human-recognisable reference — a customer, an order, a
+     *  seat. Purely a dashboard affordance: it is never returned by the
+     *  public verification API, so it can hold whatever the developer finds
+     *  useful without becoming part of any integration contract. */
+    label: text("label"),
+
+    /** Internal dashboard-only notes. Same reasoning as `label`, with room
+     *  for a sentence rather than a name. */
+    notes: text("notes"),
+
     status: licenseStatus("status").notNull().default("active"),
 
     /** All three developer-facing expiration modes normalize to this single
@@ -56,6 +66,13 @@ export const licenses = pgTable(
 
     // Dashboard listing: licenses for one product, newest first.
     index("licenses_product_created_idx").on(table.productId, table.createdAt),
+
+    // Serves `ORDER BY label` within a product, which is one of the offered
+    // sorts. Deliberately NOT an attempt to index the search: `q` matches with
+    // a leading wildcard (ILIKE '%term%'), which no btree can satisfy, and
+    // making it indexable would mean installing pg_trgm — a database extension
+    // is far too much apparatus for filtering one developer's own licenses.
+    index("licenses_product_label_idx").on(table.productId, table.label),
   ],
 );
 

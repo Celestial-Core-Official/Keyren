@@ -31,6 +31,9 @@ export async function makeLicense(
     hwidLocked?: boolean;
     expiresAt?: Date | null;
     status?: "active" | "revoked";
+    label?: string | null;
+    notes?: string | null;
+    createdAt?: Date;
   },
 ): Promise<{ id: string; plaintextKey: string }> {
   const id = generateLicenseId();
@@ -44,6 +47,11 @@ export async function makeLicense(
     hwidLocked: options.hwidLocked ?? true,
     expiresAt: options.expiresAt ?? null,
     status: options.status ?? "active",
+    label: options.label ?? null,
+    notes: options.notes ?? null,
+    // Explicit creation times let sort and pagination tests build a
+    // deterministic ordering instead of racing the default clock.
+    ...(options.createdAt ? { createdAt: options.createdAt, updatedAt: options.createdAt } : {}),
     ...(options.status === "revoked" ? { revokedAt: new Date() } : {}),
   });
 

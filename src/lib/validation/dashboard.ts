@@ -14,6 +14,52 @@ export const licenseIdSchema = z.string().regex(/^lic_[0-9A-Za-z]+$/, "Invalid l
 
 const productName = z.string().trim().min(1, "Name is required").max(200, "Name is too long");
 
+/**
+ * An optional free-text field that normalizes to `string | null`.
+ *
+ * Three inputs have to collapse to the same result: a missing key, an
+ * untouched text input (which submits `""`), and a field the developer
+ * blanked out. All three mean "no value", and letting empty strings reach the
+ * column would quietly defeat every `IS NULL` check the dashboard makes and
+ * render as an empty label rather than "Unlabeled license".
+ *
+ * Length is measured after trimming, so a value padded with whitespace is
+ * judged on what actually gets stored.
+ *
+ * `z.preprocess` rather than `.transform().pipe()`: Zod 4 treats a piped
+ * schema as non-optional at the object-key level even when its input union
+ * accepts `undefined`, so the `.pipe()` form rejects a field the form simply
+ * did not submit. Preprocessing runs ahead of that check and normalizes the
+ * absent case to `null` like every other empty one.
+ */
+function optionalText(max: number, field: string) {
+  return z.preprocess(
+    (value) => {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      return trimmed === "" ? null : trimmed;
+    },
+    z
+      .string()
+      .max(max, `${field} must be ${max.toLocaleString("en-US")} characters or fewer`)
+      .nullable(),
+  );
+}
+
+export const LICENSE_LABEL_MAX = 120;
+export const LICENSE_NOTES_MAX = 1000;
+
+export const licenseLabelSchema = optionalText(LICENSE_LABEL_MAX, "Label");
+export const licenseNotesSchema = optionalText(LICENSE_NOTES_MAX, "Notes");
+
+export const editLicenseDetailsSchema = z.object({
+  licenseId: licenseIdSchema,
+  label: licenseLabelSchema,
+  notes: licenseNotesSchema,
+});
+
+export type EditLicenseDetailsInput = z.infer<typeof editLicenseDetailsSchema>;
+
 export const createProductSchema = z.object({ name: productName });
 
 export const renameProductSchema = z.object({

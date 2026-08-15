@@ -21,6 +21,9 @@ export type LicenseView = {
   id: string;
   productId: string;
   keyLast4: string;
+  /** Dashboard-only. Never crosses into the public verification response. */
+  label: string | null;
+  notes: string | null;
   status: "active" | "revoked";
   expiresAt: Date | null;
   hwidLocked: boolean;
@@ -35,6 +38,14 @@ export type CreateLicenseInput = {
   expiration: ExpirationInput;
   hwidLocked: boolean;
   secret: string;
+  label?: string | null;
+  notes?: string | null;
+};
+
+/** The mutable half of a license. Everything else is fixed at creation. */
+export type LicenseDetailsInput = {
+  label: string | null;
+  notes: string | null;
 };
 
 /**
@@ -76,6 +87,8 @@ export async function createLicense(
       // caller. It is not logged, not cached, and not written anywhere.
       keyHash: hashLicenseKey(plaintextKey, input.secret),
       keyLast4: licenseKeyLast4(plaintextKey),
+      label: input.label ?? null,
+      notes: input.notes ?? null,
       status: "active",
       expiresAt,
       hwidLocked: input.hwidLocked,
@@ -114,6 +127,8 @@ export function toLicenseView(
     id: row.id,
     productId: row.productId,
     keyLast4: row.keyLast4,
+    label: row.label,
+    notes: row.notes,
     status: row.status,
     expiresAt: row.expiresAt,
     hwidLocked: row.hwidLocked,
@@ -195,6 +210,33 @@ export async function restoreLicense(
   const [row] = await db
     .update(licenses)
     .set({ status: "active", revokedAt: null, updatedAt: new Date() })
+    .where(eq(licenses.id, licenseId))
+    .returning();
+
+  if (!row) throw notFound("License");
+  return toLicenseView(row, null);
+}
+
+/**
+ * Edits the two mutable, dashboard-only fields.
+ *
+ * The SET clause names exactly `label`, `notes` and `updatedAt`. Nothing
+ * about the license's identity or its licensing decision — the key hash, the
+ * status, the expiry, the device lock — is reachable from this path, so a
+ * relabel can never become an accidental un-revoke.
+ */
+export async function updateLicenseDetails(
+  db: Database,
+  ownerId: string,
+  licenseId: string,
+  details: LicenseDetailsInput,
+): Promise<LicenseView> {
+  const owned = await findOwnedLicense(db, ownerId, licenseId);
+  if (!owned) throw notFound("License");
+
+  const [row] = await db
+    .update(licenses)
+    .set({ label: details.label, notes: details.notes, updatedAt: new Date() })
     .where(eq(licenses.id, licenseId))
     .returning();
 

@@ -123,4 +123,11 @@ describe("licenseKeyLast4 and maskedLicenseKey", () => {
     expect(masked).toContain("KEYREN");
     expect(masked).not.toMatch(/[A-HJ-NP-TV-Z0-9]{8}/);
   });
+
+  it("puts the suffix in its own group rather than trailing a masked one", () => {
+    // The last group reads as four visible characters, not eight bullets with
+    // four characters stuck on the end. Alpha_v1's form implied the suffix was
+    // extra characters beyond a full-width group.
+    expect(maskedLicenseKey("WXYZ")).toBe("KEYREN-••••-••••-••••-WXYZ");
+  });
 });

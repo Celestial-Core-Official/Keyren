@@ -8,6 +8,13 @@
       "when": 1786781433786,
       "tag": "0000_glorious_purple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786820068495,
+      "tag": "0001_spooky_star_brand",
+      "breakpoints": true
     }
   ]
 }
