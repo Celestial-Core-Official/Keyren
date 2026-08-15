@@ -4,8 +4,11 @@
 **Scope:** everything `Alpha_v2` added on top of the `Alpha_v1` build reviewed in
 [`security-review.md`](security-review.md), which remains accurate for the parts
 it covers.
-**Method:** static review of the new code, plus the end-to-end walkthrough in
-[`docs/SETUP.md`](SETUP.md).
+**Method:** static review of the new code, plus a scripted end-to-end
+walkthrough (`npm run verify:release`) against real Neon Postgres and a
+running server — 77 assertions covering batch generation, the public API's
+full error-code table, discovery queries, bulk operations, authorization and
+cleanup.
 
 `Alpha_v2` is a quality-of-life release, but three of its features touch the
 system's most sensitive property — the show-once plaintext key — and two
@@ -28,6 +31,56 @@ survive.
 | URL-driven filters | every value is attacker-controlled |
 
 ---
+
+## SEC-A2-0 — `Date` bound into a raw SQL template (found and fixed)
+
+**Severity:** Critical — availability. Found during the live walkthrough, not
+by the test suite, which structurally could not find it.
+
+**Symptom.** The first query run against real Neon Postgres threw:
+
+```
+TypeError [ERR_INVALID_ARG_TYPE]: The "string" argument must be of type
+string or an instance of Buffer or ArrayBuffer. Received an instance of Date
+```
+
+**Root cause.** Six raw `sql` templates in `licenses/query.ts` and
+`licenses/bulk.ts` interpolated a JavaScript `Date` to compare against
+`expires_at`:
+
+```ts
+sql`${licenses.expiresAt} <= ${now}`
+```
+
+Drizzle's typed operators (`eq`, `lt`, …) run the column's own mapper and
+serialize a `Date` correctly. A raw `sql` template does not — it hands the
+value straight to the driver, and **postgres.js rejects a `Date` parameter
+outright**. **PGlite, which the entire test suite uses, accepts it.**
+
+**Impact had it shipped.** Every path that computes effective status: the
+licenses page, all four filters, the product overview's stat cards, and the
+metadata export. In practice the whole dashboard, failing on the first
+request, in production only.
+
+**This is a recurrence of `Alpha_v1`'s SEC-1**, where the identical mistake in
+the rate limiter caused it to fail open and silently disable itself. The same
+trap, the same driver asymmetry, a different consequence.
+
+**Fix.** A single helper, `instant()` in `src/lib/db/timestamp.ts`, binds an
+ISO-8601 string with an explicit `::timestamptz` cast — explicit rather than
+relying on inference, since inside a `CASE` Postgres has much less context to
+infer a parameter's type from. All six call sites go through it.
+
+**Why it will not recur.** `tests/db/timestamp.test.ts` inspects the generated
+SQL of every query that takes a `now` and fails if any bound parameter is a
+`Date` instance. It examines the query rather than executing it, so it holds
+regardless of which driver is underneath, and it includes a test asserting
+that the *wrong* form is detected — so the guard itself is proven to work.
+
+**Process note.** Two defences existed and neither was sufficient: 700 tests
+passed, and `npm run build` passed. Only running against the production driver
+caught it. `npm run verify:release` now exists for exactly this, and should be
+run against a real Postgres before any release.
 
 ## SEC-A2-1 — CSV formula injection (addressed by design)
 
@@ -198,6 +251,8 @@ details on screen.
 | Public API contract unchanged | holds — no change to the route or its envelopes |
 | Destructive actions confirmation-gated | holds — bulk delete requires `DELETE <count>` |
 | No `any`, `@ts-ignore`, `@ts-expect-error`, `eslint-disable` in `src/` | holds |
+| Dashboard errors carry no driver, SQL or schema detail | holds — exact-match allow-list |
+| No raw `Date` bound into a raw SQL template | holds — see SEC-A2-0, guarded by a test |
 
 The single `@ts-expect-error` in the repository is in
 `tests/preferences.test.ts`, deliberately passing fields the type forbids in

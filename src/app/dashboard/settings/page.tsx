@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/dashboard/page-header";
-import { KEYBOARD_SHORTCUTS } from "@/components/dashboard/keyboard-shortcuts";
+import { KEYBOARD_SHORTCUTS } from "@/lib/shortcuts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RELEASE } from "@/lib/release";
 

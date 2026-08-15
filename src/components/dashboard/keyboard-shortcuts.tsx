@@ -67,11 +67,3 @@ export function KeyboardShortcuts() {
 
   return null;
 }
-
-/** The reference shown on the settings page. */
-export const KEYBOARD_SHORTCUTS = [
-  { keys: ["/"], description: "Focus the search box on the current page" },
-  { keys: ["N"], description: "New product, or generate a license" },
-  { keys: ["Esc"], description: "Close a dialog or menu" },
-  { keys: ["Tab"], description: "Move between controls" },
-] as const;

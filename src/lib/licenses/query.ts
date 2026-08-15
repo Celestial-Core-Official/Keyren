@@ -1,6 +1,7 @@
 import { and, asc, count, desc, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { activations, licenses, products } from "@/db/schema";
 import type { Database } from "@/db/types";
+import { instant } from "@/lib/db/timestamp";
 import { notFound } from "@/lib/errors";
 import { containsPattern } from "@/lib/search";
 import { toLicenseView } from "./service";
@@ -51,7 +52,7 @@ async function assertOwnsProduct(
 function effectiveStatusSql(now: Date): SQL<EffectiveStatus> {
   return sql<EffectiveStatus>`CASE
     WHEN ${licenses.status} = 'revoked' THEN 'revoked'
-    WHEN ${licenses.expiresAt} IS NOT NULL AND ${licenses.expiresAt} <= ${now} THEN 'expired'
+    WHEN ${licenses.expiresAt} IS NOT NULL AND ${licenses.expiresAt} <= ${instant(now)} THEN 'expired'
     ELSE 'active'
   END`;
 }
@@ -80,7 +81,7 @@ function filterConditions(
   switch (query.status) {
     case "active":
       conditions.push(
-        sql`${licenses.status} = 'active' AND (${licenses.expiresAt} IS NULL OR ${licenses.expiresAt} > ${now})`,
+        sql`${licenses.status} = 'active' AND (${licenses.expiresAt} IS NULL OR ${licenses.expiresAt} > ${instant(now)})`,
       );
       break;
     case "revoked":
@@ -88,7 +89,7 @@ function filterConditions(
       break;
     case "expired":
       conditions.push(
-        sql`${licenses.status} = 'active' AND ${licenses.expiresAt} IS NOT NULL AND ${licenses.expiresAt} <= ${now}`,
+        sql`${licenses.status} = 'active' AND ${licenses.expiresAt} IS NOT NULL AND ${licenses.expiresAt} <= ${instant(now)}`,
       );
       break;
     case "all":
@@ -220,12 +221,12 @@ export async function getProductLicenseStats(
       total: count(),
       active: sql<number>`count(*) FILTER (
         WHERE ${licenses.status} = 'active'
-          AND (${licenses.expiresAt} IS NULL OR ${licenses.expiresAt} > ${now})
+          AND (${licenses.expiresAt} IS NULL OR ${licenses.expiresAt} > ${instant(now)})
       )`,
       expired: sql<number>`count(*) FILTER (
         WHERE ${licenses.status} = 'active'
           AND ${licenses.expiresAt} IS NOT NULL
-          AND ${licenses.expiresAt} <= ${now}
+          AND ${licenses.expiresAt} <= ${instant(now)}
       )`,
       revoked: sql<number>`count(*) FILTER (WHERE ${licenses.status} = 'revoked')`,
       // "Bound" means a device is actually held: an unlocked license with an

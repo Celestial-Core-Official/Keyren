@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { activations, licenses, products } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { maskedLicenseKey } from "@/lib/crypto/license-key";
+import { instant } from "@/lib/db/timestamp";
 import type { LicenseMetadataRow } from "./export";
 import type { EffectiveStatus } from "./types";
 
@@ -191,7 +192,7 @@ export async function licensesForExport(
       status: licenses.status,
       effectiveStatus: sql<EffectiveStatus>`CASE
         WHEN ${licenses.status} = 'revoked' THEN 'revoked'
-        WHEN ${licenses.expiresAt} IS NOT NULL AND ${licenses.expiresAt} <= ${now} THEN 'expired'
+        WHEN ${licenses.expiresAt} IS NOT NULL AND ${licenses.expiresAt} <= ${instant(now)} THEN 'expired'
         ELSE 'active'
       END`,
       expiresAt: licenses.expiresAt,
