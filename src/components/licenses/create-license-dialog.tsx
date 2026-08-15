@@ -52,6 +52,24 @@ export function CreateLicenseDialog({ productId }: { productId: string }) {
     if (state.plaintextKey) setAcknowledged(false);
   }
 
+  // Which key the developer has already acknowledged and dismissed.
+  //
+  // This is load-bearing: `useActionState` has no reset, so `state.plaintextKey`
+  // stays populated for the life of the mounted component. Gating the reveal on
+  // `state.plaintextKey` alone would make the dialog impossible to close — the
+  // branch below hardcodes `open`, so "Done" would clear local state and then
+  // immediately re-render the exact same reveal. Comparing against the dismissed
+  // key closes it, while a subsequent license still produces a different key
+  // string and correctly re-opens the reveal.
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+
+  // A value rather than a boolean so TypeScript narrows it to `string` inside
+  // the branch below.
+  const revealKey =
+    state.plaintextKey !== null && state.plaintextKey !== dismissedKey
+      ? state.plaintextKey
+      : null;
+
   function closeAll() {
     setOpen(false);
     setMode("permanent");
@@ -59,9 +77,15 @@ export function CreateLicenseDialog({ productId }: { productId: string }) {
     setAcknowledged(false);
   }
 
+  function acknowledgeAndClose() {
+    // Recorded before closing, so the reveal cannot reappear for this key.
+    setDismissedKey(revealKey);
+    closeAll();
+  }
+
   // Once a key exists, the form is replaced by the reveal. There is no path
-  // back to the form without dismissing the key, and no way to re-open it.
-  if (state.plaintextKey) {
+  // back to the form except acknowledging the key, and no way to re-open it.
+  if (revealKey !== null) {
     return (
       <Dialog open onOpenChange={() => undefined}>
         <DialogContent
@@ -83,9 +107,9 @@ export function CreateLicenseDialog({ productId }: { productId: string }) {
 
           <div className="space-y-3 py-5">
             <div className="rounded-lg border border-border bg-muted/40 p-4">
-              <code className="block break-all font-mono text-sm">{state.plaintextKey}</code>
+              <code className="block break-all font-mono text-sm">{revealKey}</code>
             </div>
-            <CopyButton value={state.plaintextKey} label="Copy license key" />
+            <CopyButton value={revealKey} label="Copy license key" />
 
             <label className="flex cursor-pointer items-start gap-2.5 pt-2 text-sm">
               <input
@@ -101,7 +125,7 @@ export function CreateLicenseDialog({ productId }: { productId: string }) {
           </div>
 
           <DialogFooter>
-            <Button onClick={closeAll} disabled={!acknowledged}>
+            <Button onClick={acknowledgeAndClose} disabled={!acknowledged}>
               Done
             </Button>
           </DialogFooter>

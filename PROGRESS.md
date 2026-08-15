@@ -4,7 +4,7 @@
 **Release being built:** `Alpha_v1` (private/testing release — never call it "v1" in product UI)
 
 > **If you are a new assistant picking this up (ChatGPT, a fresh Claude session, a human):**
-> read this whole file first, then start at **Task 24** in the plan. Everything you need is here.
+> read this whole file first, then start at **Task 34** in the plan. Everything you need is here.
 
 ---
 
@@ -12,13 +12,29 @@
 
 | | |
 |---|---|
-| **Tasks complete** | **1–23 of 35** |
-| **Next task** | **Task 24 — Clerk wiring (`middleware.ts`, `src/lib/auth/require-developer.ts`)** |
-| **Test suite** | 176 tests, 19 files, all passing |
-| **Typecheck** | clean (exit 0) |
+| **Tasks complete** | **1–33 of 35** |
+| **Next task** | **Task 34 — live end-to-end walkthrough** (user has explicitly deferred this) |
+| **Test suite** | 191 tests, 20 files, all passing |
+| **Typecheck** | clean · lint clean · `npm run build` succeeds |
 | **Working tree** | clean, all work committed |
 
-Progress is also tracked as `- [x]` checkboxes inside the plan file itself. Tasks 1–23 are checked off there.
+Progress is also tracked as `- [x]` checkboxes inside the plan file itself. Tasks 1–33 are checked off there.
+
+---
+
+## ⚠️ Environment is LIVE (as of Tasks 24–33)
+
+`.env.local` contains **real working credentials** and is gitignored:
+
+- `DATABASE_URL` → live **Neon** Postgres, eu-central-1, Postgres 18.4, `sslmode=require`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` → real Clerk **test** keys
+- `KEYREN_LICENSE_HMAC_SECRET` → real 256-bit secret
+
+**The migration is already applied to Neon.** All 4 tables, 6 indexes, and the `license_status` enum exist and were verified by direct query. **Do NOT run `db:migrate` or `db:push` again.**
+
+**Never regenerate `KEYREN_LICENSE_HMAC_SECRET`.** It is what license keys are hashed with — changing it invalidates every key ever issued.
+
+`npm run dev` and `npm run build` both work now.
 
 ---
 
@@ -435,6 +451,30 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 | 3 | 11–15 | ✅ Complete. 92 tests passing (11 files), typecheck clean. Database genuinely exercised for the first time. One plan bug found and corrected (see below); one plan-vs-actual test-count mismatch noted (harmless). |
 | 4 | 16–19 | ✅ Complete. 133 tests passing (15 files), typecheck clean. The verification engine — the security core of the product — shipped with **zero** deviation from the plan's code. Two more harmless plan-prose test-count mismatches found and corrected in the plan (see below); no code impact. |
 | 5 | 20–23 | ✅ Complete. 176 tests passing (19 files), typecheck clean, lint clean. The public HTTP surface — rate limiting, validation, and the verify endpoint — shipped with one genuine (trivial) plan bug and two more harmless plan-prose test-count mismatches, both corrected below. All 17 of the specification's mandatory scenarios are now covered. |
+
+| 6 | 24–28 | ✅ Complete. 191 tests (20 files), typecheck + lint clean, `npm run build` succeeds. Clerk auth, server actions, shadcn/ui, dashboard shell, products page. **Two real plan bugs** found and corrected: middleware path, and a `DurationValue` cast that broke type inference. |
+| 7 | 29–33 | ✅ Complete. 191 tests still passing, build succeeds. Product detail + integration docs, show-once key dialog, licenses table, landing page, README + API reference. **One real bug found in the show-once dialog** (see below) plus four API-drift fixes. |
+
+### Batch 6-7 notes (Tasks 24-33) — UI
+
+**New environment facts discovered:**
+
+- **`middleware.ts` MUST live at `src/middleware.ts`.** This project uses a `src/` layout. At the repo root, Next.js silently never invokes it — typecheck, lint, tests, and `next build` ALL still pass. The only symptom is a runtime error on the first `/dashboard` request. Caught only by actually running `npm run dev`.
+- **`@clerk/nextjs@7.7.4` does NOT export `SignedIn` / `SignedOut`.** They were replaced by a single async Server Component: `<Show when="signed-in">` / `<Show when="signed-out">`. The landing page uses `Show`.
+- **Clerk's `appearance.variables` has no `colorText`** in this version — it is `colorForeground`.
+- **shadcn CLI has changed shape.** `--base-color` no longer exists, and the default primitive library is now **Base UI**, not Radix. This project deliberately uses Radix (the plan's component code assumes it): `npx shadcn@4.17.0 init -t next -b radix -p nova -y`. To add components later: `npx --yes shadcn@4.17.0 add <name> --yes` — pin the version, since `@latest` 404s under `min-release-age=3`.
+- **shadcn's init auto-rewrites `layout.tsx`** to wire a Geist font. It was reverted; `globals.css`'s `--font-sans`/`--font-mono` overrides were removed so Tailwind v4's built-in stacks apply (`font-mono` is used on product IDs and license keys).
+- **Two ESLint rules are newly load-bearing** for any future component work: `react-hooks/set-state-in-effect` (no synchronous `setState` in a `useEffect` — adjust during render instead) and `react-hooks/purity` (no `Date.now()` / `Math.random()` in a component body — the licenses table uses the already-tested `isExpired()` helper instead).
+- **`npm run dev` regenerates root-level `AGENTS.md` / `CLAUDE.md`** (a Next.js 16 feature). They are deleted, not committed.
+- Cosmetic deprecation warnings on every build, deliberately not fixed: Next's "middleware → proxy" rename, and Clerk's `createRouteMatcher` notice.
+
+**Component API surface (shadcn radix-nova, neutral, lucide-react ^1.31.0):**
+
+- `DialogContent` accepts `showCloseButton` (default `true`) ✓
+- `DropdownMenuItem` accepts `variant?: "default" | "destructive"` ✓
+- Destructive styling is a **subtle tint** (`bg-destructive/10 text-destructive`), not solid red. Expected — do not "fix".
+
+**A real bug found and fixed in the show-once dialog.** The plan gated the key-reveal branch on `state.plaintextKey` alone. Because `useActionState` has no reset, that value persists for the life of the mounted component, and the reveal branch hardcodes `open` — so the "Done" button cleared local state and then immediately re-rendered the identical dialog. **The dialog was impossible to close without a page reload.** Fixed by tracking a `dismissedKey` and gating on `state.plaintextKey !== dismissedKey`. Every anti-dismissal guarantee is preserved (no Escape, no click-outside, no close button, acknowledgement still required), and a second license still correctly re-opens the reveal because its key string differs.
 
 ### Corrections already folded back into the plan
 

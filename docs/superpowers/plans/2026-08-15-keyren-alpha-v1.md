@@ -4654,7 +4654,7 @@ export const config = {
 };
 ```
 
-- [ ] **Step 2: Create `src/lib/auth/require-developer.ts`**
+- [x] **Step 2: Create `src/lib/auth/require-developer.ts`**
 
 ```ts
 import { auth } from "@clerk/nextjs/server";
@@ -4681,7 +4681,7 @@ export async function requireDeveloperId(): Promise<string> {
 }
 ```
 
-- [ ] **Step 3: Wrap the app in `ClerkProvider`**
+- [x] **Step 3: Wrap the app in `ClerkProvider`**
 
 Modify `src/app/layout.tsx`:
 
@@ -4717,7 +4717,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-- [ ] **Step 4: Create the auth pages**
+- [x] **Step 4: Create the auth pages**
 
 `src/app/sign-in/[[...sign-in]]/page.tsx`:
 
@@ -4747,7 +4747,7 @@ export default function SignUpPage() {
 }
 ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 ```bash
 npm run typecheck
@@ -4756,7 +4756,7 @@ Expected: exits 0.
 
 A running check needs real Clerk keys in `.env.local`. If they are not available yet, note it and continue — the test suite does not depend on Clerk.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A && git commit -m "feat: Clerk developer authentication and route protection"
@@ -4772,7 +4772,7 @@ git add -A && git commit -m "feat: Clerk developer authentication and route prot
 - Create: `src/app/dashboard/products/[productId]/licenses/actions.ts`
 - Create: `tests/validation/dashboard.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/validation/dashboard.test.ts`:
 
@@ -4881,14 +4881,14 @@ describe("createLicenseSchema", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/validation/dashboard.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/validation/dashboard`.
 
-- [ ] **Step 3: Implement `src/lib/validation/dashboard.ts`**
+- [x] **Step 3: Implement `src/lib/validation/dashboard.ts`**
 
 ```ts
 import { z } from "zod";
@@ -4945,7 +4945,7 @@ export const createLicenseSchema = z.discriminatedUnion("mode", [
 export const licenseActionSchema = z.object({ licenseId: licenseIdSchema });
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/validation/dashboard.test.ts
@@ -4954,7 +4954,7 @@ Expected: 15 passed.
 
 > `z.discriminatedUnion` with `.default()` on a shared field: if Zod 4 rejects a default inside a discriminated union member, move `hwidLocked` to a `.transform()` that fills it, or preprocess the form data. Do not remove the default — an omitted checkbox producing an unlocked license is a real security regression.
 
-- [ ] **Step 5: Create `src/app/dashboard/products/actions.ts`**
+- [x] **Step 5: Create `src/app/dashboard/products/actions.ts`**
 
 ```ts
 "use server";
@@ -5039,7 +5039,7 @@ export async function deleteProductAction(
 }
 ```
 
-- [ ] **Step 6: Create `src/app/dashboard/products/[productId]/licenses/actions.ts`**
+- [x] **Step 6: Create `src/app/dashboard/products/[productId]/licenses/actions.ts`**
 
 ```ts
 "use server";
@@ -5159,7 +5159,7 @@ export const deleteLicenseAction = licenseMutation((ownerId, licenseId) =>
 );
 ```
 
-- [ ] **Step 7: Typecheck and commit**
+- [x] **Step 7: Typecheck and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -5177,7 +5177,7 @@ Visual direction: dark-first, minimal, spacious, subtle borders, restrained acce
 - Modify: `src/app/globals.css`
 - Create: `components.json`, `src/components/ui/**`, `src/lib/utils.ts`
 
-- [ ] **Step 1: Initialise shadcn/ui**
+- [x] **Step 1: Initialise shadcn/ui**
 
 ```bash
 npx --yes shadcn@latest init --defaults --base-color neutral --yes
@@ -5191,7 +5191,7 @@ npx --yes shadcn@latest add button card dialog alert-dialog input label select s
 
 Expected: `src/components/ui/*.tsx` created, `src/lib/utils.ts` with `cn()`, `components.json` written.
 
-- [ ] **Step 2: Set the dark-first palette in `src/app/globals.css`**
+- [x] **Step 2: Set the dark-first palette in `src/app/globals.css`**
 
 Keep the `@import "tailwindcss";` line shadcn/Tailwind 4 generates, and set the dark theme values so the app is dark by default (the root `<html>` already carries `className="dark"`):
 
@@ -5222,14 +5222,14 @@ Keep the `@import "tailwindcss";` line shadcn/Tailwind 4 generates, and set the 
 
 Apply the same values under `.dark` so both selectors resolve identically — Alpha_v1 ships dark only, and this avoids a flash of an unstyled light theme.
 
-- [ ] **Step 3: Verify the build compiles**
+- [x] **Step 3: Verify the build compiles**
 
 ```bash
 npm run typecheck && npm run build
 ```
 Expected: build succeeds. It will fail if `.env.local` lacks the required variables, because `src/env.ts` validates at import time — that is the intended behaviour. Populate `.env.local` from `.env.example` with a placeholder `DATABASE_URL`, a generated secret (`openssl rand -hex 32`), and Clerk test keys before building.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add -A && git commit -m "feat: shadcn/ui with dark-first design tokens"
@@ -5243,7 +5243,7 @@ git add -A && git commit -m "feat: shadcn/ui with dark-first design tokens"
 - Create: `src/components/dashboard/sidebar.tsx`, `src/components/dashboard/copy-button.tsx`, `src/components/dashboard/page-header.tsx`
 - Create: `src/app/dashboard/layout.tsx`, `src/app/dashboard/page.tsx`, `src/app/dashboard/settings/page.tsx`
 
-- [ ] **Step 1: Create `src/components/dashboard/copy-button.tsx`**
+- [x] **Step 1: Create `src/components/dashboard/copy-button.tsx`**
 
 Used in several places — product IDs, license keys, the integration snippet.
 
@@ -5293,7 +5293,7 @@ export function CopyButton({
 }
 ```
 
-- [ ] **Step 2: Create `src/components/dashboard/page-header.tsx`**
+- [x] **Step 2: Create `src/components/dashboard/page-header.tsx`**
 
 ```tsx
 export function PageHeader({
@@ -5319,7 +5319,7 @@ export function PageHeader({
 }
 ```
 
-- [ ] **Step 3: Create `src/components/dashboard/sidebar.tsx`**
+- [x] **Step 3: Create `src/components/dashboard/sidebar.tsx`**
 
 Exactly three items. No placeholders for features that do not exist.
 
@@ -5368,7 +5368,7 @@ export function DashboardSidebar() {
 }
 ```
 
-- [ ] **Step 4: Create `src/app/dashboard/layout.tsx`**
+- [x] **Step 4: Create `src/app/dashboard/layout.tsx`**
 
 ```tsx
 import Link from "next/link";
@@ -5404,7 +5404,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 }
 ```
 
-- [ ] **Step 5: Create `src/app/dashboard/page.tsx` (Overview)**
+- [x] **Step 5: Create `src/app/dashboard/page.tsx` (Overview)**
 
 ```tsx
 import Link from "next/link";
@@ -5477,7 +5477,7 @@ export default async function OverviewPage() {
 }
 ```
 
-- [ ] **Step 6: Create `src/app/dashboard/settings/page.tsx`**
+- [x] **Step 6: Create `src/app/dashboard/settings/page.tsx`**
 
 Alpha_v1 has no developer-configurable settings, so this page states the release's limitations honestly rather than showing fake toggles.
 
@@ -5527,7 +5527,7 @@ export default function SettingsPage() {
 }
 ```
 
-- [ ] **Step 7: Verify and commit**
+- [x] **Step 7: Verify and commit**
 
 ```bash
 npm run typecheck && git add -A && git commit -m "feat: dashboard shell, overview and settings"
@@ -5541,7 +5541,7 @@ npm run typecheck && git add -A && git commit -m "feat: dashboard shell, overvie
 - Create: `src/components/products/create-product-dialog.tsx`, `src/components/products/product-actions.tsx`
 - Create: `src/app/dashboard/products/page.tsx`
 
-- [ ] **Step 1: Create `src/components/products/create-product-dialog.tsx`**
+- [x] **Step 1: Create `src/components/products/create-product-dialog.tsx`**
 
 ```tsx
 "use client";
@@ -5610,7 +5610,7 @@ export function CreateProductDialog() {
 }
 ```
 
-- [ ] **Step 2: Create `src/components/products/product-actions.tsx`**
+- [x] **Step 2: Create `src/components/products/product-actions.tsx`**
 
 Rename and delete, with delete requiring the product name to be typed.
 
@@ -5743,7 +5743,7 @@ export function ProductActions({ productId, name }: { productId: string; name: s
 }
 ```
 
-- [ ] **Step 3: Create `src/app/dashboard/products/page.tsx`**
+- [x] **Step 3: Create `src/app/dashboard/products/page.tsx`**
 
 ```tsx
 import Link from "next/link";
@@ -5837,7 +5837,7 @@ export default async function ProductsPage() {
 }
 ```
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 npm run typecheck && git add -A && git commit -m "feat: products page with create, rename and confirmed delete"
@@ -5850,7 +5850,7 @@ npm run typecheck && git add -A && git commit -m "feat: products page with creat
 - Create: `src/app/dashboard/products/[productId]/layout.tsx`, `src/app/dashboard/products/[productId]/page.tsx`
 - Create: `src/components/products/integration-snippet.tsx`
 
-- [ ] **Step 1: Create `src/app/dashboard/products/[productId]/layout.tsx`**
+- [x] **Step 1: Create `src/app/dashboard/products/[productId]/layout.tsx`**
 
 Fetches the product once (ownership-scoped) and renders the two product-level tabs.
 
@@ -5919,7 +5919,7 @@ export default async function ProductLayout({
 }
 ```
 
-- [ ] **Step 2: Create `src/components/products/integration-snippet.tsx`**
+- [x] **Step 2: Create `src/components/products/integration-snippet.tsx`**
 
 The Alpha_v1 integration documentation, rendered with the developer's real product ID substituted in.
 
@@ -6016,7 +6016,7 @@ if (!result.success) {
 }
 ```
 
-- [ ] **Step 3: Create `src/app/dashboard/products/[productId]/page.tsx`**
+- [x] **Step 3: Create `src/app/dashboard/products/[productId]/page.tsx`**
 
 ```tsx
 import Link from "next/link";
@@ -6078,7 +6078,7 @@ export default async function ProductOverviewPage({
 }
 ```
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 npm run typecheck && git add -A && git commit -m "feat: product overview with integration documentation"
@@ -6093,12 +6093,12 @@ The single most important piece of UX in the product. If the developer dismisses
 **Files:**
 - Create: `src/components/licenses/create-license-dialog.tsx`
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```tsx
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { AlertTriangle, Plus } from "lucide-react";
 import {
   createLicenseAction,
@@ -6141,9 +6141,28 @@ export function CreateLicenseDialog({ productId }: { productId: string }) {
 
   // Reset the acknowledgement whenever a new key arrives, so the developer
   // cannot carry a previous confirmation over to a key they have not saved.
-  useEffect(() => {
+  const [lastKey, setLastKey] = useState(state.plaintextKey);
+  if (state.plaintextKey !== lastKey) {
+    setLastKey(state.plaintextKey);
     if (state.plaintextKey) setAcknowledged(false);
-  }, [state.plaintextKey]);
+  }
+
+  // Which key the developer has already acknowledged and dismissed.
+  //
+  // Load-bearing: `useActionState` has no reset, so `state.plaintextKey` stays
+  // populated for the life of the mounted component. Gating the reveal on
+  // `state.plaintextKey` alone makes the dialog IMPOSSIBLE TO CLOSE — the
+  // branch below hardcodes `open`, so "Done" clears local state and then
+  // immediately re-renders the identical reveal. Comparing against the
+  // dismissed key closes it, while a later license still yields a different
+  // key string and correctly re-opens the reveal.
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+
+  // A value rather than a boolean so TypeScript narrows it to `string` below.
+  const revealKey =
+    state.plaintextKey !== null && state.plaintextKey !== dismissedKey
+      ? state.plaintextKey
+      : null;
 
   function closeAll() {
     setOpen(false);
@@ -6152,9 +6171,15 @@ export function CreateLicenseDialog({ productId }: { productId: string }) {
     setAcknowledged(false);
   }
 
+  function acknowledgeAndClose() {
+    // Recorded before closing, so the reveal cannot reappear for this key.
+    setDismissedKey(revealKey);
+    closeAll();
+  }
+
   // Once a key exists, the form is replaced by the reveal. There is no path
-  // back to the form without dismissing the key, and no way to re-open it.
-  if (state.plaintextKey) {
+  // back to the form except acknowledging the key, and no way to re-open it.
+  if (revealKey !== null) {
     return (
       <Dialog open onOpenChange={() => undefined}>
         <DialogContent
@@ -6176,9 +6201,9 @@ export function CreateLicenseDialog({ productId }: { productId: string }) {
 
           <div className="space-y-3 py-5">
             <div className="rounded-lg border border-border bg-muted/40 p-4">
-              <code className="block break-all font-mono text-sm">{state.plaintextKey}</code>
+              <code className="block break-all font-mono text-sm">{revealKey}</code>
             </div>
-            <CopyButton value={state.plaintextKey} label="Copy license key" />
+            <CopyButton value={revealKey} label="Copy license key" />
 
             <label className="flex cursor-pointer items-start gap-2.5 pt-2 text-sm">
               <input
@@ -6194,7 +6219,7 @@ export function CreateLicenseDialog({ productId }: { productId: string }) {
           </div>
 
           <DialogFooter>
-            <Button onClick={closeAll} disabled={!acknowledged}>
+            <Button onClick={acknowledgeAndClose} disabled={!acknowledged}>
               Done
             </Button>
           </DialogFooter>
@@ -6300,7 +6325,7 @@ export function CreateLicenseDialog({ productId }: { productId: string }) {
 
 > `showCloseButton` exists on the current shadcn dialog. If this version's `DialogContent` does not accept it, hide the close affordance with a class instead. The requirement is that the key cannot be dismissed accidentally — do not drop the acknowledgement gate.
 
-- [ ] **Step 2: Verify and commit**
+- [x] **Step 2: Verify and commit**
 
 ```bash
 npm run typecheck && git add -A && git commit -m "feat: license creation dialog with show-once key reveal"
@@ -6314,7 +6339,7 @@ npm run typecheck && git add -A && git commit -m "feat: license creation dialog 
 - Create: `src/components/licenses/license-row-actions.tsx`, `src/components/licenses/license-status-badge.tsx`
 - Create: `src/app/dashboard/products/[productId]/licenses/page.tsx`
 
-- [ ] **Step 1: Create `src/components/licenses/license-status-badge.tsx`**
+- [x] **Step 1: Create `src/components/licenses/license-status-badge.tsx`**
 
 ```tsx
 import { Badge } from "@/components/ui/badge";
@@ -6342,7 +6367,7 @@ export function LicenseStatusBadge({
 }
 ```
 
-- [ ] **Step 2: Create `src/components/licenses/license-row-actions.tsx`**
+- [x] **Step 2: Create `src/components/licenses/license-row-actions.tsx`**
 
 ```tsx
 "use client";
@@ -6512,7 +6537,7 @@ export function LicenseRowActions({
 }
 ```
 
-- [ ] **Step 3: Create `src/app/dashboard/products/[productId]/licenses/page.tsx`**
+- [x] **Step 3: Create `src/app/dashboard/products/[productId]/licenses/page.tsx`**
 
 ```tsx
 import { notFound } from "next/navigation";
@@ -6641,7 +6666,7 @@ export default async function LicensesPage({
 }
 ```
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 npm run typecheck && npm run lint && git add -A && git commit -m "feat: licenses table with revoke, restore, reset and delete"
@@ -6655,7 +6680,7 @@ npm run typecheck && npm run lint && git add -A && git commit -m "feat: licenses
 **Files:**
 - Modify: `src/app/page.tsx`
 
-- [ ] **Step 1: Replace the create-next-app placeholder**
+- [x] **Step 1: Replace the create-next-app placeholder**
 
 Restrained, developer-infrastructure tone. The one place a hero is acceptable — the spec forbids them *inside the authenticated dashboard*.
 
@@ -6761,7 +6786,7 @@ export default function LandingPage() {
 }
 ```
 
-- [ ] **Step 2: Verify and commit**
+- [x] **Step 2: Verify and commit**
 
 ```bash
 npm run typecheck && git add -A && git commit -m "feat: landing page"
@@ -6774,11 +6799,11 @@ npm run typecheck && git add -A && git commit -m "feat: landing page"
 **Files:**
 - Create: `README.md`, `docs/api.md`
 
-- [ ] **Step 1: Write `README.md`**
+- [x] **Step 1: Write `README.md`**
 
 Cover: what Keyren is, the Alpha_v1 scope, local setup (env vars, `openssl rand -hex 32` for the secret, `npm run db:generate` / `db:migrate`), the commands (`dev`, `test`, `typecheck`, `lint`, `build`), the architecture layering (UI → route/action → service → persistence → crypto), and an explicit **Security notes** section stating: plaintext keys are never stored; the HMAC secret must never be shipped to a client; rotating the secret invalidates every existing license; device fingerprints are spoofable identifiers rather than hardware security primitives; validation is online-only in Alpha_v1.
 
-- [ ] **Step 2: Write `docs/api.md`**
+- [x] **Step 2: Write `docs/api.md`**
 
 Document `POST /api/v1/licenses/verify` completely: the request body fields, the success envelope for both expiring and permanent licenses, and a table of every error code with its HTTP status and meaning:
 
@@ -6797,7 +6822,7 @@ State plainly that `LICENSE_INVALID` deliberately does not distinguish "never ex
 
 Include an "Integrating safely" section repeating: the product ID is not a credential and is safe to embed; never ship dashboard credentials or the HMAC secret in distributed software; assume anything in a shipped binary is readable; send a precomputed fingerprint rather than raw hardware identifiers; and Alpha_v1 is online-only, so decide deliberately what your application does when Keyren is unreachable.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add -A && git commit -m "docs: README and public API reference"
