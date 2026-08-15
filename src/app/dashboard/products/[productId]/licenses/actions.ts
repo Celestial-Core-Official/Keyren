@@ -23,8 +23,13 @@ export type LicenseActionState = { error: string | null };
  * never written to the database, never logged, and never returned by any
  * list or detail endpoint. Once the dialog is dismissed it is unrecoverable,
  * which is why the dialog demands an explicit acknowledgement.
+ *
+ * The first variant is the `useActionState` seed value only — before any
+ * submission there is neither an error nor a key yet. `createLicenseAction`
+ * itself only ever returns the second or third variant.
  */
 export type CreateLicenseState =
+  | { error: null; plaintextKey: null }
   | { error: string; plaintextKey: null }
   | { error: null; plaintextKey: string };
 
