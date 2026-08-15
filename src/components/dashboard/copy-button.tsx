@@ -22,6 +22,7 @@ export function CopyButton({
   announce = false,
   variant = "ghost",
   successMessage,
+  onCopied,
 }: {
   value: string;
   label?: string;
@@ -30,6 +31,8 @@ export function CopyButton({
   announce?: boolean;
   variant?: "ghost" | "outline" | "secondary";
   successMessage?: string;
+  /** Runs only on a genuine success, never on a blocked clipboard. */
+  onCopied?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [status, setStatus] = useState("");
@@ -50,6 +53,7 @@ export function CopyButton({
       setTimeout(() => setCopied(false), 1600);
 
       if (announce) toast.success(successMessage ?? "Copied to clipboard.");
+      onCopied?.();
     } catch {
       setStatus("Copy failed");
       toast.error(
