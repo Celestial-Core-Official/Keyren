@@ -69,9 +69,9 @@ export async function createLicenseAction(
 
     revalidatePath(`/dashboard/products/${parsed.data.productId}/licenses`);
     return { error: null, plaintextKey };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not create license.";
-    return { error: message, plaintextKey: null };
+  } catch {
+    // Never return database or driver exception text to the browser.
+    return { error: "Could not create license.", plaintextKey: null };
   }
 }
 

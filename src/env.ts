@@ -7,6 +7,8 @@ import { z } from "zod";
  * immediately and loudly rather than at the first verification request.
  */
 const envSchema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).optional(),
+  VERCEL_ENV: z.enum(["development", "preview", "production"]).optional(),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
 
   // 32 bytes hex = 64 chars. Anything shorter is rejected outright rather
@@ -26,6 +28,17 @@ const envSchema = z.object({
     .int()
     .positive()
     .default(600),
+}).superRefine((value, context) => {
+  if (value.VERCEL_ENV === "production") {
+    const hostname = new URL(value.NEXT_PUBLIC_APP_URL).hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
+      context.addIssue({
+        code: "custom",
+        path: ["NEXT_PUBLIC_APP_URL"],
+        message: "NEXT_PUBLIC_APP_URL must be a public URL in production",
+      });
+    }
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;

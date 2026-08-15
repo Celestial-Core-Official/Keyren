@@ -40,4 +40,14 @@ describe("parseEnv", () => {
     const env = parseEnv({ ...valid, RATE_LIMIT_VERIFY_PER_MINUTE: "10" });
     expect(env.RATE_LIMIT_VERIFY_PER_MINUTE).toBe(10);
   });
+
+  it("rejects a localhost app URL in production", () => {
+    expect(() =>
+      parseEnv({
+        ...valid,
+        VERCEL_ENV: "production",
+        NEXT_PUBLIC_APP_URL: "http://localhost:3000",
+      }),
+    ).toThrow(/NEXT_PUBLIC_APP_URL/);
+  });
 });

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { Show } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
+import { env } from "@/env";
 
-const SNIPPET = `const response = await fetch("https://keyren.dev/api/v1/licenses/verify", {
+function integrationSnippet(appUrl: string): string {
+  return `const response = await fetch("${appUrl}/api/v1/licenses/verify", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
@@ -17,8 +19,10 @@ const result = await response.json();
 if (!result.success) {
   throw new Error(result.error.code);
 }`;
+}
 
 export default function LandingPage() {
+  const snippet = integrationSnippet(env.NEXT_PUBLIC_APP_URL.replace(/\/$/, ""));
   return (
     <div className="min-h-screen">
       <header className="flex h-14 items-center justify-between border-b border-border px-6">
@@ -69,7 +73,7 @@ export default function LandingPage() {
         </div>
 
         <pre className="mt-14 overflow-x-auto rounded-lg border border-border bg-muted/40 p-5 text-xs leading-relaxed">
-          <code>{SNIPPET}</code>
+          <code>{snippet}</code>
         </pre>
 
         <div className="mt-14 grid gap-8 border-t border-border pt-10 sm:grid-cols-3">
