@@ -33,9 +33,16 @@ export class PostgresRateLimiter implements RateLimiter {
         // A single atomic upsert-and-increment. Doing this as SELECT then
         // UPDATE would let concurrent requests read the same count and each
         // decide they were under the limit.
+        // The timestamp is bound as an ISO-8601 STRING, not a Date object.
+        // This is not a style choice: postgres.js (the production driver)
+        // rejects a Date parameter outright with ERR_INVALID_ARG_TYPE, while
+        // PGlite (the test driver) accepts it. Binding a Date here therefore
+        // throws only in production, where the catch below silently fails
+        // open — disabling rate limiting entirely while every test still
+        // passes. Postgres casts the ISO string to timestamptz itself.
         const result = await this.db.execute<{ count: number }>(sql`
           INSERT INTO rate_limit_counters (bucket_key, window_start, count)
-          VALUES (${bucketKey}, ${new Date(windowStartMs)}, 1)
+          VALUES (${bucketKey}, ${new Date(windowStartMs).toISOString()}, 1)
           ON CONFLICT (bucket_key)
           DO UPDATE SET count = rate_limit_counters.count + 1
           RETURNING count
@@ -52,9 +59,20 @@ export class PostgresRateLimiter implements RateLimiter {
           : ((result as { rows?: unknown[] }).rows ?? []);
         const first = rows[0] as { count: number | string } | undefined;
         count = Number(first?.count ?? 0);
-      } catch {
-        // Fail open. An unavailable limiter must not take licensing offline.
-        // Deliberately does not log the bucket key, which contains an IP.
+      } catch (error) {
+        // Fail open: an unavailable limiter must not take licensing offline
+        // for every customer. But fail LOUDLY — a silent fail-open is
+        // indistinguishable from working rate limiting, which is exactly how
+        // the Date-binding bug above survived a green test suite and a live
+        // end-to-end run. This log is the only signal that the endpoint is
+        // currently unmetered.
+        //
+        // Logs the dimension name and the driver's message only. Never the
+        // bucket key, which embeds a client IP.
+        console.error("[rate-limit] failing open — limiter unavailable", {
+          dimension: dimension.name,
+          reason: error instanceof Error ? error.message.split("\n")[0] : "unknown",
+        });
         return { allowed: true };
       }
 

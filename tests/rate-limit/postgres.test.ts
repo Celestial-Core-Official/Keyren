@@ -102,3 +102,72 @@ describe("PostgresRateLimiter", () => {
     expect((await limiter.consume([])).allowed).toBe(true);
   });
 });
+
+/**
+ * Driver-portability regression tests.
+ *
+ * These exist because the suite above runs on PGlite, which is more permissive
+ * than the production driver. A bug that only manifests under postgres.js will
+ * pass every PGlite test, and — because the limiter fails open — will also pass
+ * a live end-to-end run, silently leaving the public endpoint unmetered.
+ *
+ * These tests assert on the statement the limiter *builds*, so they hold for
+ * any driver.
+ */
+describe("driver portability", () => {
+  function captureStatement() {
+    const calls: unknown[] = [];
+    const stub = {
+      execute: (query: unknown) => {
+        calls.push(query);
+        return Promise.resolve({ rows: [{ count: 1 }] });
+      },
+    } as unknown as Database;
+    return { stub, calls };
+  }
+
+  function chunksOf(query: unknown): unknown[] {
+    return (query as { queryChunks?: unknown[] }).queryChunks ?? [];
+  }
+
+  it("never binds a Date object as a parameter", async () => {
+    // postgres.js rejects a Date parameter with ERR_INVALID_ARG_TYPE, while
+    // PGlite accepts it. Binding a Date therefore disables rate limiting in
+    // production only. Timestamps must be passed as ISO-8601 strings.
+    const { stub, calls } = captureStatement();
+
+    await new PostgresRateLimiter(stub).consume([
+      { name: "ip", value: "1.1.1.1", limit: 10, windowSeconds: 60 },
+    ]);
+
+    expect(calls).toHaveLength(1);
+    const dateChunks = chunksOf(calls[0]).filter((chunk) => chunk instanceof Date);
+    expect(dateChunks).toEqual([]);
+  });
+
+  it("binds the window start as a parseable ISO-8601 string", async () => {
+    const { stub, calls } = captureStatement();
+
+    await new PostgresRateLimiter(stub).consume([
+      { name: "ip", value: "1.1.1.1", limit: 10, windowSeconds: 60 },
+    ]);
+
+    const isoChunks = chunksOf(calls[0]).filter(
+      (chunk): chunk is string =>
+        typeof chunk === "string" && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(chunk),
+    );
+    expect(isoChunks).toHaveLength(1);
+    expect(Number.isNaN(Date.parse(isoChunks[0]!))).toBe(false);
+  });
+
+  it("issues one statement per dimension", async () => {
+    const { stub, calls } = captureStatement();
+
+    await new PostgresRateLimiter(stub).consume([
+      { name: "ip", value: "1.1.1.1", limit: 10, windowSeconds: 60 },
+      { name: "product", value: "prod_x", limit: 100, windowSeconds: 60 },
+    ]);
+
+    expect(calls).toHaveLength(2);
+  });
+});

@@ -24,7 +24,7 @@ export default function LandingPage() {
       <header className="flex h-14 items-center justify-between border-b border-border px-6">
         <div className="flex items-center gap-2">
           <span className="font-semibold tracking-tight">Keyren</span>
-          <span className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          <span className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium tracking-wider text-muted-foreground">
             Alpha_v1
           </span>
         </div>
