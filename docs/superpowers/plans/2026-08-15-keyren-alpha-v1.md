@@ -6834,7 +6834,7 @@ git add -A && git commit -m "docs: README and public API reference"
 
 Nothing is claimed complete until these commands have actually been run and their output read.
 
-- [ ] **Step 1: Run the whole gate**
+- [x] **Step 1: Run the whole gate**
 
 ```bash
 npm run typecheck && npm run lint && npm run test && npm run build
@@ -6842,7 +6842,7 @@ npm run typecheck && npm run lint && npm run test && npm run build
 
 Every one must pass. Do not suppress a failure with `eslint-disable`, `@ts-expect-error`, or a skipped test — fix the cause. If `npm run build` fails on missing environment variables, that is `src/env.ts` working correctly; populate `.env.local` rather than weakening the schema.
 
-- [ ] **Step 2: Confirm the mandated scenarios are all covered**
+- [x] **Step 2: Confirm the mandated scenarios are all covered**
 
 ```bash
 npx vitest run --reporter=verbose
@@ -6850,7 +6850,7 @@ npx vitest run --reporter=verbose
 
 Read the output and check off all 17 scenarios from the coverage map in this plan's header. If any is missing, add it before continuing.
 
-- [ ] **Step 3: Run the end-to-end success criteria against a real database**
+- [x] **Step 3: Run the end-to-end success criteria against a real database**
 
 This needs a real `DATABASE_URL` and real Clerk keys. Apply migrations first:
 
@@ -6888,7 +6888,7 @@ Expected: `{"success":true,"license":{"status":"active","expiresAt":null}}`.
 12. Restore → succeeds again.
 13. Delete with the typed confirmation → `LICENSE_INVALID`.
 
-- [ ] **Step 4: Record the result**
+- [x] **Step 4: Record the result**
 
 Note in the commit message which steps were executed against a live database and which were not. If Clerk keys or a database were unavailable, say so explicitly rather than implying the flow was verified.
 
@@ -6902,7 +6902,7 @@ git add -A && git commit -m "chore: verification pass"
 
 A deliberate pass over the finished code, not a re-run of the tests.
 
-- [ ] **Step 1: Confirm no secret can reach a client**
+- [x] **Step 1: Confirm no secret can reach a client**
 
 ```bash
 grep -rn "KEYREN_LICENSE_HMAC_SECRET\|CLERK_SECRET_KEY" src/ --include=*.ts --include=*.tsx
@@ -6914,14 +6914,14 @@ grep -rn "NEXT_PUBLIC_" src/ | grep -iv "clerk\|app_url"
 ```
 Expected: no results. Only the Clerk publishable key and the app URL are public by design.
 
-- [ ] **Step 2: Confirm no plaintext key or raw fingerprint is logged**
+- [x] **Step 2: Confirm no plaintext key or raw fingerprint is logged**
 
 ```bash
 grep -rn "console\.\(log\|error\|warn\|info\)" src/
 ```
 Review every hit. None may receive a license key, a `keyHash`, a raw `deviceId`, or a whole request body.
 
-- [ ] **Step 3: Confirm every mutation is ownership-scoped**
+- [x] **Step 3: Confirm every mutation is ownership-scoped**
 
 Read `src/lib/products/service.ts` and `src/lib/licenses/service.ts` and check that every exported function either takes `ownerId` and folds it into the WHERE clause, or calls `assertOwnsProduct` / `findOwnedLicense` first. Then:
 
@@ -6935,15 +6935,15 @@ grep -rn "ownerId" src/lib/validation/
 ```
 Expected: no results — ownership must never be a validated input field.
 
-- [ ] **Step 4: Confirm the public endpoint is not behind Clerk**
+- [x] **Step 4: Confirm the public endpoint is not behind Clerk**
 
 Re-read `middleware.ts` and confirm `createRouteMatcher` covers only `/dashboard(.*)`. A verification request must never receive a redirect.
 
-- [ ] **Step 5: Re-read the verification engine end to end**
+- [x] **Step 5: Re-read the verification engine end to end**
 
 Read `src/lib/licenses/verify.ts` in full and check each claim: the product lookup precedes the key lookup; the license query is scoped by `productId`; revoked is checked before expired; expiry uses the server clock only; `DEVICE_MISMATCH` is returned only for HWID-locked licenses bound elsewhere; no branch returns an internal ID or a distinct code that reveals whether a key exists.
 
-- [ ] **Step 6: Write up the findings**
+- [x] **Step 6: Write up the findings**
 
 Create `docs/security-review.md` recording what was checked, what passed, and any accepted residual risks with the reasoning. Known ones to state explicitly:
 

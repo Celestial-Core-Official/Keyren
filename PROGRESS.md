@@ -4,7 +4,7 @@
 **Release being built:** `Alpha_v1` (private/testing release — never call it "v1" in product UI)
 
 > **If you are a new assistant picking this up (ChatGPT, a fresh Claude session, a human):**
-> read this whole file first, then start at **Task 34** in the plan. Everything you need is here.
+> read this whole file first. **All 35 tasks are complete.** Alpha_v1 is built, tested, and reviewed.
 
 ---
 
@@ -12,13 +12,21 @@
 
 | | |
 |---|---|
-| **Tasks complete** | **1–33 of 35** |
-| **Next task** | **Task 34 — live end-to-end walkthrough** (user has explicitly deferred this) |
-| **Test suite** | 191 tests, 20 files, all passing |
+| **Tasks complete** | **35 of 35 — Alpha_v1 COMPLETE** |
+| **Next task** | none — see "Known follow-ups" below |
+| **Test suite** | 194 tests, 20 files, all passing |
 | **Typecheck** | clean · lint clean · `npm run build` succeeds |
 | **Working tree** | clean, all work committed |
 
-Progress is also tracked as `- [x]` checkboxes inside the plan file itself. Tasks 1–33 are checked off there.
+Progress is also tracked as `- [x]` checkboxes inside the plan file itself. All tasks are checked off.
+
+**Live end-to-end walkthrough: 26/26 assertions passed** against real Neon + the running server. Security review: `docs/security-review.md`.
+
+### Known follow-ups (not blockers)
+
+- **Any raw `db.execute()` is only tested against PGlite**, which is more permissive than production's postgres.js. One mandatory control (rate limiting) was completely inert in production because of this while every test passed — see SEC-1 in the security review. Verify raw SQL against postgres.js specifically.
+- `/dashboard/settings` and the dashboard layout don't call `requireDeveloperId()`. Harmless today (neither reads owned data), but any change that makes them read owned data must add it.
+- Cosmetic deprecation warnings on every build: Next's "middleware → proxy" rename, Clerk's `createRouteMatcher`.
 
 ---
 
