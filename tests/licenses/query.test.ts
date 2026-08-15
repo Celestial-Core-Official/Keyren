@@ -521,7 +521,29 @@ describe("getProductLicenseStats", () => {
       expired: 0,
       revoked: 0,
       boundDevices: 0,
+      activated: 0,
     });
+  });
+
+  it("counts any activation as evidence a verification has succeeded", async () => {
+    // An activation row is only ever written by a successful verification, so
+    // this is what lets onboarding derive "your integration works" from real
+    // data instead of a flag somebody has to remember to set. Unlike
+    // boundDevices it includes unlocked licenses, which verify successfully
+    // without claiming a device.
+    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    await seedCast(product.id);
+
+    const stats = await getProductLicenseStats(db, DEVELOPER_A, product.id, NOW);
+    expect(stats.activated).toBe(2);
+    expect(stats.boundDevices).toBe(1);
+  });
+
+  it("reports no activations for a product nothing has verified against", async () => {
+    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    await makeLicense(db, { productId: product.id });
+
+    expect((await getProductLicenseStats(db, DEVELOPER_A, product.id, NOW)).activated).toBe(0);
   });
 
   it("refuses a product owned by another developer", async () => {

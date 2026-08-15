@@ -196,6 +196,15 @@ export type ProductLicenseStats = {
   expired: number;
   revoked: number;
   boundDevices: number;
+  /**
+   * Licenses with any activation row at all, locked or not.
+   *
+   * An activation row is only ever written by a successful verification, so a
+   * non-zero count is proof that this product's integration has worked at
+   * least once — which is what the onboarding checklist needs, derived from
+   * real data rather than a flag somebody has to remember to set.
+   */
+  activated: number;
 };
 
 export async function getProductLicenseStats(
@@ -225,6 +234,7 @@ export async function getProductLicenseStats(
       boundDevices: sql<number>`count(*) FILTER (
         WHERE ${licenses.hwidLocked} = true AND ${activations.id} IS NOT NULL
       )`,
+      activated: sql<number>`count(*) FILTER (WHERE ${activations.id} IS NOT NULL)`,
     })
     .from(licenses)
     .leftJoin(activations, eq(activations.licenseId, licenses.id))
@@ -236,5 +246,6 @@ export async function getProductLicenseStats(
     expired: Number(row?.expired ?? 0),
     revoked: Number(row?.revoked ?? 0),
     boundDevices: Number(row?.boundDevices ?? 0),
+    activated: Number(row?.activated ?? 0),
   };
 }

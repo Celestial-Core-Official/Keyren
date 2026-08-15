@@ -9,6 +9,7 @@ import { verifyUrl } from "@/lib/release";
 import { CopyButton } from "@/components/dashboard/copy-button";
 import { ApiTester } from "@/components/products/api-tester";
 import { IntegrationCenter } from "@/components/products/integration-center";
+import { OnboardingChecklist } from "@/components/products/onboarding-checklist";
 import { CreateLicenseDialog } from "@/components/licenses/create-license-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +40,15 @@ export default async function ProductOverviewPage({
 
   return (
     <div className="space-y-8">
+      <OnboardingChecklist
+        productId={product.id}
+        productSlug={product.slug}
+        hasLicense={stats.total > 0}
+        // Derived, not remembered: an activation row is only ever written by
+        // a verification that succeeded.
+        hasVerification={stats.activated > 0}
+      />
+
       <div className="grid gap-4 sm:grid-cols-3">
         {cards.map((stat) => (
           <Card key={stat.label}>
@@ -95,7 +105,9 @@ export default async function ProductOverviewPage({
         </Button>
       </div>
 
-      <IntegrationCenter productId={product.id} appUrl={env.NEXT_PUBLIC_APP_URL} />
+      <div id="integration" className="scroll-mt-20">
+        <IntegrationCenter productId={product.id} appUrl={env.NEXT_PUBLIC_APP_URL} />
+      </div>
 
       <ApiTester productId={product.id} />
     </div>
