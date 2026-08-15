@@ -4,7 +4,7 @@
 **Release being built:** `Alpha_v1` (private/testing release — never call it "v1" in product UI)
 
 > **If you are a new assistant picking this up (ChatGPT, a fresh Claude session, a human):**
-> read this whole file first, then start at **Task 11** in the plan. Everything you need is here.
+> read this whole file first, then start at **Task 16** in the plan. Everything you need is here.
 
 ---
 
@@ -12,13 +12,13 @@
 
 | | |
 |---|---|
-| **Tasks complete** | **1–10 of 35** |
-| **Next task** | **Task 11 — PGlite test harness** |
-| **Test suite** | 48 tests, 6 files, all passing |
+| **Tasks complete** | **1–15 of 35** |
+| **Next task** | **Task 16 — License lifecycle (revoke, restore, reset activation, delete)** |
+| **Test suite** | 92 tests, 11 files, all passing |
 | **Typecheck** | clean (exit 0) |
 | **Working tree** | clean, all work committed |
 
-Progress is also tracked as `- [x]` checkboxes inside the plan file itself. Tasks 1–10 are checked off there.
+Progress is also tracked as `- [x]` checkboxes inside the plan file itself. Tasks 1–15 are checked off there.
 
 ---
 
@@ -110,6 +110,20 @@ Do not remove `!.env.example` and do not rename the file, or it silently stops b
 
 `psql` and `docker` are **not installed**. This is why the entire test suite runs on **PGlite** (real Postgres compiled to WASM, in-memory) — no Docker, no local Postgres, no network required. Tasks 1–23 need nothing external.
 
+### `db.execute()`'s return shape and typing (resolved in Task 11 — read this before touching raw SQL)
+
+Two separate findings, both load-bearing for any future raw `db.execute(sql\`...\`)` call:
+
+1. **Runtime shape.** Under PGlite 0.5.4 / drizzle-orm 0.45.2, `await db.execute(sql\`...\`)` resolves to a plain object `{ rows: T[], fields: [...], affectedRows: number }` — **not** an iterable. `[...result]` throws `TypeError: result is not iterable`. Confirmed empirically by logging the actual value (see `tests/helpers/db.test.ts` git history — the debug log was added, the shape captured, then removed before commit). Use `result.rows`.
+2. **Compile-time type.** This is the more surprising one: `result` above types as `unknown`, **not** `{ rows: T[]; ... }`, even with `db.execute<T>(...)`. Root cause: `src/db/types.ts`'s `Database` type is deliberately written against the *abstract* `PgQueryResultHKT` base interface (for driver portability between postgres.js and PGlite), and that base interface hard-codes `type: unknown`. Only a *concrete* HKT (e.g. PGlite's own `PgliteQueryResultHKT`, which redefines `type` as `Results<Row>`) would let the `<TRow>` generic flow through. Because `Database` never uses the concrete HKT, `db.execute()`'s resolved value is `unknown` for **every** driver, always, by construction — this is not something a future task can fix by passing a different generic.
+   **Consequence:** any code that needs to read structured data back from a raw `db.execute()` call (as opposed to the fluent `.select()/.insert()/.update()/.delete()` query builders, which are unaffected and stay fully typed via `$inferSelect`) must add an explicit `as { rows: SomeShape[] }` assertion on the awaited result. This is a normal, narrow `as` cast documenting an empirically-confirmed shape — not `as any` — and does not violate the no-`any` rule. See `tests/helpers/db.test.ts` for the pattern.
+
+Also confirmed in Task 11: `migrate(db as never, { migrationsFolder: "./drizzle" })` (the cast the plan's own code uses to bridge the portable `Database` type to the PGlite migrator's concrete `PgliteDatabase<TSchema>` parameter type) works with zero runtime or type errors. No alternative form was needed.
+
+### Drizzle's relational query API (`db.query.<table>.findMany()`) works under the PGlite harness
+
+Confirmed in Task 13: `db.query.licenses.findMany()` works with no special setup beyond what `createTestDatabase()` already does (passing `schema` to `drizzle(client, { schema })`). The plan's documented fallback (`db.select().from(licenses)`) was **not** needed. Both forms are available; later tasks can use either.
+
 ---
 
 ## What exists right now
@@ -126,7 +140,14 @@ src/
 │   │   └── device.ts         # hashDeviceId()
 │   ├── errors.ts              # VerificationErrorCode, VERIFICATION_ERROR_STATUS/MESSAGE,
 │   │                          #   KeyrenError, notFound()
-│   └── log.ts                 # maskLicenseKey()
+│   ├── log.ts                  # maskLicenseKey()
+│   ├── products/
+│   │   ├── slug.ts             # slugify()
+│   │   └── service.ts          # createProduct/listProducts/getProduct/renameProduct/deleteProduct
+│   └── licenses/
+│       ├── expiration.ts       # DURATION_OPTIONS, resolveExpiresAt(), isExpired()
+│       └── service.ts          # createLicense()/listLicenses() — creation+listing half only;
+│                                #   revoke/restore/reset/delete land in Task 16
 └── db/
     ├── schema/
     │   ├── products.ts       # products table
@@ -140,11 +161,21 @@ tests/
 ├── setup.ts                  # seeds dummy env vars (see above)
 ├── env.test.ts               # 5 passing
 ├── errors.test.ts            # 6 passing
-└── crypto/
-    ├── random.test.ts        # 8 passing
-    ├── ids.test.ts           # 6 passing
-    ├── license-key.test.ts   # 18 passing
-    └── device.test.ts        # 5 passing
+├── crypto/
+│   ├── random.test.ts        # 8 passing
+│   ├── ids.test.ts           # 6 passing
+│   ├── license-key.test.ts   # 18 passing
+│   └── device.test.ts        # 5 passing
+├── helpers/
+│   ├── db.ts                  # createTestDatabase(), truncateAll(), TEST_HMAC_SECRET — not a test file
+│   ├── db.test.ts             # 2 passing — proves the PGlite harness itself works
+│   └── factories.ts           # makeProduct(), makeLicense(), DEVELOPER_A/DEVELOPER_B — not a test file
+├── products/
+│   ├── slug.test.ts           # 8 passing
+│   └── service.test.ts        # 14 passing
+└── licenses/
+    ├── expiration.test.ts     # 11 passing
+    └── create.test.ts         # 9 passing
 .env.example                  # documents every required variable
 drizzle.config.ts             # drizzle-kit config; reads DATABASE_URL, falls back to a placeholder
 drizzle/0000_glorious_purple_man.sql  # first migration: 4 tables, 1 enum, 2 FKs, 6 indexes
@@ -204,6 +235,50 @@ export { schema }
 // src/env.ts
 export function parseEnv(source): Env            // exported separately so tests
 export const env: Env                            // can validate without ambient env
+
+// src/lib/products/slug.ts
+export function slugify(name: string): string     // falls back to "product" if unusable
+
+// src/lib/products/service.ts
+export type Product = { id, name, slug, createdAt, updatedAt }
+export type ProductListItem = Product & { licenseCount: number }
+export function createProduct(db, ownerId, input: { name }): Promise<Product>
+export function listProducts(db, ownerId): Promise<ProductListItem[]>
+export function getProduct(db, ownerId, productId): Promise<Product | null>
+export function renameProduct(db, ownerId, productId, name): Promise<Product>   // throws notFound()
+export function deleteProduct(db, ownerId, productId): Promise<void>            // throws notFound()
+
+// src/lib/licenses/expiration.ts
+export const DURATION_OPTIONS: readonly { value, label, days }[]   // "1d".."365d", 6 options
+export type DurationValue = (typeof DURATION_OPTIONS)[number]["value"]
+export type ExpirationInput =
+  | { mode: "permanent" } | { mode: "date"; expiresAt: Date } | { mode: "duration"; duration: DurationValue }
+export function resolveExpiresAt(input: ExpirationInput, now?: Date): Date | null
+export function isExpired(expiresAt: Date | null, now?: Date): boolean   // deadline instant IS expired
+
+// src/lib/licenses/service.ts (creation + listing half; revoke/restore/reset/delete land in Task 16)
+export type LicenseView = { id, productId, keyLast4, status, expiresAt, hwidLocked, createdAt,
+                             updatedAt, revokedAt, activation: { activatedAt, lastSeenAt } | null }
+export type CreateLicenseInput = { productId, expiration: ExpirationInput, hwidLocked, secret }
+export function createLicense(db, ownerId, input): Promise<{ license: LicenseView; plaintextKey: string }>
+export function listLicenses(db, ownerId, productId): Promise<LicenseView[]>
+export function toLicenseView(row, activation): LicenseView
+```
+
+### Test helpers later tasks depend on (`tests/helpers/`, not exported from `src/`)
+
+```ts
+// tests/helpers/db.ts
+export function createTestDatabase(): Promise<{ db: Database; close: () => Promise<void> }>
+export function truncateAll(db: Database): Promise<void>
+export const TEST_HMAC_SECRET: string
+
+// tests/helpers/factories.ts
+export const DEVELOPER_A: string   // "user_developer_a"
+export const DEVELOPER_B: string   // "user_developer_b"
+export function makeProduct(db, options?: { ownerId?; name? }): Promise<{ id; ownerId; name }>
+export function makeLicense(db, options: { productId; hwidLocked?; expiresAt?; status? }):
+  Promise<{ id; plaintextKey }>
 ```
 
 ### ⚠️ A security invariant you can silently break
@@ -232,17 +307,22 @@ npm run db:migrate   # drizzle-kit migrate
 
 The build is running in **batches of 5 tasks** to conserve usage limits. Tasks are sequential and share files, so **run them in order** — do not parallelize within a batch.
 
-**Next up: Tasks 11–15.**
+**Next up: Tasks 16–20.**
 
 | Task | What it builds |
 |---|---|
-| 11 | PGlite test harness (`tests/helpers/db.ts`) |
-| 12 | Slug generation (`src/lib/products/slug.ts`) |
-| 13 | Product service with ownership enforced in SQL (`src/lib/products/service.ts`) |
-| 14 | Expiration normalization (`src/lib/licenses/expiration.ts`) |
-| 15 | License creation and listing (`src/lib/licenses/service.ts`) |
+| 16 | License lifecycle — revoke, restore, reset activation, delete (`src/lib/licenses/service.ts`, continued) |
+| 17 | Verification core — product, key lookup, enumeration resistance (`src/lib/licenses/verify.ts`) |
+| 18 | Verification — license state and expiration |
+| 19 | Verification — HWID binding, reset, and deletion |
+| 20 | Rate limiter interface and Postgres store (`src/lib/rate-limit/`) |
 
-Note for Task 11: `src/db/types.ts`'s `Database = PgDatabase<PgQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>` compiled with zero errors as written — the plan's documented fallback (`PgliteDatabase<typeof schema>` type + `as unknown as Database` casts) was **not** needed. Note that `src/db/index.ts` already goes through `as unknown as Database` at its one construction site regardless (per the plan's own code), so this was never a structural-assignability question — it was whether the `PgDatabase<...>` generic type itself resolves under drizzle-orm@0.45.2, and it does. Task 11's PGlite harness will presumably do the same `as unknown as Database` cast at its construction site; no reason is currently known why it wouldn't typecheck, but it hasn't been built yet.
+Notes for Task 16 (reads `src/lib/licenses/service.ts`, which Task 15 only half-built):
+- `toLicenseView` is exported (not just used internally) — Task 16's new functions (revoke/restore/reset/delete) will presumably need it too, to build their return values the same way `createLicense`/`listLicenses` do.
+- `assertOwnsProduct` is a private (non-exported) helper in the same file. A license-scoped equivalent (confirm a license exists AND its product belongs to this developer) does not exist yet — Task 16 most likely needs to add one, probably via a join from `licenses` to `products`, since a license doesn't carry `ownerId` directly.
+- The activation-reset operation will need to delete from `activations` where `licenseId` matches — no helper for that exists yet either.
+
+See "Environment facts" above for two Task-11-discovered items every later task needs: (1) `db.execute()`'s runtime shape and typing under the portable `Database` type, and (2) that `db.query.<table>` relational queries work. Both are load-bearing for Tasks 16–23.
 
 ### Working method for each task
 
@@ -265,6 +345,7 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 |---|---|---|
 | 1 | 1–5 | ✅ Complete. 18 tests passing, typecheck clean. Two plan bugs found and corrected (see below). |
 | 2 | 6–10 | ✅ Complete. 48 tests passing (6 files), typecheck clean. Plan's code used verbatim, no bugs found. Task 10's `Database` type fallback was **not** needed — the base-class `PgDatabase<...>` form compiled cleanly. |
+| 3 | 11–15 | ✅ Complete. 92 tests passing (11 files), typecheck clean. Database genuinely exercised for the first time. One plan bug found and corrected (see below); one plan-vs-actual test-count mismatch noted (harmless). |
 
 ### Corrections already folded back into the plan
 
@@ -278,6 +359,17 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 - `npm run db:generate` (Task 9) ran with **no** `.env.local` and **no** live Postgres, confirmed by PROGRESS.md's own prediction: it only reads `src/db/schema/*` and writes SQL. Output: `drizzle/0000_glorious_purple_man.sql` (4 `CREATE TABLE`, 1 `CREATE TYPE` enum, 2 `FOREIGN KEY` constraints, 2 `CREATE UNIQUE INDEX`, 4 `CREATE INDEX`).
 - One thing worth flagging precisely: of the plan's three named indexes on `licenses`, only `licenses_key_hash_unique` and `activations_license_unique` are SQL `UNIQUE` indexes. `licenses_product_key_hash_idx` is a deliberately **non-unique** composite index (the plan uses `index(...)`, not `uniqueIndex(...)`) — it exists purely to make the verification hot path `WHERE product_id = $1 AND key_hash = $2` an index lookup; global uniqueness is already guaranteed by `licenses_key_hash_unique` alone. Don't "fix" this to `uniqueIndex` in a later task.
 - `src/db/index.ts` (Task 10) imports `@/env` and constructs a `postgres()` client at module load using `env.DATABASE_URL`. This did **not** break the test suite because (a) `postgres()` from postgres.js is lazy — it does not open a TCP connection until a query actually runs — and (b) nothing in `tests/` currently imports `@/db`. Task 11 will presumably import it directly or provide a PGlite-backed alternative; watch for this if a future test ever imports the real `@/db/index.ts` module against the dummy `DATABASE_URL` in `tests/setup.ts`.
+
+### Batch 3 notes (Tasks 11–15) — the database ran for the first time
+
+- **Confirmed:** `tests/` still never imports `@/db/index.ts` (the real postgres.js singleton). Every service function takes `Database` as an explicit first parameter and imports only from `@/db/schema` / `@/db/types`, exactly as required. Tasks 12–15's services (`slug.ts`, `products/service.ts`, `licenses/expiration.ts`, `licenses/service.ts`) all follow this.
+- **The two unknowns flagged for this batch are both resolved — see "Environment facts" above for the full detail:**
+  1. `db.execute()` under PGlite resolves at runtime to `{ rows, fields, affectedRows }`, confirmed by an empirical log (added, observed, then removed before commit) — not the `[...result]`-iterable shape the plan's test code assumed. **Additionally** (not anticipated by the plan at all): the *type* of that resolved value is `unknown`, not just "iterate differently" — a structural consequence of `Database` being written against the abstract `PgQueryResultHKT` rather than a concrete driver HKT. `tests/helpers/db.test.ts` fixes this with `result.rows` plus a narrow `as { rows: T[] }` assertion on the awaited value (not `any` — see the code for the full reasoning in comments).
+  2. `db.query.licenses.findMany()` (Drizzle's relational query API) **works** under the PGlite harness, no changes needed. Task 13's delete-cascade test uses it exactly as written in the plan.
+- **One genuine plan bug found and fixed**, same category as Batch 1's two: in `src/lib/products/slug.ts` (Task 12), the plan's `slugify()` implementation collapses *all* non-alphanumeric runs (including a bare apostrophe) into a single `_`, which turns `"Acme's App (v2)!"` into `"acme_s_app_v2"` — but the plan's own test (`tests/products/slug.test.ts`, "drops punctuation") asserts `"acmes_app_v2"`. Fixed by adding `.replace(/'/g, "")` (drop apostrophes outright, before the general punctuation-to-underscore collapse) as its own step, right after `.toLowerCase()`. All 8 of the plan's slug tests pass with this change; nothing else in the pipeline was touched. If a later task edits `slugify()`, keep this step — removing it silently reintroduces the bug.
+- **One harmless plan-documentation mismatch:** Task 13's plan text says "Expected: 13 passed" for `tests/products/service.test.ts`, but the plan's own test file (copied verbatim) contains 14 `it(...)` blocks (2 in `createProduct`, 3 each in `listProducts`/`getProduct`/`renameProduct`/`deleteProduct`), and all 14 genuinely pass. This is a miscount in the plan's prose, not a code defect — nothing was added, removed, or skipped to reach 14. Don't be alarmed if a future re-read of the plan still says 13.
+- Every other file in this batch (`tests/helpers/db.ts`, `tests/helpers/factories.ts`, `src/lib/products/service.ts`, `src/lib/licenses/expiration.ts`, `src/lib/licenses/service.ts`, and all other test files) was used byte-for-byte as written in the plan, and all plan-stated test counts for those files were exact (Task 11: 2, Task 14: 11, Task 15: 9).
+- The single most security-critical test in this batch — `tests/licenses/create.test.ts`'s "never persists the plaintext key" (JSON-serializes the full stored row, uppercases it, and asserts the plaintext key appears nowhere in any column) — passed against the plan's implementation with no changes needed. `licenses.keyHash` is the only derivative stored; the plaintext is generated, hashed, and returned, never written anywhere else.
 
 ---
 

@@ -1500,7 +1500,7 @@ npm run typecheck && git add -A && git commit -m "feat: driver-agnostic database
 - Create: `tests/helpers/db.ts`, `tests/helpers/factories.ts`
 - Create: `tests/helpers/db.test.ts`
 
-- [ ] **Step 1: Create `tests/helpers/db.ts`**
+- [x] **Step 1: Create `tests/helpers/db.ts`**
 
 ```ts
 import { PGlite } from "@electric-sql/pglite";
@@ -1546,7 +1546,7 @@ export async function truncateAll(db: Database): Promise<void> {
 export const TEST_HMAC_SECRET = "test-hmac-secret-value-at-least-32-chars-long";
 ```
 
-- [ ] **Step 2: Write a test proving the harness works**
+- [x] **Step 2: Write a test proving the harness works**
 
 `tests/helpers/db.test.ts`:
 
@@ -1588,7 +1588,7 @@ describe("PGlite harness", () => {
 });
 ```
 
-- [ ] **Step 3: Run it**
+- [x] **Step 3: Run it**
 
 ```bash
 npx vitest run tests/helpers/db.test.ts
@@ -1597,7 +1597,7 @@ Expected: 2 passed.
 
 > `db.execute` returns a driver-shaped result. If `[...result]` does not iterate under PGlite, use `result.rows` instead and adjust. Confirm against the actual returned shape rather than guessing.
 
-- [ ] **Step 4: Create `tests/helpers/factories.ts`**
+- [x] **Step 4: Create `tests/helpers/factories.ts`**
 
 ```ts
 import { generateLicenseId, generateProductId } from "@/lib/crypto/ids";
@@ -1653,7 +1653,7 @@ export async function makeLicense(
 }
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 npx vitest run && git add -A && git commit -m "test: PGlite harness and fixtures"
@@ -1668,7 +1668,7 @@ npx vitest run && git add -A && git commit -m "test: PGlite harness and fixtures
 - Create: `src/lib/products/slug.ts`
 - Create: `tests/products/slug.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/products/slug.test.ts`:
 
@@ -1717,14 +1717,14 @@ describe("slugify", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/products/slug.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/products/slug`.
 
-- [ ] **Step 3: Implement `src/lib/products/slug.ts`**
+- [x] **Step 3: Implement `src/lib/products/slug.ts`**
 
 ```ts
 const MAX_SLUG_LENGTH = 64;
@@ -1752,14 +1752,14 @@ export function slugify(name: string): string {
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/products/slug.test.ts
 ```
 Expected: 8 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: product slug generation"
@@ -1773,7 +1773,7 @@ git add -A && git commit -m "feat: product slug generation"
 - Create: `src/lib/products/service.ts`
 - Create: `tests/products/service.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/products/service.test.ts`:
 
@@ -1916,14 +1916,14 @@ describe("deleteProduct", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/products/service.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/products/service`.
 
-- [ ] **Step 3: Implement `src/lib/products/service.ts`**
+- [x] **Step 3: Implement `src/lib/products/service.ts`**
 
 ```ts
 import { and, count, desc, eq } from "drizzle-orm";
@@ -2058,7 +2058,7 @@ function toProduct(row: typeof products.$inferSelect): Product {
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/products/service.test.ts
@@ -2067,7 +2067,7 @@ Expected: 13 passed.
 
 > `db.query.licenses.findMany()` in the delete-cascade test requires the schema to be passed to `drizzle()`, which the harness does. If the relational API is unavailable, substitute `db.select().from(licenses)`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: product service with SQL-level ownership enforcement"
@@ -2082,7 +2082,7 @@ git add -A && git commit -m "feat: product service with SQL-level ownership enfo
 - Create: `src/lib/licenses/expiration.ts`
 - Create: `tests/licenses/expiration.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/licenses/expiration.test.ts`:
 
@@ -2157,14 +2157,14 @@ describe("isExpired", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/licenses/expiration.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/licenses/expiration`.
 
-- [ ] **Step 3: Implement `src/lib/licenses/expiration.ts`**
+- [x] **Step 3: Implement `src/lib/licenses/expiration.ts`**
 
 ```ts
 /**
@@ -2224,14 +2224,14 @@ export function isExpired(expiresAt: Date | null, now: Date = new Date()): boole
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/licenses/expiration.test.ts
 ```
 Expected: 11 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: normalize three expiration modes to expiresAt"
@@ -2245,7 +2245,7 @@ git add -A && git commit -m "feat: normalize three expiration modes to expiresAt
 - Create: `src/lib/licenses/service.ts`
 - Create: `tests/licenses/create.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/licenses/create.test.ts`:
 
@@ -2399,14 +2399,14 @@ describe("listLicenses", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/licenses/create.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/licenses/service`.
 
-- [ ] **Step 3: Implement the creation and listing half of `src/lib/licenses/service.ts`**
+- [x] **Step 3: Implement the creation and listing half of `src/lib/licenses/service.ts`**
 
 ```ts
 import { and, desc, eq } from "drizzle-orm";
@@ -2538,14 +2538,14 @@ export function toLicenseView(
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/licenses/create.test.ts
 ```
 Expected: 9 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: license creation with show-once plaintext key"
