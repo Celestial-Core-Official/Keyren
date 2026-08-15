@@ -1,48 +1,43 @@
 import { notFound } from "next/navigation";
+import { KeyRound, SearchX } from "lucide-react";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
-import { getProduct } from "@/lib/products/service";
+import { getCachedProduct } from "@/lib/products/cached";
 import { queryLicenses } from "@/lib/licenses/query";
-import { DEFAULT_LICENSE_QUERY } from "@/lib/licenses/types";
-import { maskedLicenseKey } from "@/lib/crypto/license-key";
+import { isFiltered } from "@/lib/licenses/types";
+import { parseLicenseQuery, type RawSearchParams } from "@/lib/validation/dashboard";
+import { EmptyState } from "@/components/dashboard/empty-state";
+import { Pagination } from "@/components/dashboard/pagination";
 import { CreateLicenseDialog } from "@/components/licenses/create-license-dialog";
-import { LicenseRowActions } from "@/components/licenses/license-row-actions";
-import { LicenseStatusBadge } from "@/components/licenses/license-status-badge";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-
-function formatDate(value: Date | null): string {
-  return value ? value.toISOString().slice(0, 10) : "—";
-}
+import { LicenseCardList } from "@/components/licenses/license-card-list";
+import { LicenseFilters } from "@/components/licenses/license-filters";
+import { LicenseTable } from "@/components/licenses/license-table";
+import { ClearFiltersLink } from "@/components/licenses/clear-filters-link";
 
 export default async function LicensesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ productId: string }>;
+  searchParams: Promise<RawSearchParams>;
 }) {
   const { productId } = await params;
   const ownerId = await requireDeveloperId();
 
-  const product = await getProduct(db, ownerId, productId);
+  const product = await getCachedProduct(db, ownerId, productId);
   if (!product) notFound();
 
-  const { rows: licenses } = await queryLicenses(
-    db,
-    ownerId,
-    productId,
-    DEFAULT_LICENSE_QUERY,
-  );
+  // Parsed from the URL, so the first server render already has the right
+  // rows — no shipping everything and narrowing it in the browser.
+  const query = parseLicenseQuery(await searchParams);
+  const page = await queryLicenses(db, ownerId, productId, query);
+
+  const filtering = isFiltered(query);
+  const empty = page.total === 0;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-medium">Licenses</h2>
           <p className="text-sm text-muted-foreground">
@@ -52,71 +47,40 @@ export default async function LicensesPage({
         <CreateLicenseDialog productId={product.id} productSlug={product.slug} />
       </div>
 
-      {licenses.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-sm font-medium">No licenses yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Generate one to start authenticating installations of {product.name}.
-            </p>
-          </CardContent>
-        </Card>
+      {/* Filters stay mounted even with no results, so the developer can undo
+          the search that emptied the list rather than losing the controls. */}
+      {(!empty || filtering) && <LicenseFilters query={query} total={page.total} />}
+
+      {empty && filtering ? (
+        <EmptyState
+          icon={<SearchX className="size-5" />}
+          title="No licenses match these filters"
+          description="Nothing here fits the current search and filters. Widen them, or clear them to see every license for this product."
+          action={<ClearFiltersLink />}
+        />
+      ) : empty ? (
+        <EmptyState
+          icon={<KeyRound className="size-5" />}
+          title="No licenses yet"
+          description={`Generate one to start authenticating installations of ${product.name}. The key is shown once, immediately after creation.`}
+          action={
+            <CreateLicenseDialog productId={product.id} productSlug={product.slug}>
+              Generate your first license
+            </CreateLicenseDialog>
+          }
+        />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>License</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Device lock</TableHead>
-                <TableHead>Activation</TableHead>
-                <TableHead>Expires</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="w-12" />
-              </TableRow>
-            </TableHeader>
+        <div className="space-y-4">
+          <LicenseTable licenses={page.rows} productId={product.id} />
+          <LicenseCardList licenses={page.rows} productId={product.id} />
 
-            <TableBody>
-              {licenses.map((license) => (
-                <TableRow key={license.id}>
-                  <TableCell>
-                    <code className="font-mono text-xs text-muted-foreground">
-                      {maskedLicenseKey(license.keyLast4)}
-                    </code>
-                  </TableCell>
-
-                  <TableCell>
-                    <LicenseStatusBadge
-                      status={license.status}
-                      expiresAt={license.expiresAt}
-                    />
-                  </TableCell>
-
-                  <TableCell className="text-sm text-muted-foreground">
-                    {license.hwidLocked ? "Locked" : "Unlocked"}
-                  </TableCell>
-
-                  <TableCell className="text-sm text-muted-foreground">
-                    {license.activation
-                      ? `Last seen ${formatDate(license.activation.lastSeenAt)}`
-                      : "Not activated"}
-                  </TableCell>
-
-                  <TableCell className="text-sm text-muted-foreground">
-                    {license.expiresAt ? formatDate(license.expiresAt) : "Never"}
-                  </TableCell>
-
-                  <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(license.createdAt)}
-                  </TableCell>
-
-                  <TableCell>
-                    <LicenseRowActions license={license} productId={product.id} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <Pagination
+            page={page.page}
+            pageCount={page.pageCount}
+            pageSize={page.pageSize}
+            total={page.total}
+            shown={page.rows.length}
+          />
         </div>
       )}
     </div>

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
-import { getProduct } from "@/lib/products/service";
+import { getCachedProduct } from "@/lib/products/cached";
 import { CopyButton } from "@/components/dashboard/copy-button";
 
 export default async function ProductLayout({
@@ -17,7 +17,11 @@ export default async function ProductLayout({
 
   // Scoped by owner. A product belonging to another developer resolves to
   // null and renders the same 404 as one that does not exist.
-  const product = await getProduct(db, ownerId, productId);
+  //
+  // Cached per request, so the page beneath this layout can make the same
+  // call — and make its own ownership check rather than trusting this one —
+  // without a second round trip to the database.
+  const product = await getCachedProduct(db, ownerId, productId);
   if (!product) notFound();
 
   return (

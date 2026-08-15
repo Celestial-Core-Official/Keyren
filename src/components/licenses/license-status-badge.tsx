@@ -1,23 +1,37 @@
 import { Badge } from "@/components/ui/badge";
 import { isExpired } from "@/lib/licenses/expiration";
+import type { EffectiveStatus } from "@/lib/licenses/types";
 
+/**
+ * The status a customer's software would actually be told.
+ *
+ * `effectiveStatus` is preferred when the caller has it, because it came from
+ * the same SQL expression the status filter uses — so filtering to "expired"
+ * and the badge on the row can never disagree. The fallback recomputes it
+ * with the same `isExpired` the verification engine uses, so a caller that
+ * only has a raw row still gets the same answer.
+ */
 export function LicenseStatusBadge({
   status,
   expiresAt,
+  effectiveStatus,
 }: {
   status: "active" | "revoked";
   expiresAt: Date | null;
+  effectiveStatus?: EffectiveStatus;
 }) {
-  if (status === "revoked") return <Badge variant="destructive">Revoked</Badge>;
+  const resolved: EffectiveStatus =
+    effectiveStatus ??
+    (status === "revoked" ? "revoked" : isExpired(expiresAt) ? "expired" : "active");
 
-  // An active license past its expiry is shown as Expired: that is what the
-  // verification API will actually tell the customer's software. Uses the
-  // same isExpired() the verification engine itself uses (rather than a
-  // fresh Date.now() comparison here) so there is exactly one definition of
-  // "expired" in the whole app, and so this component's render stays a pure
-  // function of its props rather than reading the clock directly.
-  if (isExpired(expiresAt)) {
-    return <Badge variant="secondary">Expired</Badge>;
+  if (resolved === "revoked") return <Badge variant="destructive">Revoked</Badge>;
+
+  if (resolved === "expired") {
+    return (
+      <Badge className="border-amber-500/25 bg-amber-500/15 text-amber-400" variant="outline">
+        Expired
+      </Badge>
+    );
   }
 
   return (
