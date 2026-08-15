@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
 import { getCachedProduct } from "@/lib/products/cached";
 import { CopyButton } from "@/components/dashboard/copy-button";
+import { ProductTabs } from "@/components/dashboard/product-tabs";
 
 export default async function ProductLayout({
   children,
@@ -26,16 +28,22 @@ export default async function ProductLayout({
 
   return (
     <div className="space-y-8">
-      <div className="space-y-4 border-b border-border pb-6">
+      {/* The identity block is one compact row: a long product name and a
+          product ID used to cost four stacked lines of vertical space before
+          any actual content appeared. */}
+      <div className="space-y-3 border-b border-border">
         <Link
           href="/dashboard/products"
-          className="text-sm text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
-          ← Products
+          <ChevronLeft className="size-4" />
+          Products
         </Link>
 
-        <div className="space-y-2">
-          <h1 className="text-xl font-semibold tracking-tight">{product.name}</h1>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words">
+            {product.name}
+          </h1>
           <div className="flex items-center gap-1">
             <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
               {product.id}
@@ -44,20 +52,7 @@ export default async function ProductLayout({
           </div>
         </div>
 
-        <nav className="flex gap-1" aria-label="Product sections">
-          <Link
-            href={`/dashboard/products/${product.id}`}
-            className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-          >
-            Overview
-          </Link>
-          <Link
-            href={`/dashboard/products/${product.id}/licenses`}
-            className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-          >
-            Licenses
-          </Link>
-        </nav>
+        <ProductTabs productId={product.id} />
       </div>
 
       {children}

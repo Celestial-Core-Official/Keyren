@@ -102,7 +102,7 @@ export function CreateProductDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger ? (
         <DialogTrigger asChild>
-          <Button size="sm" className="gap-1.5">
+          <Button size="sm" className="gap-1.5" data-keyren-create="product">
             <Plus className="size-4" />
             New product
             <kbd className="ml-1 hidden rounded border border-primary-foreground/25 px-1 font-mono text-[10px] sm:inline">
