@@ -351,6 +351,8 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 
 - **Task 1** — the scaffold directory cannot start with a dot (`.keyren-scaffold` is an invalid npm package name). Now scaffolds into `$TMPDIR/keyren-scaffold` and rsyncs in. Also sets `"name": "keyren"` in `package.json`.
 - **Task 3** — create-next-app's blanket `.env*` gitignore rule also matches `.env.example`, which would have silently dropped it from the commit. Now adds `!.env.example` and verifies with `git check-ignore`.
+- **Task 12** — the plan's `slugify()` contradicted the plan's own test: collapsing every non-alphanumeric run turned `"Acme's App (v2)!"` into `acme_s_app_v2`, but the test asserts `acmes_app_v2`. The plan now strips apostrophes with `.replace(/'/g, "")` **before** the general punctuation collapse. The implementation in `src/lib/products/slug.ts` already has this fix.
+- **Task 13** — the plan's prose said "Expected: 13 passed"; the plan's own `it()` blocks total 14. Corrected to 14. No code impact.
 - **Assumptions** — documented the `min-release-age=3` npm policy.
 
 ### Batch 2 notes (Tasks 6–10)

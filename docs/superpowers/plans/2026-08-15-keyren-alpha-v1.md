@@ -1743,6 +1743,10 @@ export function slugify(name: string): string {
     // Strip combining marks left behind by NFKD, so "é" becomes "e".
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
+    // Apostrophes are elided, not turned into a separator, so "Acme's App"
+    // becomes "acmes_app" rather than "acme_s_app". This line must come
+    // BEFORE the general punctuation collapse below.
+    .replace(/'/g, "")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, MAX_SLUG_LENGTH)
@@ -2063,7 +2067,7 @@ function toProduct(row: typeof products.$inferSelect): Product {
 ```bash
 npx vitest run tests/products/service.test.ts
 ```
-Expected: 13 passed.
+Expected: 14 passed.
 
 > `db.query.licenses.findMany()` in the delete-cascade test requires the schema to be passed to `drizzle()`, which the harness does. If the relational API is unavailable, substitute `db.select().from(licenses)`.
 
