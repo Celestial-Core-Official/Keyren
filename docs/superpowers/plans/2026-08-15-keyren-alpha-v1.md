@@ -654,7 +654,7 @@ This is the security centre of the product. Take the time.
 - Create: `src/lib/crypto/license-key.ts`
 - Create: `tests/crypto/license-key.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/crypto/license-key.test.ts`:
 
@@ -787,14 +787,14 @@ describe("licenseKeyLast4 and maskedLicenseKey", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/crypto/license-key.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/crypto/license-key`.
 
-- [ ] **Step 3: Implement `src/lib/crypto/license-key.ts`**
+- [x] **Step 3: Implement `src/lib/crypto/license-key.ts`**
 
 ```ts
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -883,7 +883,7 @@ export function maskedLicenseKey(last4: string): string {
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 They will still fail on the domain-separation case until Task 7 exists. Run the rest:
 
@@ -894,7 +894,7 @@ npx vitest run tests/crypto/license-key.test.ts -t "keyHashesEqual"
 ```
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: license key generation, normalization and HMAC hashing"
@@ -908,7 +908,7 @@ git add -A && git commit -m "feat: license key generation, normalization and HMA
 - Create: `src/lib/crypto/device.ts`
 - Create: `tests/crypto/device.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/crypto/device.test.ts`:
 
@@ -944,14 +944,14 @@ describe("hashDeviceId", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/crypto/device.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/crypto/device`.
 
-- [ ] **Step 3: Implement `src/lib/crypto/device.ts`**
+- [x] **Step 3: Implement `src/lib/crypto/device.ts`**
 
 ```ts
 import { createHmac } from "node:crypto";
@@ -977,14 +977,14 @@ export function hashDeviceId(deviceId: string, secret: string): string {
 }
 ```
 
-- [ ] **Step 4: Run the full crypto suite**
+- [x] **Step 4: Run the full crypto suite**
 
 ```bash
 npx vitest run tests/crypto
 ```
 Expected: all crypto tests pass, including the domain-separation case in `license-key.test.ts`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: domain-separated device fingerprint hashing"
@@ -999,7 +999,7 @@ git add -A && git commit -m "feat: domain-separated device fingerprint hashing"
 - Create: `src/lib/log.ts`
 - Create: `tests/errors.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/errors.test.ts`:
 
@@ -1067,14 +1067,14 @@ describe("maskLicenseKey", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/errors.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/errors`.
 
-- [ ] **Step 3: Implement `src/lib/errors.ts`**
+- [x] **Step 3: Implement `src/lib/errors.ts`**
 
 ```ts
 /**
@@ -1148,7 +1148,7 @@ export function notFound(resource: string): KeyrenError {
 }
 ```
 
-- [ ] **Step 4: Implement `src/lib/log.ts`**
+- [x] **Step 4: Implement `src/lib/log.ts`**
 
 ```ts
 /**
@@ -1162,14 +1162,14 @@ export function maskLicenseKey(licenseKey: string): string {
 }
 ```
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 ```bash
 npx vitest run tests/errors.test.ts
 ```
 Expected: 6 passed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A && git commit -m "feat: verification error taxonomy and log masking"
@@ -1185,7 +1185,7 @@ git add -A && git commit -m "feat: verification error taxonomy and log masking"
 - Modify: `src/lib/crypto/ids.ts` (add `generateActivationId`)
 - Modify: `tests/crypto/ids.test.ts` (cover it)
 
-- [ ] **Step 1: Add `generateActivationId` to `src/lib/crypto/ids.ts`**
+- [x] **Step 1: Add `generateActivationId` to `src/lib/crypto/ids.ts`**
 
 Append to the existing file:
 
@@ -1212,7 +1212,7 @@ npx vitest run tests/crypto/ids.test.ts
 ```
 Expected: 6 passed.
 
-- [ ] **Step 2: Create `src/db/schema/products.ts`**
+- [x] **Step 2: Create `src/db/schema/products.ts`**
 
 ```ts
 import { index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
@@ -1246,7 +1246,7 @@ export type ProductRow = typeof products.$inferSelect;
 export type NewProductRow = typeof products.$inferInsert;
 ```
 
-- [ ] **Step 3: Create `src/db/schema/licenses.ts`**
+- [x] **Step 3: Create `src/db/schema/licenses.ts`**
 
 ```ts
 import {
@@ -1315,7 +1315,7 @@ export type NewLicenseRow = typeof licenses.$inferInsert;
 export type LicenseStatus = (typeof licenseStatus.enumValues)[number];
 ```
 
-- [ ] **Step 4: Create `src/db/schema/activations.ts`**
+- [x] **Step 4: Create `src/db/schema/activations.ts`**
 
 ```ts
 import { pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
@@ -1349,7 +1349,7 @@ export const activations = pgTable(
 export type ActivationRow = typeof activations.$inferSelect;
 ```
 
-- [ ] **Step 5: Create `src/db/schema/rate-limits.ts`**
+- [x] **Step 5: Create `src/db/schema/rate-limits.ts`**
 
 ```ts
 import { index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
@@ -1378,7 +1378,7 @@ export const rateLimitCounters = pgTable(
 );
 ```
 
-- [ ] **Step 6: Create `src/db/schema/index.ts`**
+- [x] **Step 6: Create `src/db/schema/index.ts`**
 
 ```ts
 export * from "./products";
@@ -1387,7 +1387,7 @@ export * from "./activations";
 export * from "./rate-limits";
 ```
 
-- [ ] **Step 7: Create `drizzle.config.ts` and generate the migration**
+- [x] **Step 7: Create `drizzle.config.ts` and generate the migration**
 
 ```ts
 import { defineConfig } from "drizzle-kit";
@@ -1413,7 +1413,7 @@ npm run db:generate
 ```
 Expected: a `drizzle/0000_*.sql` file plus `drizzle/meta/`. Open the SQL and confirm it contains `CREATE TABLE "products"`, `"licenses"`, `"activations"`, `"rate_limit_counters"`, the `license_status` enum, both foreign keys, and the three unique indexes.
 
-- [ ] **Step 8: Typecheck and commit**
+- [x] **Step 8: Typecheck and commit**
 
 ```bash
 npm run typecheck && git add -A && git commit -m "feat: database schema for products, licenses, activations, rate limits"
@@ -1426,7 +1426,7 @@ npm run typecheck && git add -A && git commit -m "feat: database schema for prod
 **Files:**
 - Create: `src/db/types.ts`, `src/db/index.ts`
 
-- [ ] **Step 1: Create `src/db/types.ts`**
+- [x] **Step 1: Create `src/db/types.ts`**
 
 Services must accept both the production postgres.js client and the PGlite client used in tests, so they are written against a driver-agnostic type.
 
@@ -1451,7 +1451,7 @@ export type Database = PgDatabase<
 
 > If `npm run typecheck` rejects assigning the concrete drizzle instances to this type, the fallback is `export type Database = PgliteDatabase<typeof schema>` (both drivers are structurally compatible across the select/insert/update/delete/transaction surface this codebase uses) with a single `as unknown as Database` cast at each client construction site. Take the fallback only if the base-class form genuinely does not compile — do not scatter casts through the services.
 
-- [ ] **Step 2: Create `src/db/index.ts`**
+- [x] **Step 2: Create `src/db/index.ts`**
 
 ```ts
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -1486,7 +1486,7 @@ export const db = drizzle(client, { schema }) as unknown as Database;
 export { schema };
 ```
 
-- [ ] **Step 3: Typecheck and commit**
+- [x] **Step 3: Typecheck and commit**
 
 ```bash
 npm run typecheck && git add -A && git commit -m "feat: driver-agnostic database client"

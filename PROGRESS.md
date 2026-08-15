@@ -4,7 +4,7 @@
 **Release being built:** `Alpha_v1` (private/testing release — never call it "v1" in product UI)
 
 > **If you are a new assistant picking this up (ChatGPT, a fresh Claude session, a human):**
-> read this whole file first, then start at **Task 6** in the plan. Everything you need is here.
+> read this whole file first, then start at **Task 11** in the plan. Everything you need is here.
 
 ---
 
@@ -12,13 +12,13 @@
 
 | | |
 |---|---|
-| **Tasks complete** | **1–5 of 35** |
-| **Next task** | **Task 6 — License key generation, normalization and hashing** |
-| **Test suite** | 18 tests, 3 files, all passing |
+| **Tasks complete** | **1–10 of 35** |
+| **Next task** | **Task 11 — PGlite test harness** |
+| **Test suite** | 48 tests, 6 files, all passing |
 | **Typecheck** | clean (exit 0) |
 | **Working tree** | clean, all work committed |
 
-Progress is also tracked as `- [x]` checkboxes inside the plan file itself. Tasks 1–5 are checked off there.
+Progress is also tracked as `- [x]` checkboxes inside the plan file itself. Tasks 1–10 are checked off there.
 
 ---
 
@@ -117,17 +117,37 @@ Do not remove `!.env.example` and do not rename the file, or it silently stops b
 ```
 src/
 ├── env.ts                    # Zod-validated env; the ONLY place process.env is read
-└── lib/crypto/
-    ├── random.ts             # CROCKFORD_ALPHABET, randomAlphabetString()
-    └── ids.ts                # generateProductId(), generateLicenseId()
+├── lib/
+│   ├── crypto/
+│   │   ├── random.ts         # CROCKFORD_ALPHABET, randomAlphabetString()
+│   │   ├── ids.ts            # generateProductId(), generateLicenseId(), generateActivationId()
+│   │   ├── license-key.ts    # generateLicenseKey, normalizeLicenseKey, hashLicenseKey,
+│   │   │                     #   keyHashesEqual, licenseKeyLast4, maskedLicenseKey
+│   │   └── device.ts         # hashDeviceId()
+│   ├── errors.ts              # VerificationErrorCode, VERIFICATION_ERROR_STATUS/MESSAGE,
+│   │                          #   KeyrenError, notFound()
+│   └── log.ts                 # maskLicenseKey()
+└── db/
+    ├── schema/
+    │   ├── products.ts       # products table
+    │   ├── licenses.ts       # licenses table, licenseStatus enum ("active"|"revoked")
+    │   ├── activations.ts    # activations table
+    │   ├── rate-limits.ts    # rateLimitCounters table
+    │   └── index.ts          # re-exports all of the above
+    ├── types.ts               # Database — the driver-agnostic PgDatabase type
+    └── index.ts                # db singleton (postgres.js) + schema re-export
 tests/
 ├── setup.ts                  # seeds dummy env vars (see above)
 ├── env.test.ts               # 5 passing
+├── errors.test.ts            # 6 passing
 └── crypto/
     ├── random.test.ts        # 8 passing
-    └── ids.test.ts           # 5 passing
+    ├── ids.test.ts           # 6 passing
+    ├── license-key.test.ts   # 18 passing
+    └── device.test.ts        # 5 passing
 .env.example                  # documents every required variable
-drizzle.config.ts             # NOT YET CREATED — arrives in Task 9
+drizzle.config.ts             # drizzle-kit config; reads DATABASE_URL, falls back to a placeholder
+drizzle/0000_glorious_purple_man.sql  # first migration: 4 tables, 1 enum, 2 FKs, 6 indexes
 ```
 
 ### Exports later tasks depend on (do not rename)
@@ -140,7 +160,46 @@ export function randomAlphabetString(length: number): string
 // src/lib/crypto/ids.ts
 export function generateProductId(): string      // "prod_" + 26 symbols = 130 bits
 export function generateLicenseId(): string      // "lic_"  + 26 symbols
-// Task 9 adds: generateActivationId()           // "act_"  + 26 symbols
+export function generateActivationId(): string   // "act_"  + 26 symbols
+
+// src/lib/crypto/license-key.ts
+export const LICENSE_KEY_ENTROPY_BITS: number    // 160
+export const LICENSE_KEY_PATTERN: RegExp         // KEYREN-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX
+export function generateLicenseKey(): string
+export function normalizeLicenseKey(input: string): string
+export function hashLicenseKey(licenseKey: string, secret: string): string
+export function keyHashesEqual(a: string, b: string): boolean
+export function licenseKeyLast4(licenseKey: string): string
+export function maskedLicenseKey(last4: string): string
+
+// src/lib/crypto/device.ts
+export function hashDeviceId(deviceId: string, secret: string): string
+
+// src/lib/errors.ts
+export type VerificationErrorCode =
+  | "BAD_REQUEST" | "PRODUCT_INVALID" | "LICENSE_INVALID" | "LICENSE_REVOKED"
+  | "LICENSE_EXPIRED" | "DEVICE_MISMATCH" | "RATE_LIMITED" | "INTERNAL_ERROR";
+export const VERIFICATION_ERROR_STATUS: Record<VerificationErrorCode, number>
+export const VERIFICATION_ERROR_MESSAGE: Record<VerificationErrorCode, string>
+export type DashboardErrorCode = "NOT_FOUND" | "INVALID_INPUT" | "CONFLICT"
+export class KeyrenError extends Error { code: DashboardErrorCode }
+export function notFound(resource: string): KeyrenError
+
+// src/lib/log.ts
+export function maskLicenseKey(licenseKey: string): string
+
+// src/db/schema/index.ts (re-exports products.ts, licenses.ts, activations.ts, rate-limits.ts)
+export const products, licenses, activations, rateLimitCounters   // pgTable instances
+export const licenseStatus                       // pgEnum("license_status", ["active","revoked"])
+export type ProductRow, NewProductRow, LicenseRow, NewLicenseRow, ActivationRow, LicenseStatus
+
+// src/db/types.ts
+export type Database = PgDatabase<PgQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>
+// Compiled clean as written — the plan's PGlite-type fallback was NOT needed.
+
+// src/db/index.ts
+export const db: Database                        // postgres.js singleton, reused across hot reloads
+export { schema }
 
 // src/env.ts
 export function parseEnv(source): Env            // exported separately so tests
@@ -173,17 +232,17 @@ npm run db:migrate   # drizzle-kit migrate
 
 The build is running in **batches of 5 tasks** to conserve usage limits. Tasks are sequential and share files, so **run them in order** — do not parallelize within a batch.
 
-**Next up: Tasks 6–10.**
+**Next up: Tasks 11–15.**
 
 | Task | What it builds |
 |---|---|
-| 6 | License key generation, normalization, HMAC hashing (`src/lib/crypto/license-key.ts`) |
-| 7 | Device fingerprint hashing (`src/lib/crypto/device.ts`) |
-| 8 | Error taxonomy + log masking (`src/lib/errors.ts`, `src/lib/log.ts`) |
-| 9 | Database schema, 4 tables (`src/db/schema/*`) + first migration |
-| 10 | Driver-agnostic database client (`src/db/index.ts`, `src/db/types.ts`) |
+| 11 | PGlite test harness (`tests/helpers/db.ts`) |
+| 12 | Slug generation (`src/lib/products/slug.ts`) |
+| 13 | Product service with ownership enforced in SQL (`src/lib/products/service.ts`) |
+| 14 | Expiration normalization (`src/lib/licenses/expiration.ts`) |
+| 15 | License creation and listing (`src/lib/licenses/service.ts`) |
 
-Note: **Task 6's test file includes one case that cannot pass until Task 7 exists** (it asserts license hashing and device hashing are domain-separated). The plan says so explicitly and tells you to run the other describe-blocks first. That's expected, not a failure.
+Note for Task 11: `src/db/types.ts`'s `Database = PgDatabase<PgQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>` compiled with zero errors as written — the plan's documented fallback (`PgliteDatabase<typeof schema>` type + `as unknown as Database` casts) was **not** needed. Note that `src/db/index.ts` already goes through `as unknown as Database` at its one construction site regardless (per the plan's own code), so this was never a structural-assignability question — it was whether the `PgDatabase<...>` generic type itself resolves under drizzle-orm@0.45.2, and it does. Task 11's PGlite harness will presumably do the same `as unknown as Database` cast at its construction site; no reason is currently known why it wouldn't typecheck, but it hasn't been built yet.
 
 ### Working method for each task
 
@@ -205,12 +264,20 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 | Batch | Tasks | Outcome |
 |---|---|---|
 | 1 | 1–5 | ✅ Complete. 18 tests passing, typecheck clean. Two plan bugs found and corrected (see below). |
+| 2 | 6–10 | ✅ Complete. 48 tests passing (6 files), typecheck clean. Plan's code used verbatim, no bugs found. Task 10's `Database` type fallback was **not** needed — the base-class `PgDatabase<...>` form compiled cleanly. |
 
 ### Corrections already folded back into the plan
 
 - **Task 1** — the scaffold directory cannot start with a dot (`.keyren-scaffold` is an invalid npm package name). Now scaffolds into `$TMPDIR/keyren-scaffold` and rsyncs in. Also sets `"name": "keyren"` in `package.json`.
 - **Task 3** — create-next-app's blanket `.env*` gitignore rule also matches `.env.example`, which would have silently dropped it from the commit. Now adds `!.env.example` and verifies with `git check-ignore`.
 - **Assumptions** — documented the `min-release-age=3` npm policy.
+
+### Batch 2 notes (Tasks 6–10)
+
+- No plan corrections needed — every file matched the plan's literal source exactly, and every named export exists under its specified name.
+- `npm run db:generate` (Task 9) ran with **no** `.env.local` and **no** live Postgres, confirmed by PROGRESS.md's own prediction: it only reads `src/db/schema/*` and writes SQL. Output: `drizzle/0000_glorious_purple_man.sql` (4 `CREATE TABLE`, 1 `CREATE TYPE` enum, 2 `FOREIGN KEY` constraints, 2 `CREATE UNIQUE INDEX`, 4 `CREATE INDEX`).
+- One thing worth flagging precisely: of the plan's three named indexes on `licenses`, only `licenses_key_hash_unique` and `activations_license_unique` are SQL `UNIQUE` indexes. `licenses_product_key_hash_idx` is a deliberately **non-unique** composite index (the plan uses `index(...)`, not `uniqueIndex(...)`) — it exists purely to make the verification hot path `WHERE product_id = $1 AND key_hash = $2` an index lookup; global uniqueness is already guaranteed by `licenses_key_hash_unique` alone. Don't "fix" this to `uniqueIndex` in a later task.
+- `src/db/index.ts` (Task 10) imports `@/env` and constructs a `postgres()` client at module load using `env.DATABASE_URL`. This did **not** break the test suite because (a) `postgres()` from postgres.js is lazy — it does not open a TCP connection until a query actually runs — and (b) nothing in `tests/` currently imports `@/db`. Task 11 will presumably import it directly or provide a PGlite-backed alternative; watch for this if a future test ever imports the real `@/db/index.ts` module against the dummy `DATABASE_URL` in `tests/setup.ts`.
 
 ---
 
