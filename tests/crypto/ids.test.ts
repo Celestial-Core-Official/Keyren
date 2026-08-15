@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateLicenseId, generateProductId } from "@/lib/crypto/ids";
+import { generateActivationId, generateLicenseId, generateProductId } from "@/lib/crypto/ids";
 
 describe("generateProductId", () => {
   it("is prefixed and 26 random symbols long", () => {
@@ -27,5 +27,11 @@ describe("generateLicenseId", () => {
   it("is distinct from product ids", () => {
     expect(generateLicenseId().startsWith("lic_")).toBe(true);
     expect(generateProductId().startsWith("prod_")).toBe(true);
+  });
+});
+
+describe("generateActivationId", () => {
+  it("is prefixed and 26 random symbols long", () => {
+    expect(generateActivationId()).toMatch(/^act_[0-9A-HJKMNP-TV-Z]{26}$/);
   });
 });

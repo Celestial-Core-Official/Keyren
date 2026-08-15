@@ -15,3 +15,7 @@ export function generateProductId(): string {
 export function generateLicenseId(): string {
   return `lic_${randomAlphabetString(ID_RANDOM_LENGTH)}`;
 }
+
+export function generateActivationId(): string {
+  return `act_${randomAlphabetString(ID_RANDOM_LENGTH)}`;
+}

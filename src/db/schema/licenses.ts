@@ -1,0 +1,64 @@
+import {
+  boolean,
+  index,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+import { products } from "./products";
+
+/** Alpha_v1 supports exactly these two states. Revoking is reversible and
+ *  never destroys the record. */
+export const licenseStatus = pgEnum("license_status", ["active", "revoked"]);
+
+export const licenses = pgTable(
+  "licenses",
+  {
+    id: text("id").primaryKey(),
+
+    productId: text("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+
+    /** HMAC-SHA256(server_secret, "license:" + normalized_key), hex.
+     *  The plaintext key is never stored anywhere. */
+    keyHash: text("key_hash").notNull(),
+
+    /** Final four characters, captured at creation so the dashboard has a
+     *  stable non-secret way to refer to a key it can never redisplay. */
+    keyLast4: text("key_last4").notNull(),
+
+    status: licenseStatus("status").notNull().default("active"),
+
+    /** All three developer-facing expiration modes normalize to this single
+     *  nullable UTC timestamp. NULL means permanent. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+
+    hwidLocked: boolean("hwid_locked").notNull().default(true),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    // Globally unique: a collision would let one product's key authenticate
+    // against another. At 160 bits this will never fire, which is the point —
+    // it is a tripwire, not a routine constraint.
+    uniqueIndex("licenses_key_hash_unique").on(table.keyHash),
+
+    // THE verification path index. The hot query is
+    //   WHERE product_id = $1 AND key_hash = $2
+    // and this covers it exactly, so verification stays an index lookup
+    // rather than a scan as the table grows.
+    index("licenses_product_key_hash_idx").on(table.productId, table.keyHash),
+
+    // Dashboard listing: licenses for one product, newest first.
+    index("licenses_product_created_idx").on(table.productId, table.createdAt),
+  ],
+);
+
+export type LicenseRow = typeof licenses.$inferSelect;
+export type NewLicenseRow = typeof licenses.$inferInsert;
+export type LicenseStatus = (typeof licenseStatus.enumValues)[number];
