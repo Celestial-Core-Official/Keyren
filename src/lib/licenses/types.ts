@@ -23,6 +23,23 @@ export const PAGE_SIZES = [25, 50, 100] as const;
 /** Long enough for any real label; short enough that the URL stays sane. */
 export const SEARCH_MAX_LENGTH = 120;
 
+/**
+ * Field and batch bounds live here, with no imports, so the validation
+ * schemas, the batch service and the React inputs all constrain to the same
+ * numbers instead of each carrying their own copy.
+ */
+export const LICENSE_LABEL_MAX = 120;
+export const LICENSE_NOTES_MAX = 1000;
+
+/**
+ * One hundred is where a batch stops being a convenience and starts being a
+ * way to lock a table for everyone else. It is also the point past which the
+ * one-time reveal becomes unreadable, and an unreadable reveal is how keys get
+ * lost.
+ */
+export const BATCH_QUANTITY_MIN = 1;
+export const BATCH_QUANTITY_MAX = 100;
+
 export type LicenseStatusFilter = (typeof LICENSE_STATUS_FILTERS)[number];
 export type ActivationFilter = (typeof ACTIVATION_FILTERS)[number];
 export type LockFilter = (typeof LOCK_FILTERS)[number];

@@ -2,7 +2,11 @@ import { z } from "zod";
 import { DURATION_OPTIONS, type DurationValue } from "@/lib/licenses/expiration";
 import {
   ACTIVATION_FILTERS,
+  BATCH_QUANTITY_MAX,
+  BATCH_QUANTITY_MIN,
   DEFAULT_LICENSE_QUERY,
+  LICENSE_LABEL_MAX,
+  LICENSE_NOTES_MAX,
   LICENSE_SORTS,
   LICENSE_STATUS_FILTERS,
   LOCK_FILTERS,
@@ -61,9 +65,6 @@ function optionalText(max: number, field: string) {
   );
 }
 
-export const LICENSE_LABEL_MAX = 120;
-export const LICENSE_NOTES_MAX = 1000;
-
 export const licenseLabelSchema = optionalText(LICENSE_LABEL_MAX, "Label");
 export const licenseNotesSchema = optionalText(LICENSE_NOTES_MAX, "Notes");
 
@@ -92,22 +93,40 @@ const durationValues = DURATION_OPTIONS.map((option) => option.value) as [
   ...DurationValue[],
 ];
 
+/**
+ * Coerced because a form submits `"5"`, defaulted because the field is
+ * optional in the UI, and bounded because the quantity decides how many rows
+ * a single click writes.
+ */
+export const batchQuantitySchema = z.coerce
+  .number()
+  .int(`Quantity must be a whole number`)
+  .min(BATCH_QUANTITY_MIN, `Quantity must be at least ${BATCH_QUANTITY_MIN}`)
+  .max(BATCH_QUANTITY_MAX, `Quantity cannot exceed ${BATCH_QUANTITY_MAX}`)
+  .default(BATCH_QUANTITY_MIN);
+
+/**
+ * Shared by all three expiration modes. Spread rather than repeated so a new
+ * field cannot be added to one branch and forgotten in the others.
+ */
+const licenseCoreShape = {
+  productId: productIdSchema,
+  hwidLocked: z.boolean().default(true),
+  quantity: batchQuantitySchema,
+  label: licenseLabelSchema,
+  notes: licenseNotesSchema,
+};
+
 export const createLicenseSchema = z.discriminatedUnion("mode", [
-  z.object({
-    mode: z.literal("permanent"),
-    productId: productIdSchema,
-    hwidLocked: z.boolean().default(true),
-  }),
+  z.object({ mode: z.literal("permanent"), ...licenseCoreShape }),
   z.object({
     mode: z.literal("date"),
-    productId: productIdSchema,
-    hwidLocked: z.boolean().default(true),
+    ...licenseCoreShape,
     expiresAt: z.coerce.date(),
   }),
   z.object({
     mode: z.literal("duration"),
-    productId: productIdSchema,
-    hwidLocked: z.boolean().default(true),
+    ...licenseCoreShape,
     duration: z.enum(durationValues),
   }),
 ]);
