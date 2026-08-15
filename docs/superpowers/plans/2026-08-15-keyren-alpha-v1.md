@@ -3679,7 +3679,7 @@ git add -A && git commit -m "test: HWID binding, activation reset and deletion b
 - Create: `src/lib/rate-limit/types.ts`, `src/lib/rate-limit/postgres.ts`
 - Create: `tests/rate-limit/postgres.test.ts`
 
-- [ ] **Step 1: Create `src/lib/rate-limit/types.ts`**
+- [x] **Step 1: Create `src/lib/rate-limit/types.ts`**
 
 ```ts
 /**
@@ -3717,7 +3717,7 @@ export interface RateLimiter {
 }
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 `tests/rate-limit/postgres.test.ts`:
 
@@ -3828,14 +3828,14 @@ describe("PostgresRateLimiter", () => {
 });
 ```
 
-- [ ] **Step 3: Run and watch it fail**
+- [x] **Step 3: Run and watch it fail**
 
 ```bash
 npx vitest run tests/rate-limit/postgres.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/rate-limit/postgres`.
 
-- [ ] **Step 4: Implement `src/lib/rate-limit/postgres.ts`**
+- [x] **Step 4: Implement `src/lib/rate-limit/postgres.ts`**
 
 ```ts
 import { sql } from "drizzle-orm";
@@ -3904,7 +3904,7 @@ export class PostgresRateLimiter implements RateLimiter {
 }
 ```
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 ```bash
 npx vitest run tests/rate-limit/postgres.test.ts
@@ -3913,7 +3913,7 @@ Expected: 8 passed.
 
 > The `db.execute` return shape differs between drivers. The implementation handles both an array and a `{ rows }` object; confirm which PGlite returns and keep both branches, since production uses postgres.js.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A && git commit -m "feat: Postgres-backed multi-dimension rate limiter"
@@ -3926,7 +3926,7 @@ git add -A && git commit -m "feat: Postgres-backed multi-dimension rate limiter"
 - Create: `src/lib/rate-limit/index.ts`
 - Create: `tests/rate-limit/policy.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/rate-limit/policy.test.ts`:
 
@@ -3987,14 +3987,14 @@ describe("verifyDimensions", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/rate-limit/policy.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/rate-limit`.
 
-- [ ] **Step 3: Implement `src/lib/rate-limit/index.ts`**
+- [x] **Step 3: Implement `src/lib/rate-limit/index.ts`**
 
 ```ts
 import type { RateLimitDimension } from "./types";
@@ -4053,14 +4053,14 @@ export function verifyDimensions(
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/rate-limit/policy.test.ts
 ```
 Expected: 8 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: verification rate-limit policy across IP and product axes"
@@ -4074,7 +4074,7 @@ git add -A && git commit -m "feat: verification rate-limit policy across IP and 
 - Create: `src/lib/validation/verify-request.ts`
 - Create: `tests/validation/verify-request.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/validation/verify-request.test.ts`:
 
@@ -4150,14 +4150,14 @@ describe("verifyRequestSchema", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/validation/verify-request.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/validation/verify-request`.
 
-- [ ] **Step 3: Implement `src/lib/validation/verify-request.ts`**
+- [x] **Step 3: Implement `src/lib/validation/verify-request.ts`**
 
 ```ts
 import { z } from "zod";
@@ -4197,16 +4197,16 @@ export const verifyRequestSchema = z
 export type VerifyRequestBody = z.infer<typeof verifyRequestSchema>;
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/validation/verify-request.test.ts
 ```
-Expected: 15 passed.
+Expected: 14 passed.
 
 > Zod 4 strips unknown keys by default for object schemas; `.strip()` makes that explicit. If `.strip()` is not chainable in this version, remove the call — the default behaviour already satisfies the test.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: Zod validation for the public verify request"
@@ -4220,7 +4220,7 @@ git add -A && git commit -m "feat: Zod validation for the public verify request"
 - Create: `src/app/api/v1/licenses/verify/route.ts`
 - Create: `tests/api/verify-route.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 The route reads `env` and `db` at module scope, so the test mocks those two modules and drives the handler directly.
 
@@ -4228,7 +4228,7 @@ The route reads `env` and `db` at module scope, so the test mocks those two modu
 
 ```ts
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { createTestDatabase, TEST_HMAC_SECRET, truncateAll } from "../helpers/db";
+import { createTestDatabase, truncateAll } from "../helpers/db";
 import { DEVELOPER_A, makeLicense, makeProduct } from "../helpers/factories";
 import type { Database } from "@/db/types";
 
@@ -4456,14 +4456,14 @@ describe("POST /api/v1/licenses/verify", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/api/verify-route.test.ts
 ```
 Expected: FAIL — the route module does not exist.
 
-- [ ] **Step 3: Implement `src/app/api/v1/licenses/verify/route.ts`**
+- [x] **Step 3: Implement `src/app/api/v1/licenses/verify/route.ts`**
 
 ```ts
 import { NextResponse } from "next/server";
@@ -4585,23 +4585,23 @@ export async function GET(): Promise<NextResponse> {
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/api/verify-route.test.ts
 ```
-Expected: 14 passed.
+Expected: 13 passed.
 
 > If `vi.mock` with a getter does not resolve `db` in time, the fallback is to extract the handler body into `src/lib/licenses/verify-handler.ts` taking `(db, env, request)` and have the route be a three-line adapter. That is a better shape anyway if the mock proves brittle — take it rather than fighting the mock.
 
-- [ ] **Step 5: Full suite and typecheck**
+- [x] **Step 5: Full suite and typecheck**
 
 ```bash
 npm run typecheck && npx vitest run
 ```
 Expected: all green. Every one of the 17 mandated scenarios is now covered.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A && git commit -m "feat: public POST /api/v1/licenses/verify endpoint"

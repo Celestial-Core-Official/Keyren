@@ -4,7 +4,7 @@
 **Release being built:** `Alpha_v1` (private/testing release — never call it "v1" in product UI)
 
 > **If you are a new assistant picking this up (ChatGPT, a fresh Claude session, a human):**
-> read this whole file first, then start at **Task 20** in the plan. Everything you need is here.
+> read this whole file first, then start at **Task 24** in the plan. Everything you need is here.
 
 ---
 
@@ -12,13 +12,13 @@
 
 | | |
 |---|---|
-| **Tasks complete** | **1–19 of 35** |
-| **Next task** | **Task 20 — Rate limiter interface and Postgres store** |
-| **Test suite** | 133 tests, 15 files, all passing |
+| **Tasks complete** | **1–23 of 35** |
+| **Next task** | **Task 24 — Clerk wiring (`middleware.ts`, `src/lib/auth/require-developer.ts`)** |
+| **Test suite** | 176 tests, 19 files, all passing |
 | **Typecheck** | clean (exit 0) |
 | **Working tree** | clean, all work committed |
 
-Progress is also tracked as `- [x]` checkboxes inside the plan file itself. Tasks 1–19 are checked off there.
+Progress is also tracked as `- [x]` checkboxes inside the plan file itself. Tasks 1–23 are checked off there.
 
 ---
 
@@ -144,11 +144,20 @@ src/
 │   ├── products/
 │   │   ├── slug.ts             # slugify()
 │   │   └── service.ts          # createProduct/listProducts/getProduct/renameProduct/deleteProduct
-│   └── licenses/
-│       ├── expiration.ts       # DURATION_OPTIONS, resolveExpiresAt(), isExpired()
-│       ├── service.ts          # createLicense/listLicenses/getLicense/revokeLicense/
-│       │                       #   restoreLicense/resetActivation/deleteLicense — full lifecycle
-│       └── verify.ts           # verifyLicense() — the verification engine; security core
+│   ├── licenses/
+│   │   ├── expiration.ts       # DURATION_OPTIONS, resolveExpiresAt(), isExpired()
+│   │   ├── service.ts          # createLicense/listLicenses/getLicense/revokeLicense/
+│   │   │                       #   restoreLicense/resetActivation/deleteLicense — full lifecycle
+│   │   └── verify.ts           # verifyLicense() — the verification engine; security core
+│   ├── rate-limit/
+│   │   ├── types.ts            # RateLimitDimension, RateLimitResult, RateLimiter interface
+│   │   ├── postgres.ts         # PostgresRateLimiter — fixed-window counters, fails open
+│   │   └── index.ts            # clientIpFrom(), verifyDimensions() — the IP+product policy
+│   └── validation/
+│       └── verify-request.ts   # verifyRequestSchema (Zod) — the public verify body
+├── app/
+│   └── api/v1/licenses/verify/
+│       └── route.ts            # POST /api/v1/licenses/verify — the public endpoint; GET → 405
 └── db/
     ├── schema/
     │   ├── products.ts       # products table
@@ -178,10 +187,17 @@ tests/
 │   ├── expiration.test.ts     # 11 passing
 │   ├── create.test.ts         # 9 passing
 │   └── lifecycle.test.ts      # 13 passing
-└── verify/
-    ├── lookup.test.ts         # 8 passing
-    ├── state.test.ts          # 8 passing
-    └── hwid.test.ts           # 12 passing
+├── verify/
+│   ├── lookup.test.ts         # 8 passing
+│   ├── state.test.ts          # 8 passing
+│   └── hwid.test.ts           # 12 passing
+├── rate-limit/
+│   ├── postgres.test.ts       # 8 passing
+│   └── policy.test.ts         # 8 passing
+├── validation/
+│   └── verify-request.test.ts # 14 passing
+└── api/
+    └── verify-route.test.ts   # 13 passing
 .env.example                  # documents every required variable
 drizzle.config.ts             # drizzle-kit config; reads DATABASE_URL, falls back to a placeholder
 drizzle/0000_glorious_purple_man.sql  # first migration: 4 tables, 1 enum, 2 FKs, 6 indexes
@@ -288,6 +304,48 @@ export function verifyLicense(db: Database, input: VerifyInput): Promise<VerifyR
 // activation bookkeeping. A license that is absent, deleted, or belongs to a different
 // product all return the byte-identical LICENSE_INVALID failure — enumeration
 // resistance is structural (one return line), not two implementations kept in sync.
+
+// src/lib/rate-limit/types.ts
+export type RateLimitDimension = { name: string; value: string; limit: number; windowSeconds: number }
+export type RateLimitResult = { allowed: true } | { allowed: false; retryAfterSeconds: number }
+export interface RateLimiter { consume(dimensions: RateLimitDimension[]): Promise<RateLimitResult> }
+
+// src/lib/rate-limit/postgres.ts
+export class PostgresRateLimiter implements RateLimiter {
+  constructor(db: Database)
+  consume(dimensions: RateLimitDimension[]): Promise<RateLimitResult>
+}
+// Fixed-window counters in rate_limit_counters (atomic INSERT..ON CONFLICT..DO UPDATE
+// RETURNING). Fails OPEN (allowed: true) on any store error — a rate-limiter outage must
+// never take licensing offline. Deliberately does not log the bucket key (contains an IP).
+
+// src/lib/rate-limit/index.ts (re-exports everything from ./types and PostgresRateLimiter from ./postgres)
+export function clientIpFrom(headers: Headers): string
+// First entry of x-forwarded-for, else x-real-ip, else the literal string "unknown"
+// (one shared bucket for everything unattributable, never an exemption from limiting).
+export type VerifyLimitConfig = { perIpPerMinute: number; perProductPerMinute: number }
+export function verifyDimensions(
+  request: { ip: string; productId: string },
+  config?: VerifyLimitConfig,          // defaults to { perIpPerMinute: 60, perProductPerMinute: 600 }
+): RateLimitDimension[]                // always exactly two dimensions: "ip" and "product", both 60s windows
+
+// src/lib/validation/verify-request.ts
+export const verifyRequestSchema: ZodObject  // productId /^prod_[0-9A-Za-z]+$/ (1-64), licenseKey (1-128,
+                                              // format NOT enforced — a bad format must fail as LICENSE_INVALID,
+                                              // not a validation error), deviceId (1-1024). Strips unknown keys.
+export type VerifyRequestBody = z.infer<typeof verifyRequestSchema>
+
+// src/app/api/v1/licenses/verify/route.ts — the only public, unauthenticated endpoint
+export async function POST(request: Request): Promise<NextResponse>
+export async function GET(): Promise<NextResponse>   // explicit 405, not a bare 404, on wrong method
+export const runtime = "nodejs"        // node:crypto is used for HMAC
+export const dynamic = "force-dynamic" // never cache a licensing decision
+// Order inside POST is load-bearing: parse/validate -> rate-limit (BEFORE any DB lookup,
+// so a flood of guesses never reaches the licenses table) -> verifyLicense() -> serialize.
+// Never passes a client value into VerifyInput.now. Zod's issue list is discarded on a
+// parse failure — the response is always the fixed string
+// VERIFICATION_ERROR_MESSAGE.BAD_REQUEST ("The request body was malformed."), nothing
+// zod-shaped. The catch-all logs server-side detail and returns only INTERNAL_ERROR.
 ```
 
 ### Test helpers later tasks depend on (`tests/helpers/`, not exported from `src/`)
@@ -330,25 +388,28 @@ npm run db:migrate   # drizzle-kit migrate
 
 ## How to continue
 
-The build is running in **batches of 5 tasks** to conserve usage limits. Batch 4 (this one) was an intentional exception at 4 tasks: Task 17 is the verification engine — the function that decides whether paid software runs — and it stayed in its own tightly-scoped batch with Tasks 18–19 (the tests proving it). Tasks are sequential and share files, so **run them in order** — do not parallelize within a batch.
+The build is running in **batches of roughly 5 tasks** to conserve usage limits. Batch 4 was an intentional exception at 4 tasks (the verification engine stayed tightly scoped); Batch 5 (this one) was also 4 tasks — Tasks 20–23 share files and build toward one endpoint, so it made sense to finish the whole public HTTP surface in one pass rather than split it. Tasks are sequential and share files, so **run them in order** — do not parallelize within a batch.
 
-**Next up: Tasks 20–24.**
+**Next up: Tasks 24–28** (Phase 7 "Developer authentication and server actions" plus the start of Phase 8 "Dashboard UI").
 
 | Task | What it builds |
 |---|---|
-| 20 | Rate limiter interface and Postgres store (`src/lib/rate-limit/`) |
-| 21 | Verification rate-limit policy and client IP extraction |
-| 22 | Request validation (`src/lib/validation/verify-request.ts`) |
-| 23 | The public verification endpoint (`src/app/api/v1/licenses/verify/route.ts`) |
 | 24 | Clerk wiring (`middleware.ts`, `src/lib/auth/require-developer.ts`) |
+| 25 | Server actions (`src/app/dashboard/**/actions.ts`) |
+| 26 | shadcn/ui and the design tokens |
+| 27 | Dashboard shell and navigation |
+| 28 | Products page |
 
-Notes for Task 20 onward, now that the verification engine exists:
-- `verifyLicense(db, input)` (`src/lib/licenses/verify.ts`, Task 17) is a plain function with no HTTP concerns — signature `(db: Database, input: VerifyInput) => Promise<VerifyResult>`. Task 23's route handler is where parsing, rate limiting, and status-code mapping (via `VERIFICATION_ERROR_STATUS`) belong; none of that lives in `verify.ts` and it shouldn't move there.
-- `VerifyInput.now?: Date` exists solely so tests can inject a fixed clock (see `tests/verify/state.test.ts`). Task 23's route handler must never pass it — omitting it defaults to `new Date()`, the real server clock. Wiring a client-supplied timestamp into it would defeat the "ignores the client clock entirely" guarantee Task 18 tests.
-- `RATE_LIMITED` and `BAD_REQUEST` already exist in `VerificationErrorCode` / `VERIFICATION_ERROR_STATUS` / `VERIFICATION_ERROR_MESSAGE` (`src/lib/errors.ts`, Task 8) but nothing produces them yet — `verifyLicense` never returns either. Tasks 20–22 are what will actually trigger them.
-- The full license lifecycle (`revokeLicense`, `restoreLicense`, `resetActivation`, `deleteLicense` — all in `src/lib/licenses/service.ts` as of Task 16) has no caller yet outside tests. No dashboard UI or server action invokes them until Task 25's `actions.ts`.
+Notes for Task 24 onward, now that the public verify endpoint exists and is fully tested:
 
-See "Environment facts" above for two Task-11-discovered items every later task needs: (1) `db.execute()`'s runtime shape and typing under the portable `Database` type, and (2) that `db.query.<table>` relational queries work. Neither came up in Batch 4 — Tasks 16–19 only ever used the fluent query builder (`.select()/.insert()/.update()/.delete()/.returning()`), never raw `db.execute()`. Still load-bearing for anything in Tasks 20–23 that touches raw SQL (the Postgres rate limiter is the most likely candidate).
+- **The public API is genuinely public — no Clerk involvement.** `src/app/api/v1/licenses/verify/route.ts` never calls `auth()` and has zero Clerk imports, exactly per the "two completely separate authentication systems" rule. Task 24's `middleware.ts` must leave `/api/v1/**` outside Clerk's protected-route matcher — protecting it would break every customer integration, not just the dashboard. `/dashboard/**` is what Task 24 actually needs to gate.
+- **The `vi.mock("@/db", ...)` / `vi.mock("@/env", ...)` getter pattern from Task 23 worked on the first try** — no brittleness, no fallback needed (see Batch 5 notes below). The same pattern is very likely reusable for Task 25's server-action tests if they need to swap in the PGlite test database the same way.
+- **Rate limiting and validation are now fully wired**, so `RATE_LIMITED` and `BAD_REQUEST` are no longer dead codes in `VerificationErrorCode` — both are exercised end-to-end by `tests/api/verify-route.test.ts`.
+- `PostgresRateLimiter`, `clientIpFrom()`, and `verifyDimensions()` (`src/lib/rate-limit/`, Tasks 20–21) are specific to the verify endpoint's IP+product policy. Nothing in the dashboard (Tasks 24+) is rate-limited by the spec — Clerk-authenticated routes don't need this limiter. Don't reach for it there without checking the spec first.
+- The full license lifecycle (`revokeLicense`, `restoreLicense`, `resetActivation`, `deleteLicense` — `src/lib/licenses/service.ts`, Task 16) still has no caller outside tests. Task 25's `actions.ts` is what finally wires these to the UI.
+- `verifyRequestSchema` (`src/lib/validation/verify-request.ts`, Task 22) is for the public API only. Task 25 needs its own `src/lib/validation/dashboard.ts` (per the plan's File Structure) for server-action inputs — do not reuse or extend the public schema for dashboard forms; they have different trust boundaries (Clerk-authenticated developer vs. anonymous customer software).
+
+See "Environment facts" above for the two Task-11-discovered `db.execute()` items. Batch 5 used the runtime-shape/typing one directly for the first time in production code (not just test helpers) — see Batch 5 notes below for confirmation it held up unchanged.
 
 ### Working method for each task
 
@@ -373,6 +434,7 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 | 2 | 6–10 | ✅ Complete. 48 tests passing (6 files), typecheck clean. Plan's code used verbatim, no bugs found. Task 10's `Database` type fallback was **not** needed — the base-class `PgDatabase<...>` form compiled cleanly. |
 | 3 | 11–15 | ✅ Complete. 92 tests passing (11 files), typecheck clean. Database genuinely exercised for the first time. One plan bug found and corrected (see below); one plan-vs-actual test-count mismatch noted (harmless). |
 | 4 | 16–19 | ✅ Complete. 133 tests passing (15 files), typecheck clean. The verification engine — the security core of the product — shipped with **zero** deviation from the plan's code. Two more harmless plan-prose test-count mismatches found and corrected in the plan (see below); no code impact. |
+| 5 | 20–23 | ✅ Complete. 176 tests passing (19 files), typecheck clean, lint clean. The public HTTP surface — rate limiting, validation, and the verify endpoint — shipped with one genuine (trivial) plan bug and two more harmless plan-prose test-count mismatches, both corrected below. All 17 of the specification's mandatory scenarios are now covered. |
 
 ### Corrections already folded back into the plan
 
@@ -382,6 +444,10 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 - **Task 13** — the plan's prose said "Expected: 13 passed"; the plan's own `it()` blocks total 14. Corrected to 14. No code impact.
 - **Task 17** — the plan's prose said "Expected: 7 passed"; the plan's own `tests/verify/lookup.test.ts` (copied verbatim) contains 8 `it()` blocks. Corrected to 8. No code impact.
 - **Task 19** — the plan's prose said "Expected: 11 passed"; the plan's own `tests/verify/hwid.test.ts` (copied verbatim) contains 12 `it()` blocks. Corrected to 12. No code impact.
+- **Task 22** — the plan's prose said "Expected: 15 passed"; the plan's own `tests/validation/verify-request.test.ts` (copied verbatim) contains 8 standalone `it()` blocks plus 2 `it.each([...])` blocks over 3 fields each (6 executions) = 14 total. Corrected to 14. No code impact.
+- **Task 23** — two fixes, both in `tests/api/verify-route.test.ts`:
+  1. The plan's prose said "Expected: 14 passed"; the plan's own test file (copied verbatim) contains 13 `it()` blocks. Corrected to 13. No code impact.
+  2. Genuine plan bug: the test file's own import line pulled in `TEST_HMAC_SECRET` from `tests/helpers/db.ts` but never referenced it anywhere in the file (the mocked `@/env` module hardcodes the same string as a literal instead) — `npm run lint` flagged it as `@typescript-eslint/no-unused-vars`. Fixed by dropping `TEST_HMAC_SECRET` from the import. Folded into the plan's own code block, same as Task 12's fix.
 - **Assumptions** — documented the `min-release-age=3` npm policy.
 
 ### Batch 2 notes (Tasks 6–10)
@@ -410,6 +476,18 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 - **Cross-developer isolation (spec test #14)** is enforced by one helper, `findOwnedLicense()`, that every one of the four mutating functions calls before doing anything else — there is no separate ownership check duplicated per function to drift out of sync. `tests/licenses/lifecycle.test.ts`'s "cross-developer isolation" block drives `getLicense` plus all four mutations against a license owned by `DEVELOPER_B` while authenticated as `DEVELOPER_A`, and asserts both the rejection (`/not found/i` — never a distinguishing "forbidden") and that the underlying row is provably untouched afterward (re-read as `DEVELOPER_B`). All 5 pass.
 - **Two more instances of the same harmless plan-prose test-count mismatch Batch 3 first flagged** (Task 13 said "13 passed", the plan's own test file had 14): Task 17's plan prose said "Expected: 7 passed" against its own 8-`it()`-block `tests/verify/lookup.test.ts`; Task 19's said "Expected: 11 passed" against its own 12-`it()`-block `tests/verify/hwid.test.ts`. Both are miscounts in the plan's narration, not the code — nothing was added, removed, or skipped to reach the higher number. Both have now been corrected directly in the plan file (see "Corrections already folded back into the plan" above), matching how Task 13's was handled.
 - **No new environment gotchas.** Tasks 16–19 never call raw `db.execute()` — every query goes through the fluent builder (`.select()/.insert()/.update()/.delete()/.returning()`), which stays fully typed per the Task 11 findings already on record. Nothing new to add to "Environment facts."
+
+### Batch 5 notes (Tasks 20–23) — the public HTTP surface
+
+- **`db.execute()` was used in production code for the first time** (`src/lib/rate-limit/postgres.ts`'s atomic `INSERT ... ON CONFLICT ... DO UPDATE ... RETURNING count`). The Task 11 findings held up completely unchanged: the plan's own code — `Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows ?? []` — compiled with **zero** additional assertions needed, because asserting from `unknown` (which is what `result` types as, per the `PgQueryResultHKT` root cause PROGRESS.md documents) is always permitted in TypeScript without a special-cased cast. A comment was added at the call site explaining why, but no code changed from the plan's literal text. All 8 of `tests/rate-limit/postgres.test.ts` pass, including the counter-increment tests, which is indirect but solid runtime proof the `rows` branch is being read correctly under PGlite.
+- **The Task 23 `vi.mock("@/db", ...)` / `vi.mock("@/env", ...)` getter pattern worked on the first attempt.** All 13 of `tests/api/verify-route.test.ts` passed against the plan's route code with zero changes. **The stated fallback (extracting the handler into `src/lib/licenses/verify-handler.ts`) was NOT taken** — the file layout is exactly as the plan specifies: `src/app/api/v1/licenses/verify/route.ts` is the whole implementation, no separate handler module. If a future task's route test hits a genuinely brittle mock, this precedent is worth revisiting, but nothing here forced it.
+- **One genuine (trivial) plan bug**, same low-stakes category as Task 12's: `tests/api/verify-route.test.ts` imported `TEST_HMAC_SECRET` from `tests/helpers/db.ts` but never used it (the mocked `env` hardcodes the same literal string directly). `npm run lint` caught it as an unused-var warning. Fixed by dropping the import; see "Corrections already folded back into the plan" above.
+- **Two more instances of the same harmless plan-prose test-count mismatch** every batch since Batch 3 has found: Task 22 said "Expected: 15 passed" against its own 14-execution test file; Task 23 said "Expected: 14 passed" against its own 13-`it()`-block test file. Both corrected in the plan (see above). At this point the pattern is well-established enough that a future batch should not be surprised by it, and should just recount rather than assume the plan's stated number is right.
+- **Zod 4.4.3's `.strip()` is chainable on `ZodObject`** (`strip(): ZodObject<Shape, core.$strip>` in `node_modules/zod/v4/classic/schemas.d.ts`) — confirmed by reading the shipped `.d.ts` before writing `verify-request.ts`, not just by trying it. The plan's code was used verbatim; the documented fallback (remove `.strip()`, rely on default-strip behavior) was not needed.
+- **Rate limiting demonstrably runs before any license lookup.** `tests/api/verify-route.test.ts`'s "limits before touching the license lookup" test floods the endpoint with a request for a product ID that doesn't exist (`prod_UNKNOWN0000000000000000`) and asserts the 6th request returns 429, not the 404 an unmetered request would produce. This is the literal ordering the route handler's comments claim (`// 2. Rate limit BEFORE any license lookup`) verified by a test that would fail if the two steps were ever swapped.
+- **Both `RATE_LIMITED` and `BAD_REQUEST` are no longer dead codes.** They existed in `VerificationErrorCode` since Task 8 but nothing produced them until this batch. Every `VerificationErrorCode` value now has at least one passing test that triggers it through the real HTTP surface.
+- **Security assertions specifically checked and passing:** the malformed-request response body never contains `zod`, `expected`, `received`, or `path` (case-insensitive) — confirmed by `JSON.stringify(body)` pattern match against the actual response, not just against what the code is supposed to do; the license key is never echoed in any response, checked via full response `.text()`, not just the parsed JSON fields that happen to be asserted elsewhere; `VerifyInput.now` is never populated in the route handler (grep-verified — the only `now` in `route.ts` is inside prose comments, and the `verifyLicense(db, { productId, licenseKey, deviceId, secret })` call literally has no fifth property).
+- **All 17 of the specification's mandatory scenarios are now covered** — the coverage map's rows 16 (`tests/api/verify-route.test.ts`'s "malformed request" block, 4 tests) and 17 (`tests/rate-limit/postgres.test.ts`'s "denies the request past the limit" plus `tests/api/verify-route.test.ts`'s "rate limiting" block, 4 tests) are the two this batch closes out. Rows 1–15 were already covered by Batches 1–4 and re-verified passing in this batch's full-suite run.
 
 ---
 
