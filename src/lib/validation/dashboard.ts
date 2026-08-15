@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { DURATION_OPTIONS, type DurationValue } from "@/lib/licenses/expiration";
+import {
+  DURATION_OPTIONS,
+  endOfUtcDay,
+  type DurationValue,
+} from "@/lib/licenses/expiration";
 import {
   ACTIVATION_FILTERS,
   BATCH_QUANTITY_MAX,
@@ -106,6 +110,29 @@ export const batchQuantitySchema = z.coerce
   .default(BATCH_QUANTITY_MIN);
 
 /**
+ * The date input submits `YYYY-MM-DD`, which means the whole of that day.
+ *
+ * Normalized here rather than in the browser so the server is the authority:
+ * a hand-crafted submission gets the same interpretation the UI previews, and
+ * a full ISO timestamp still passes through untouched for any caller that has
+ * already decided on an exact instant.
+ */
+const expiresAtSchema = z.union([
+  z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .transform((value, context) => {
+      try {
+        return endOfUtcDay(value);
+      } catch {
+        context.addIssue({ code: "custom", message: "Enter a real calendar date." });
+        return z.NEVER;
+      }
+    }),
+  z.coerce.date(),
+]);
+
+/**
  * Shared by all three expiration modes. Spread rather than repeated so a new
  * field cannot be added to one branch and forgotten in the others.
  */
@@ -122,7 +149,7 @@ export const createLicenseSchema = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("date"),
     ...licenseCoreShape,
-    expiresAt: z.coerce.date(),
+    expiresAt: expiresAtSchema,
   }),
   z.object({
     mode: z.literal("duration"),

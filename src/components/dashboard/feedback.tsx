@@ -84,7 +84,12 @@ export function SubmitButton({
       className={className}
     >
       <span className="grid place-items-center">
+        {/* Both labels occupy the cell so the width is fixed, but only the
+            visible one is in the accessibility tree — otherwise the button
+            would be announced as "Generate license Generating…", which is
+            both wrong and confusing at the moment it matters most. */}
         <span
+          aria-hidden={pending}
           className={cn(
             "col-start-1 row-start-1 flex items-center gap-1.5",
             pending && "invisible",
@@ -94,6 +99,7 @@ export function SubmitButton({
           {children}
         </span>
         <span
+          aria-hidden={!pending}
           className={cn(
             "col-start-1 row-start-1 flex items-center gap-1.5",
             !pending && "invisible",

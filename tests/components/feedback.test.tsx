@@ -133,6 +133,18 @@ describe("SubmitButton", () => {
     expect(button.textContent).toContain("Generating…");
   });
 
+  it("announces only the label that is actually showing", () => {
+    // Without hiding the idle copy from the accessibility tree, the button is
+    // announced as "Generate licenseGenerating…".
+    render(
+      <form>
+        <SubmitButton pendingLabel="Generating…">Generate license</SubmitButton>
+      </form>,
+    );
+
+    expect(screen.getByRole("button", { name: "Generate license" })).toBeTruthy();
+  });
+
   it("is not busy before submission", () => {
     render(
       <form>

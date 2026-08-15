@@ -1,243 +1,126 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { AlertTriangle, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import {
   createLicenseAction,
   type CreateLicenseState,
 } from "@/app/dashboard/products/[productId]/licenses/actions";
-import { DURATION_OPTIONS } from "@/lib/licenses/expiration";
-import { CopyButton } from "@/components/dashboard/copy-button";
+import { useActionFeedback } from "@/components/dashboard/feedback";
+import { BatchResultDialog } from "@/components/licenses/batch-result-dialog";
+import { LicenseCreateForm } from "@/components/licenses/license-create-form";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { idleAction } from "@/lib/actions/state";
 
 const INITIAL: CreateLicenseState = idleAction();
 
-type Mode = "permanent" | "date" | "duration";
-
-export function CreateLicenseDialog({
+/**
+ * Owns the action state, and therefore owns the plaintext keys.
+ *
+ * Kept in its own component purely so the outer dialog can throw it away: the
+ * parent remounts this with a fresh `key` after the developer acknowledges the
+ * result, which is what actually drops the keys out of React state.
+ * `useActionState` has no reset, so anything short of a remount would leave
+ * the plaintext sitting in the component for the life of the page.
+ */
+function LicenseCreateFlow({
   productId,
+  productSlug,
+  open,
+  onOpenChange,
+  onAcknowledge,
+  onGenerateAnother,
 }: {
   productId: string;
   productSlug: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAcknowledge: () => void;
+  onGenerateAnother: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>("permanent");
-  const [hwidLocked, setHwidLocked] = useState(true);
-  const [acknowledged, setAcknowledged] = useState(false);
+  const [state, formAction] = useActionState(createLicenseAction, INITIAL);
 
-  const [rawState, formAction, pending] = useActionState(createLicenseAction, INITIAL);
+  // Failures raise a toast; successes are announced by the result dialog
+  // itself, which is far louder than a toast and cannot be missed.
+  useActionFeedback(state, {});
 
-  const state = {
-    error: rawState.status === "error" ? rawState.message : null,
-    plaintextKey:
-      rawState.status === "success"
-        ? (rawState.data?.licenses[0]?.licenseKey ?? null)
-        : null,
-  };
+  const created = state.status === "success" ? (state.data?.licenses ?? null) : null;
 
-  // Reset the acknowledgement whenever a new key arrives, so the developer
-  // cannot carry a previous confirmation over to a key they have not saved.
-  // Adjusted during render rather than in an effect — React's documented
-  // pattern for resetting state when a value changes, which avoids the extra
-  // commit-then-effect render pass a useEffect would cost here.
-  const [lastKey, setLastKey] = useState(state.plaintextKey);
-  if (state.plaintextKey !== lastKey) {
-    setLastKey(state.plaintextKey);
-    if (state.plaintextKey) setAcknowledged(false);
-  }
-
-  // Which key the developer has already acknowledged and dismissed.
-  //
-  // This is load-bearing: `useActionState` has no reset, so `state.plaintextKey`
-  // stays populated for the life of the mounted component. Gating the reveal on
-  // `state.plaintextKey` alone would make the dialog impossible to close — the
-  // branch below hardcodes `open`, so "Done" would clear local state and then
-  // immediately re-render the exact same reveal. Comparing against the dismissed
-  // key closes it, while a subsequent license still produces a different key
-  // string and correctly re-opens the reveal.
-  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
-
-  // A value rather than a boolean so TypeScript narrows it to `string` inside
-  // the branch below.
-  const revealKey =
-    state.plaintextKey !== null && state.plaintextKey !== dismissedKey
-      ? state.plaintextKey
-      : null;
-
-  function closeAll() {
-    setOpen(false);
-    setMode("permanent");
-    setHwidLocked(true);
-    setAcknowledged(false);
-  }
-
-  function acknowledgeAndClose() {
-    // Recorded before closing, so the reveal cannot reappear for this key.
-    setDismissedKey(revealKey);
-    closeAll();
-  }
-
-  // Once a key exists, the form is replaced by the reveal. There is no path
-  // back to the form except acknowledging the key, and no way to re-open it.
-  if (revealKey !== null) {
+  if (created && created.length > 0) {
     return (
-      <Dialog open onOpenChange={() => undefined}>
-        <DialogContent
-          showCloseButton={false}
-          onEscapeKeyDown={(event) => event.preventDefault()}
-          onInteractOutside={(event) => event.preventDefault()}
-        >
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="size-4 text-amber-500" />
-              Save this key now
-            </DialogTitle>
-            <DialogDescription>
-              This is the only time Keyren will ever show this license key. Only a secure
-              derived value is stored in the database, so it cannot be recovered or
-              displayed again.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 py-5">
-            <div className="rounded-lg border border-border bg-muted/40 p-4">
-              <code className="block break-all font-mono text-sm">{revealKey}</code>
-            </div>
-            <CopyButton value={revealKey} label="Copy license key" />
-
-            <label className="flex cursor-pointer items-start gap-2.5 pt-2 text-sm">
-              <input
-                type="checkbox"
-                checked={acknowledged}
-                onChange={(event) => setAcknowledged(event.target.checked)}
-                className="mt-0.5 size-4 accent-primary"
-              />
-              <span className="text-muted-foreground">
-                I have saved this key. I understand it cannot be shown again.
-              </span>
-            </label>
-          </div>
-
-          <DialogFooter>
-            <Button onClick={acknowledgeAndClose} disabled={!acknowledged}>
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BatchResultDialog
+        licenses={created}
+        productId={productId}
+        productSlug={productSlug}
+        onAcknowledge={onAcknowledge}
+        onGenerateAnother={onGenerateAnother}
+      />
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="gap-1.5">
-          <Plus className="size-4" />
-          Generate license
-        </Button>
-      </DialogTrigger>
-
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <form action={formAction}>
-          <input type="hidden" name="productId" value={productId} />
-          <input type="hidden" name="mode" value={mode} />
-          <input type="hidden" name="hwidLocked" value={hwidLocked ? "on" : "off"} />
-
-          <DialogHeader>
-            <DialogTitle>Generate license</DialogTitle>
-            <DialogDescription>
-              The key is shown once, immediately after creation.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-5 py-5">
-            <div className="space-y-2">
-              <Label htmlFor="mode-select">Expiration</Label>
-              <Select value={mode} onValueChange={(value) => setMode(value as Mode)}>
-                <SelectTrigger id="mode-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="permanent">Permanent — never expires</SelectItem>
-                  <SelectItem value="duration">Expires after a duration</SelectItem>
-                  <SelectItem value="date">Expires on a specific date</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {mode === "duration" ? (
-              <div className="space-y-2">
-                <Label htmlFor="duration">Duration</Label>
-                <select
-                  id="duration"
-                  name="duration"
-                  defaultValue="30d"
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  {DURATION_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted-foreground">
-                  Counted from now, not from first activation.
-                </p>
-              </div>
-            ) : null}
-
-            {mode === "date" ? (
-              <div className="space-y-2">
-                <Label htmlFor="expiresAt">Expires on</Label>
-                <Input id="expiresAt" name="expiresAt" type="date" required />
-                <p className="text-xs text-muted-foreground">Interpreted as UTC.</p>
-              </div>
-            ) : null}
-
-            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
-              <div className="space-y-1">
-                <Label htmlFor="hwid">Lock to one device</Label>
-                <p className="text-xs text-muted-foreground">
-                  The first device to authenticate claims the license. Others are refused
-                  until you reset the activation.
-                </p>
-              </div>
-              <Switch id="hwid" checked={hwidLocked} onCheckedChange={setHwidLocked} />
-            </div>
-
-            {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? "Generating…" : "Generate license"}
-            </Button>
-          </DialogFooter>
-        </form>
+        <LicenseCreateForm
+          productId={productId}
+          formAction={formAction}
+          fieldErrors={state.status === "error" ? state.fieldErrors : {}}
+          onCancel={() => onOpenChange(false)}
+        />
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function CreateLicenseDialog({
+  productId,
+  productSlug,
+  variant = "default",
+  size = "sm",
+  children,
+}: {
+  productId: string;
+  productSlug: string;
+  variant?: React.ComponentProps<typeof Button>["variant"];
+  size?: React.ComponentProps<typeof Button>["size"];
+  children?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [session, setSession] = useState(0);
+
+  function openFresh() {
+    setSession((value) => value + 1);
+    setOpen(true);
+  }
+
+  return (
+    <>
+      <Button
+        size={size}
+        variant={variant}
+        className="gap-1.5"
+        onClick={openFresh}
+        data-keyren-create="license"
+      >
+        <Plus className="size-4" />
+        {children ?? "Generate license"}
+      </Button>
+
+      <LicenseCreateFlow
+        key={session}
+        productId={productId}
+        productSlug={productSlug}
+        open={open}
+        onOpenChange={setOpen}
+        // Acknowledging bumps the key, which unmounts the component holding
+        // the plaintext and closes the dialog in the same commit.
+        onAcknowledge={() => {
+          setOpen(false);
+          setSession((value) => value + 1);
+        }}
+        onGenerateAnother={openFresh}
+      />
+    </>
   );
 }
