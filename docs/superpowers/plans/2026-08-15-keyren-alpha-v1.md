@@ -4617,7 +4617,9 @@ git add -A && git commit -m "feat: public POST /api/v1/licenses/verify endpoint"
 - Create: `src/app/sign-in/[[...sign-in]]/page.tsx`, `src/app/sign-up/[[...sign-up]]/page.tsx`
 - Modify: `src/app/layout.tsx`
 
-- [ ] **Step 1: Create `middleware.ts` at the repo root**
+- [x] **Step 1: Create `src/middleware.ts`**
+
+> **Corrected during execution.** This project uses a `src/` layout, so the file must be `src/middleware.ts`, NOT `middleware.ts` at the repo root. At the root, Next.js silently never invokes it — typecheck, lint, tests, and `next build` all still pass, and the only symptom is a runtime error on the first `/dashboard` request: *"clerkMiddleware() was not run, your middleware or proxy file might be misplaced."* Verify by actually starting `npm run dev` and requesting a protected route.
 
 ```ts
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
@@ -4912,7 +4914,13 @@ export const renameProductSchema = z.object({
   name: productName,
 });
 
-const durationValues = DURATION_OPTIONS.map((option) => option.value) as [string, ...string[]];
+// Must stay narrowed to DurationValue, not widened to string: `z.enum()` over
+// a plain string[] infers an output type of `string`, which then fails to
+// satisfy ExpirationInput's `duration: DurationValue` field.
+const durationValues = DURATION_OPTIONS.map((option) => option.value) as [
+  DurationValue,
+  ...DurationValue[],
+];
 
 export const createLicenseSchema = z.discriminatedUnion("mode", [
   z.object({
