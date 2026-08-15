@@ -4,7 +4,7 @@
 **Release being built:** `Alpha_v1` (private/testing release — never call it "v1" in product UI)
 
 > **If you are a new assistant picking this up (ChatGPT, a fresh Claude session, a human):**
-> read this whole file first, then start at **Task 16** in the plan. Everything you need is here.
+> read this whole file first, then start at **Task 20** in the plan. Everything you need is here.
 
 ---
 
@@ -12,13 +12,13 @@
 
 | | |
 |---|---|
-| **Tasks complete** | **1–15 of 35** |
-| **Next task** | **Task 16 — License lifecycle (revoke, restore, reset activation, delete)** |
-| **Test suite** | 92 tests, 11 files, all passing |
+| **Tasks complete** | **1–19 of 35** |
+| **Next task** | **Task 20 — Rate limiter interface and Postgres store** |
+| **Test suite** | 133 tests, 15 files, all passing |
 | **Typecheck** | clean (exit 0) |
 | **Working tree** | clean, all work committed |
 
-Progress is also tracked as `- [x]` checkboxes inside the plan file itself. Tasks 1–15 are checked off there.
+Progress is also tracked as `- [x]` checkboxes inside the plan file itself. Tasks 1–19 are checked off there.
 
 ---
 
@@ -146,8 +146,9 @@ src/
 │   │   └── service.ts          # createProduct/listProducts/getProduct/renameProduct/deleteProduct
 │   └── licenses/
 │       ├── expiration.ts       # DURATION_OPTIONS, resolveExpiresAt(), isExpired()
-│       └── service.ts          # createLicense()/listLicenses() — creation+listing half only;
-│                                #   revoke/restore/reset/delete land in Task 16
+│       ├── service.ts          # createLicense/listLicenses/getLicense/revokeLicense/
+│       │                       #   restoreLicense/resetActivation/deleteLicense — full lifecycle
+│       └── verify.ts           # verifyLicense() — the verification engine; security core
 └── db/
     ├── schema/
     │   ├── products.ts       # products table
@@ -173,9 +174,14 @@ tests/
 ├── products/
 │   ├── slug.test.ts           # 8 passing
 │   └── service.test.ts        # 14 passing
-└── licenses/
-    ├── expiration.test.ts     # 11 passing
-    └── create.test.ts         # 9 passing
+├── licenses/
+│   ├── expiration.test.ts     # 11 passing
+│   ├── create.test.ts         # 9 passing
+│   └── lifecycle.test.ts      # 13 passing
+└── verify/
+    ├── lookup.test.ts         # 8 passing
+    ├── state.test.ts          # 8 passing
+    └── hwid.test.ts           # 12 passing
 .env.example                  # documents every required variable
 drizzle.config.ts             # drizzle-kit config; reads DATABASE_URL, falls back to a placeholder
 drizzle/0000_glorious_purple_man.sql  # first migration: 4 tables, 1 enum, 2 FKs, 6 indexes
@@ -256,13 +262,32 @@ export type ExpirationInput =
 export function resolveExpiresAt(input: ExpirationInput, now?: Date): Date | null
 export function isExpired(expiresAt: Date | null, now?: Date): boolean   // deadline instant IS expired
 
-// src/lib/licenses/service.ts (creation + listing half; revoke/restore/reset/delete land in Task 16)
+// src/lib/licenses/service.ts (full CRUD + lifecycle — complete as of Task 16)
 export type LicenseView = { id, productId, keyLast4, status, expiresAt, hwidLocked, createdAt,
                              updatedAt, revokedAt, activation: { activatedAt, lastSeenAt } | null }
 export type CreateLicenseInput = { productId, expiration: ExpirationInput, hwidLocked, secret }
 export function createLicense(db, ownerId, input): Promise<{ license: LicenseView; plaintextKey: string }>
 export function listLicenses(db, ownerId, productId): Promise<LicenseView[]>
+export function getLicense(db, ownerId, licenseId): Promise<LicenseView | null>
+export function revokeLicense(db, ownerId, licenseId): Promise<LicenseView>    // throws notFound()
+export function restoreLicense(db, ownerId, licenseId): Promise<LicenseView>   // throws notFound(); idempotent if already active
+export function resetActivation(db, ownerId, licenseId): Promise<void>        // throws notFound(); no-op if never activated
+export function deleteLicense(db, ownerId, licenseId): Promise<void>          // throws notFound(); permanent, cascades to activation
 export function toLicenseView(row, activation): LicenseView
+
+// src/lib/licenses/verify.ts — the verification engine; the security core of the product
+export type VerifyInput = { productId: string; licenseKey: string; deviceId: string; secret: string; now?: Date }
+export type VerifyResult =
+  | { success: true; license: { status: "active"; expiresAt: string | null } }
+  | { success: false; error: { code: VerificationErrorCode; message: string } }
+export function verifyLicense(db: Database, input: VerifyInput): Promise<VerifyResult>
+// Order inside verifyLicense is load-bearing and must not be reordered: locate
+// product -> derive key hash -> locate license scoped by productId -> constant-time
+// re-check -> revoked before expired -> expiration against the SERVER clock (input.now
+// is a test-only injection point, never fed from the request) -> device rules ->
+// activation bookkeeping. A license that is absent, deleted, or belongs to a different
+// product all return the byte-identical LICENSE_INVALID failure — enumeration
+// resistance is structural (one return line), not two implementations kept in sync.
 ```
 
 ### Test helpers later tasks depend on (`tests/helpers/`, not exported from `src/`)
@@ -305,24 +330,25 @@ npm run db:migrate   # drizzle-kit migrate
 
 ## How to continue
 
-The build is running in **batches of 5 tasks** to conserve usage limits. Tasks are sequential and share files, so **run them in order** — do not parallelize within a batch.
+The build is running in **batches of 5 tasks** to conserve usage limits. Batch 4 (this one) was an intentional exception at 4 tasks: Task 17 is the verification engine — the function that decides whether paid software runs — and it stayed in its own tightly-scoped batch with Tasks 18–19 (the tests proving it). Tasks are sequential and share files, so **run them in order** — do not parallelize within a batch.
 
-**Next up: Tasks 16–20.**
+**Next up: Tasks 20–24.**
 
 | Task | What it builds |
 |---|---|
-| 16 | License lifecycle — revoke, restore, reset activation, delete (`src/lib/licenses/service.ts`, continued) |
-| 17 | Verification core — product, key lookup, enumeration resistance (`src/lib/licenses/verify.ts`) |
-| 18 | Verification — license state and expiration |
-| 19 | Verification — HWID binding, reset, and deletion |
 | 20 | Rate limiter interface and Postgres store (`src/lib/rate-limit/`) |
+| 21 | Verification rate-limit policy and client IP extraction |
+| 22 | Request validation (`src/lib/validation/verify-request.ts`) |
+| 23 | The public verification endpoint (`src/app/api/v1/licenses/verify/route.ts`) |
+| 24 | Clerk wiring (`middleware.ts`, `src/lib/auth/require-developer.ts`) |
 
-Notes for Task 16 (reads `src/lib/licenses/service.ts`, which Task 15 only half-built):
-- `toLicenseView` is exported (not just used internally) — Task 16's new functions (revoke/restore/reset/delete) will presumably need it too, to build their return values the same way `createLicense`/`listLicenses` do.
-- `assertOwnsProduct` is a private (non-exported) helper in the same file. A license-scoped equivalent (confirm a license exists AND its product belongs to this developer) does not exist yet — Task 16 most likely needs to add one, probably via a join from `licenses` to `products`, since a license doesn't carry `ownerId` directly.
-- The activation-reset operation will need to delete from `activations` where `licenseId` matches — no helper for that exists yet either.
+Notes for Task 20 onward, now that the verification engine exists:
+- `verifyLicense(db, input)` (`src/lib/licenses/verify.ts`, Task 17) is a plain function with no HTTP concerns — signature `(db: Database, input: VerifyInput) => Promise<VerifyResult>`. Task 23's route handler is where parsing, rate limiting, and status-code mapping (via `VERIFICATION_ERROR_STATUS`) belong; none of that lives in `verify.ts` and it shouldn't move there.
+- `VerifyInput.now?: Date` exists solely so tests can inject a fixed clock (see `tests/verify/state.test.ts`). Task 23's route handler must never pass it — omitting it defaults to `new Date()`, the real server clock. Wiring a client-supplied timestamp into it would defeat the "ignores the client clock entirely" guarantee Task 18 tests.
+- `RATE_LIMITED` and `BAD_REQUEST` already exist in `VerificationErrorCode` / `VERIFICATION_ERROR_STATUS` / `VERIFICATION_ERROR_MESSAGE` (`src/lib/errors.ts`, Task 8) but nothing produces them yet — `verifyLicense` never returns either. Tasks 20–22 are what will actually trigger them.
+- The full license lifecycle (`revokeLicense`, `restoreLicense`, `resetActivation`, `deleteLicense` — all in `src/lib/licenses/service.ts` as of Task 16) has no caller yet outside tests. No dashboard UI or server action invokes them until Task 25's `actions.ts`.
 
-See "Environment facts" above for two Task-11-discovered items every later task needs: (1) `db.execute()`'s runtime shape and typing under the portable `Database` type, and (2) that `db.query.<table>` relational queries work. Both are load-bearing for Tasks 16–23.
+See "Environment facts" above for two Task-11-discovered items every later task needs: (1) `db.execute()`'s runtime shape and typing under the portable `Database` type, and (2) that `db.query.<table>` relational queries work. Neither came up in Batch 4 — Tasks 16–19 only ever used the fluent query builder (`.select()/.insert()/.update()/.delete()/.returning()`), never raw `db.execute()`. Still load-bearing for anything in Tasks 20–23 that touches raw SQL (the Postgres rate limiter is the most likely candidate).
 
 ### Working method for each task
 
@@ -346,6 +372,7 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 | 1 | 1–5 | ✅ Complete. 18 tests passing, typecheck clean. Two plan bugs found and corrected (see below). |
 | 2 | 6–10 | ✅ Complete. 48 tests passing (6 files), typecheck clean. Plan's code used verbatim, no bugs found. Task 10's `Database` type fallback was **not** needed — the base-class `PgDatabase<...>` form compiled cleanly. |
 | 3 | 11–15 | ✅ Complete. 92 tests passing (11 files), typecheck clean. Database genuinely exercised for the first time. One plan bug found and corrected (see below); one plan-vs-actual test-count mismatch noted (harmless). |
+| 4 | 16–19 | ✅ Complete. 133 tests passing (15 files), typecheck clean. The verification engine — the security core of the product — shipped with **zero** deviation from the plan's code. Two more harmless plan-prose test-count mismatches found and corrected in the plan (see below); no code impact. |
 
 ### Corrections already folded back into the plan
 
@@ -353,6 +380,8 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 - **Task 3** — create-next-app's blanket `.env*` gitignore rule also matches `.env.example`, which would have silently dropped it from the commit. Now adds `!.env.example` and verifies with `git check-ignore`.
 - **Task 12** — the plan's `slugify()` contradicted the plan's own test: collapsing every non-alphanumeric run turned `"Acme's App (v2)!"` into `acme_s_app_v2`, but the test asserts `acmes_app_v2`. The plan now strips apostrophes with `.replace(/'/g, "")` **before** the general punctuation collapse. The implementation in `src/lib/products/slug.ts` already has this fix.
 - **Task 13** — the plan's prose said "Expected: 13 passed"; the plan's own `it()` blocks total 14. Corrected to 14. No code impact.
+- **Task 17** — the plan's prose said "Expected: 7 passed"; the plan's own `tests/verify/lookup.test.ts` (copied verbatim) contains 8 `it()` blocks. Corrected to 8. No code impact.
+- **Task 19** — the plan's prose said "Expected: 11 passed"; the plan's own `tests/verify/hwid.test.ts` (copied verbatim) contains 12 `it()` blocks. Corrected to 12. No code impact.
 - **Assumptions** — documented the `min-release-age=3` npm policy.
 
 ### Batch 2 notes (Tasks 6–10)
@@ -372,6 +401,15 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 - **One harmless plan-documentation mismatch:** Task 13's plan text says "Expected: 13 passed" for `tests/products/service.test.ts`, but the plan's own test file (copied verbatim) contains 14 `it(...)` blocks (2 in `createProduct`, 3 each in `listProducts`/`getProduct`/`renameProduct`/`deleteProduct`), and all 14 genuinely pass. This is a miscount in the plan's prose, not a code defect — nothing was added, removed, or skipped to reach 14. Don't be alarmed if a future re-read of the plan still says 13.
 - Every other file in this batch (`tests/helpers/db.ts`, `tests/helpers/factories.ts`, `src/lib/products/service.ts`, `src/lib/licenses/expiration.ts`, `src/lib/licenses/service.ts`, and all other test files) was used byte-for-byte as written in the plan, and all plan-stated test counts for those files were exact (Task 11: 2, Task 14: 11, Task 15: 9).
 - The single most security-critical test in this batch — `tests/licenses/create.test.ts`'s "never persists the plaintext key" (JSON-serializes the full stored row, uppercases it, and asserts the plaintext key appears nowhere in any column) — passed against the plan's implementation with no changes needed. `licenses.keyHash` is the only derivative stored; the plaintext is generated, hashed, and returned, never written anywhere else.
+
+### Batch 4 notes (Tasks 16–19) — the verification engine
+
+- **Every file in this batch was used byte-for-byte as written in the plan.** `src/lib/licenses/service.ts`'s four appended lifecycle functions (`revokeLicense`, `restoreLicense`, `resetActivation`, `deleteLicense`) plus their shared `findOwnedLicense` helper, and the entirety of `src/lib/licenses/verify.ts` (`verifyLicense` + `bindOrRefreshActivation`), needed zero changes to pass their tests. No new imports were needed in `service.ts` — `and`, `eq`, and the `activations`/`licenses`/`products` tables were already imported from Task 15, exactly as the plan promised.
+- **Tasks 18 and 19 are pure test files** (`tests/verify/state.test.ts`, `tests/verify/hwid.test.ts`) asserting behaviour Task 17's engine already claimed to have. Both suites passed on the very first run, with zero edits to `verify.ts` or `service.ts` required. That means the load-bearing ordering the plan calls out — locate product → derive key hash → locate license scoped by `productId` → constant-time re-check → **revoked before expired** → expiration against the server clock → device rules → activation bookkeeping — is genuinely correct as implemented, not just claimed in a comment. Specifically exercised and passing: a license that is both revoked and expired reports `LICENSE_REVOKED`, not `LICENSE_EXPIRED`; the expiry boundary is inclusive (`isExpired` uses `<=`, so the deadline instant itself already counts as expired, while one second before it still authenticates); the `now` parameter is server-only and nothing in the request path can influence it (`VerifyInput.now` is a test-only injection point that Task 23's route handler must never wire up to client input).
+- **Enumeration resistance holds exactly as specified, structurally rather than by convention.** `tests/verify/lookup.test.ts`'s `JSON.stringify(absent) === JSON.stringify(foreign)` check (an absent key vs. a real key belonging to a different product, both queried against the same wrong product) passed unmodified — both cases fall through the identical `if (!license) return failure("LICENSE_INVALID")` line, so there is only one code path that can produce that response, not two independent implementations that happen to agree today.
+- **Cross-developer isolation (spec test #14)** is enforced by one helper, `findOwnedLicense()`, that every one of the four mutating functions calls before doing anything else — there is no separate ownership check duplicated per function to drift out of sync. `tests/licenses/lifecycle.test.ts`'s "cross-developer isolation" block drives `getLicense` plus all four mutations against a license owned by `DEVELOPER_B` while authenticated as `DEVELOPER_A`, and asserts both the rejection (`/not found/i` — never a distinguishing "forbidden") and that the underlying row is provably untouched afterward (re-read as `DEVELOPER_B`). All 5 pass.
+- **Two more instances of the same harmless plan-prose test-count mismatch Batch 3 first flagged** (Task 13 said "13 passed", the plan's own test file had 14): Task 17's plan prose said "Expected: 7 passed" against its own 8-`it()`-block `tests/verify/lookup.test.ts`; Task 19's said "Expected: 11 passed" against its own 12-`it()`-block `tests/verify/hwid.test.ts`. Both are miscounts in the plan's narration, not the code — nothing was added, removed, or skipped to reach the higher number. Both have now been corrected directly in the plan file (see "Corrections already folded back into the plan" above), matching how Task 13's was handled.
+- **No new environment gotchas.** Tasks 16–19 never call raw `db.execute()` — every query goes through the fluent builder (`.select()/.insert()/.update()/.delete()/.returning()`), which stays fully typed per the Task 11 findings already on record. Nothing new to add to "Environment facts."
 
 ---
 

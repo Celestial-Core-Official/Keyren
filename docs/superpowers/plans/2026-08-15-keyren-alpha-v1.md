@@ -2562,7 +2562,7 @@ git add -A && git commit -m "feat: license creation with show-once plaintext key
 - Modify: `src/lib/licenses/service.ts` (append)
 - Create: `tests/licenses/lifecycle.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/licenses/lifecycle.test.ts`:
 
@@ -2735,14 +2735,14 @@ describe("cross-developer isolation", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/licenses/lifecycle.test.ts
 ```
 Expected: FAIL — `revokeLicense` is not exported.
 
-- [ ] **Step 3: Append to `src/lib/licenses/service.ts`**
+- [x] **Step 3: Append to `src/lib/licenses/service.ts`**
 
 The appended code uses only `and` and `eq` from `drizzle-orm` and the `activations` / `licenses` / `products` tables, all of which Task 15 already imported at the top of this file. No new imports are needed. Append:
 
@@ -2857,21 +2857,21 @@ export async function deleteLicense(
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/licenses/lifecycle.test.ts
 ```
 Expected: 13 passed.
 
-- [ ] **Step 5: Run everything so far**
+- [x] **Step 5: Run everything so far**
 
 ```bash
 npm run typecheck && npx vitest run
 ```
 Expected: typecheck clean, all suites green.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A && git commit -m "feat: license revoke, restore, activation reset and delete"
@@ -2889,7 +2889,7 @@ This is the code that decides whether paid software runs. It is worth reading tw
 - Create: `src/lib/licenses/verify.ts`
 - Create: `tests/verify/lookup.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/verify/lookup.test.ts`:
 
@@ -3063,14 +3063,14 @@ describe("enumeration resistance", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 ```bash
 npx vitest run tests/verify/lookup.test.ts
 ```
 Expected: FAIL — cannot resolve `@/lib/licenses/verify`.
 
-- [ ] **Step 3: Implement `src/lib/licenses/verify.ts`**
+- [x] **Step 3: Implement `src/lib/licenses/verify.ts`**
 
 ```ts
 import { and, eq } from "drizzle-orm";
@@ -3232,14 +3232,14 @@ async function bindOrRefreshActivation(
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 npx vitest run tests/verify/lookup.test.ts
 ```
-Expected: 7 passed.
+Expected: 8 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: license verification engine"
@@ -3253,7 +3253,7 @@ The engine from Task 17 already claims these behaviours. This task proves them. 
 **Files:**
 - Create: `tests/verify/state.test.ts`
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `tests/verify/state.test.ts`:
 
@@ -3422,14 +3422,14 @@ describe("permanent license", () => {
 });
 ```
 
-- [ ] **Step 2: Run**
+- [x] **Step 2: Run**
 
 ```bash
 npx vitest run tests/verify/state.test.ts
 ```
 Expected: 8 passed.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add -A && git commit -m "test: verification state and expiration behaviour"
@@ -3442,7 +3442,7 @@ git add -A && git commit -m "test: verification state and expiration behaviour"
 **Files:**
 - Create: `tests/verify/hwid.test.ts`
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `tests/verify/hwid.test.ts`:
 
@@ -3649,21 +3649,21 @@ describe("deleted license", () => {
 });
 ```
 
-- [ ] **Step 2: Run**
+- [x] **Step 2: Run**
 
 ```bash
 npx vitest run tests/verify/hwid.test.ts
 ```
-Expected: 11 passed.
+Expected: 12 passed.
 
-- [ ] **Step 3: Run the whole suite and typecheck**
+- [x] **Step 3: Run the whole suite and typecheck**
 
 ```bash
 npm run typecheck && npx vitest run
 ```
 Expected: all green.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add -A && git commit -m "test: HWID binding, activation reset and deletion behaviour"
