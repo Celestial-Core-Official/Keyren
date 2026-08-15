@@ -1,5 +1,20 @@
 import { z } from "zod";
 import { DURATION_OPTIONS, type DurationValue } from "@/lib/licenses/expiration";
+import {
+  ACTIVATION_FILTERS,
+  DEFAULT_LICENSE_QUERY,
+  LICENSE_SORTS,
+  LICENSE_STATUS_FILTERS,
+  LOCK_FILTERS,
+  PAGE_SIZES,
+  SEARCH_MAX_LENGTH,
+  type LicenseQuery,
+} from "@/lib/licenses/types";
+import {
+  DEFAULT_PRODUCT_QUERY,
+  PRODUCT_SORTS,
+  type ProductQuery,
+} from "@/lib/products/types";
 
 /**
  * Input schemas for dashboard server actions.
@@ -98,3 +113,61 @@ export const createLicenseSchema = z.discriminatedUnion("mode", [
 ]);
 
 export const licenseActionSchema = z.object({ licenseId: licenseIdSchema });
+
+// ---------------------------------------------------------------------------
+// URL search parameters
+// ---------------------------------------------------------------------------
+
+/**
+ * What Next.js hands a page as `searchParams`: a value may be absent, a single
+ * string, or an array when the parameter repeats in the URL.
+ */
+export type RawSearchParams = Record<string, string | string[] | undefined>;
+
+function firstValue(raw: string | string[] | undefined): string | undefined {
+  return Array.isArray(raw) ? raw[0] : raw;
+}
+
+/**
+ * Picks a value out of a fixed set, falling back rather than failing.
+ *
+ * Everything here comes from the address bar, so it is all attacker-controlled
+ * and none of it may throw: a bookmark from an older release, a hand-edited
+ * URL, or a crawler appending junk must still render the page.
+ */
+function oneOf<T extends string>(
+  raw: string | string[] | undefined,
+  allowed: readonly T[],
+  fallback: T,
+): T {
+  const value = firstValue(raw);
+  return allowed.includes(value as T) ? (value as T) : fallback;
+}
+
+export function parseLicenseQuery(params: RawSearchParams): LicenseQuery {
+  const rawPage = Number(firstValue(params.page));
+  const page =
+    Number.isSafeInteger(rawPage) && rawPage >= 1 ? rawPage : DEFAULT_LICENSE_QUERY.page;
+
+  const rawPageSize = Number(firstValue(params.pageSize));
+  const pageSize = PAGE_SIZES.find((size) => size === rawPageSize) ?? DEFAULT_LICENSE_QUERY.pageSize;
+
+  return {
+    // Truncated rather than rejected: an over-long term is a bad bookmark, not
+    // a reason to refuse to show the developer their own licenses.
+    q: (firstValue(params.q) ?? "").trim().slice(0, SEARCH_MAX_LENGTH),
+    status: oneOf(params.status, LICENSE_STATUS_FILTERS, DEFAULT_LICENSE_QUERY.status),
+    activation: oneOf(params.activation, ACTIVATION_FILTERS, DEFAULT_LICENSE_QUERY.activation),
+    lock: oneOf(params.lock, LOCK_FILTERS, DEFAULT_LICENSE_QUERY.lock),
+    sort: oneOf(params.sort, LICENSE_SORTS, DEFAULT_LICENSE_QUERY.sort),
+    page,
+    pageSize,
+  };
+}
+
+export function parseProductQuery(params: RawSearchParams): ProductQuery {
+  return {
+    q: (firstValue(params.q) ?? "").trim().slice(0, SEARCH_MAX_LENGTH),
+    sort: oneOf(params.sort, PRODUCT_SORTS, DEFAULT_PRODUCT_QUERY.sort),
+  };
+}

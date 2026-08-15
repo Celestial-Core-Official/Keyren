@@ -1,9 +1,11 @@
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq, or, sql, type SQL } from "drizzle-orm";
 import { licenses, products } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { generateProductId } from "@/lib/crypto/ids";
 import { notFound } from "@/lib/errors";
+import { containsPattern } from "@/lib/search";
 import { slugify } from "./slug";
+import { DEFAULT_PRODUCT_QUERY, type ProductQuery, type ProductSort } from "./types";
 
 export type Product = {
   id: string;
@@ -48,10 +50,48 @@ export async function createProduct(
   return toProduct(row);
 }
 
+/**
+ * `products.id` is the tiebreaker on every sort. Two products created in the
+ * same microsecond, or sharing a name, would otherwise come back in whatever
+ * order the planner felt like — which reads as the list reshuffling itself
+ * between navigations.
+ */
+function productOrderBy(sort: ProductSort): SQL[] {
+  const tiebreak = asc(products.id);
+
+  switch (sort) {
+    case "oldest":
+      return [asc(products.createdAt), tiebreak];
+    case "name":
+      return [asc(products.name), tiebreak];
+    case "licenses":
+      return [desc(count(licenses.id)), tiebreak];
+    case "newest":
+      return [desc(products.createdAt), tiebreak];
+  }
+}
+
 export async function listProducts(
   db: Database,
   ownerId: string,
+  query: ProductQuery = DEFAULT_PRODUCT_QUERY,
 ): Promise<ProductListItem[]> {
+  const conditions: SQL[] = [eq(products.ownerId, ownerId)];
+
+  const term = query.q.trim();
+  if (term !== "") {
+    const pattern = containsPattern(term);
+    // Product ID is searchable because it is the value a developer has in
+    // front of them — pasted from a stack trace, a support ticket, or their
+    // own config — far more often than the name they typed months ago.
+    const match = or(
+      sql`${products.name} ILIKE ${pattern}`,
+      sql`${products.slug} ILIKE ${pattern}`,
+      sql`${products.id} ILIKE ${pattern}`,
+    );
+    if (match) conditions.push(match);
+  }
+
   // A LEFT JOIN with GROUP BY rather than a query-per-product, so the
   // products page stays one round trip regardless of how many products exist.
   const rows = await db
@@ -65,9 +105,9 @@ export async function listProducts(
     })
     .from(products)
     .leftJoin(licenses, eq(licenses.productId, products.id))
-    .where(eq(products.ownerId, ownerId))
+    .where(and(...conditions))
     .groupBy(products.id)
-    .orderBy(desc(products.createdAt));
+    .orderBy(...productOrderBy(query.sort));
 
   return rows.map((row) => ({ ...row, licenseCount: Number(row.licenseCount) }));
 }

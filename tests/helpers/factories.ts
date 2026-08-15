@@ -1,11 +1,12 @@
-import { generateLicenseId, generateProductId } from "@/lib/crypto/ids";
+import { generateActivationId, generateLicenseId, generateProductId } from "@/lib/crypto/ids";
 import {
   generateLicenseKey,
   hashLicenseKey,
   licenseKeyLast4,
 } from "@/lib/crypto/license-key";
-import { licenses, products } from "@/db/schema";
+import { activations, licenses, products } from "@/db/schema";
 import type { Database } from "@/db/types";
+import { slugify } from "@/lib/products/slug";
 import { TEST_HMAC_SECRET } from "./db";
 
 export const DEVELOPER_A = "user_developer_a";
@@ -13,13 +14,21 @@ export const DEVELOPER_B = "user_developer_b";
 
 export async function makeProduct(
   db: Database,
-  options: { ownerId?: string; name?: string } = {},
+  options: { ownerId?: string; name?: string; createdAt?: Date } = {},
 ): Promise<{ id: string; ownerId: string; name: string }> {
   const id = generateProductId();
   const ownerId = options.ownerId ?? DEVELOPER_A;
   const name = options.name ?? "Test Product";
 
-  await db.insert(products).values({ id, ownerId, name, slug: "test_product" });
+  await db.insert(products).values({
+    id,
+    ownerId,
+    name,
+    slug: slugify(name),
+    ...(options.createdAt
+      ? { createdAt: options.createdAt, updatedAt: options.createdAt }
+      : {}),
+  });
 
   return { id, ownerId, name };
 }
@@ -56,4 +65,31 @@ export async function makeLicense(
   });
 
   return { id, plaintextKey };
+}
+
+/**
+ * Binds a license to a device without going through the verification path,
+ * so activation-dependent filters and sorts can be seeded at chosen times.
+ */
+export async function makeActivation(
+  db: Database,
+  options: {
+    licenseId: string;
+    deviceHash?: string;
+    activatedAt?: Date;
+    lastSeenAt?: Date;
+  },
+): Promise<{ id: string }> {
+  const id = generateActivationId();
+  const activatedAt = options.activatedAt ?? new Date();
+
+  await db.insert(activations).values({
+    id,
+    licenseId: options.licenseId,
+    deviceHash: options.deviceHash ?? `device-hash-${id}`,
+    activatedAt,
+    lastSeenAt: options.lastSeenAt ?? activatedAt,
+  });
+
+  return { id };
 }
