@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RELEASE } from "@/lib/release";
 
 export default function SettingsPage() {
   return (
@@ -20,7 +21,12 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Release: Alpha_v1</CardTitle>
+          <CardTitle className="text-base">
+            Release: {RELEASE.name}{" "}
+            <span className="font-mono text-xs font-normal text-muted-foreground">
+              ({RELEASE.version})
+            </span>
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>This is a private testing release. Known limitations:</p>

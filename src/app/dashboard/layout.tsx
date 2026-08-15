@@ -2,6 +2,7 @@ import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { RELEASE } from "@/lib/release";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -10,7 +11,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Link href="/dashboard" className="flex items-center gap-2">
           <span className="font-semibold tracking-tight">Keyren</span>
           <span className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium tracking-wider text-muted-foreground">
-            Alpha_v1
+            {RELEASE.name}
           </span>
         </Link>
         <UserButton />
