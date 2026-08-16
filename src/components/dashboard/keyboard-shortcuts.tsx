@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { KEYBOARD_SHORTCUTS } from "@/lib/shortcuts";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 /**
  * Two shortcuts, chosen because they are the two things a developer does
@@ -27,6 +34,8 @@ export function isTypingInFormField(target: EventTarget | null): boolean {
 }
 
 export function KeyboardShortcuts() {
+  const [showing, setShowing] = useState(false);
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -58,6 +67,14 @@ export function KeyboardShortcuts() {
 
         event.preventDefault();
         create.click();
+        return;
+      }
+
+      // "?" is Shift+/ on most layouts, so it is matched on the produced
+      // character rather than on the physical key.
+      if (event.key === "?") {
+        event.preventDefault();
+        setShowing(true);
       }
     }
 
@@ -65,5 +82,32 @@ export function KeyboardShortcuts() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  return null;
+  // The list used to exist only as static text on the settings page, which is
+  // the one page you are not on when you want to know a shortcut.
+  return (
+    <Dialog open={showing} onOpenChange={setShowing}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Keyboard shortcuts</DialogTitle>
+        </DialogHeader>
+        <dl className="space-y-2 text-sm">
+          {KEYBOARD_SHORTCUTS.map((shortcut) => (
+            <div key={shortcut.description} className="flex items-baseline gap-3">
+              <dt className="flex w-16 shrink-0 gap-1">
+                {shortcut.keys.map((key) => (
+                  <kbd
+                    key={key}
+                    className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs"
+                  >
+                    {key}
+                  </kbd>
+                ))}
+              </dt>
+              <dd className="text-muted-foreground">{shortcut.description}</dd>
+            </div>
+          ))}
+        </dl>
+      </DialogContent>
+    </Dialog>
+  );
 }

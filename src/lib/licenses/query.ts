@@ -404,3 +404,59 @@ export async function getApplicationBreakdown(
     active: Number(row.active),
   }));
 }
+
+export type LicenseSearchHit = {
+  id: string;
+  label: string | null;
+  keyLast4: string;
+  applicationId: string;
+  applicationName: string;
+};
+
+/**
+ * Licenses across every application the developer owns.
+ *
+ * The case this exists for: a customer emails a key suffix, and working out
+ * which application it belongs to should not be the developer's first job.
+ *
+ * `ilike` with a leading wildcard cannot use an index, which is fine at this
+ * scale and deliberately capped by `limit` — this backs a palette that shows a
+ * handful of results, not a report.
+ */
+export async function searchLicensesForOwner(
+  db: Database,
+  ownerId: string,
+  term: string,
+  limit = 5,
+): Promise<LicenseSearchHit[]> {
+  const trimmed = term.trim();
+  if (trimmed === "") return [];
+
+  // Escaped, so searching "50%" finds the license labelled "50% off" rather
+  // than matching everything.
+  const pattern = containsPattern(trimmed);
+
+  return db
+    .select({
+      id: licenses.id,
+      label: licenses.label,
+      keyLast4: licenses.keyLast4,
+      applicationId: applications.id,
+      applicationName: applications.name,
+    })
+    .from(licenses)
+    .innerJoin(applications, eq(applications.id, licenses.applicationId))
+    .where(
+      and(
+        // Owner scope first and always: without it this is a cross-account
+        // license search.
+        eq(applications.ownerId, ownerId),
+        or(
+          sql`${licenses.label} ILIKE ${pattern}`,
+          sql`${licenses.keyLast4} ILIKE ${pattern}`,
+        ),
+      ),
+    )
+    .orderBy(desc(licenses.createdAt))
+    .limit(limit);
+}

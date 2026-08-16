@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
 import { listApplications } from "@/lib/applications/service";
 import { ApplicationSwitcher } from "@/components/dashboard/application-switcher";
+import { CommandPalette } from "@/components/dashboard/command-palette";
 import { KeyboardShortcuts } from "@/components/dashboard/keyboard-shortcuts";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
@@ -61,6 +62,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </main>
       </div>
 
+      <CommandPalette applications={applications} />
       <KeyboardShortcuts />
       <Toaster />
     </div>

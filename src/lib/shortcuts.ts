@@ -9,8 +9,10 @@
  * normally under Vitest.
  */
 export const KEYBOARD_SHORTCUTS = [
+  { keys: ["⌘", "K"], description: "Search applications and licenses from anywhere" },
   { keys: ["/"], description: "Focus the search box on the current page" },
   { keys: ["N"], description: "New application, or generate a license" },
+  { keys: ["?"], description: "Show this list" },
   { keys: ["Esc"], description: "Close a dialog or menu" },
   { keys: ["Tab"], description: "Move between controls" },
 ] as const;

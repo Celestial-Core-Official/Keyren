@@ -5,6 +5,7 @@ import {
   getApplicationBreakdown,
   getExpiringSoon,
   getOverviewStats,
+  searchLicensesForOwner,
 } from "@/lib/licenses/query";
 import type { Database } from "@/db/types";
 
@@ -164,8 +165,8 @@ describe("getApplicationBreakdown", () => {
     const quiet = await makeApplication(db, { ownerId: DEVELOPER_A, name: "Quiet" });
     const busy = await makeApplication(db, { ownerId: DEVELOPER_A, name: "Busy" });
     await makeLicense(db, { applicationId: quiet.id });
-    for (const _ of [1, 2, 3]) {
-      await makeLicense(db, { applicationId: busy.id });
+    for (const offset of [1, 2, 3]) {
+      await makeLicense(db, { applicationId: busy.id, label: `busy-${offset}` });
     }
 
     const rows = await getApplicationBreakdown(db, DEVELOPER_A, NOW);
@@ -207,5 +208,54 @@ describe("getApplicationBreakdown", () => {
   it("never includes another developer's applications", async () => {
     await makeApplication(db, { ownerId: DEVELOPER_B });
     expect(await getApplicationBreakdown(db, DEVELOPER_A, NOW)).toEqual([]);
+  });
+});
+
+describe("searchLicensesForOwner", () => {
+  it("finds a license by the last four characters of its key", async () => {
+    // The case this exists for: a customer sends a key suffix and the
+    // developer should not have to work out which application it belongs to.
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
+    const last4 = license.plaintextKey.slice(-4);
+
+    const hits = await searchLicensesForOwner(db, DEVELOPER_A, last4);
+    expect(hits.map((hit) => hit.id)).toContain(license.id);
+    expect(hits[0]?.keyLast4).toBe(last4);
+  });
+
+  it("finds a license by label, across applications", async () => {
+    const first = await makeApplication(db, { ownerId: DEVELOPER_A, name: "One" });
+    const second = await makeApplication(db, { ownerId: DEVELOPER_A, name: "Two" });
+    await makeLicense(db, { applicationId: first.id, label: "Acme Corp" });
+    await makeLicense(db, { applicationId: second.id, label: "Acme Holdings" });
+
+    const hits = await searchLicensesForOwner(db, DEVELOPER_A, "Acme");
+    expect(hits).toHaveLength(2);
+    expect(hits.map((hit) => hit.applicationName).sort()).toEqual(["One", "Two"]);
+  });
+
+  it("never returns another developer's licenses", async () => {
+    const theirs = await makeApplication(db, { ownerId: DEVELOPER_B });
+    await makeLicense(db, { applicationId: theirs.id, label: "Acme Corp" });
+
+    expect(await searchLicensesForOwner(db, DEVELOPER_A, "Acme")).toEqual([]);
+  });
+
+  it("treats a wildcard as a literal rather than matching everything", async () => {
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    await makeLicense(db, { applicationId: application.id, label: "50% off" });
+    await makeLicense(db, { applicationId: application.id, label: "Full price" });
+
+    const hits = await searchLicensesForOwner(db, DEVELOPER_A, "50%");
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.label).toBe("50% off");
+  });
+
+  it("returns nothing for an empty term rather than the whole table", async () => {
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    await makeLicense(db, { applicationId: application.id, label: "Acme" });
+
+    expect(await searchLicensesForOwner(db, DEVELOPER_A, "   ")).toEqual([]);
   });
 });
