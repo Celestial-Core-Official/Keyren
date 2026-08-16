@@ -5,7 +5,31 @@ import {
   licenseIdSchema,
   applicationIdSchema,
   renameApplicationSchema,
+  wantsNewApplication,
 } from "@/lib/validation/dashboard";
+
+describe("wantsNewApplication", () => {
+  it("recognises the parameter the switcher and the palette send", () => {
+    expect(wantsNewApplication({ new: "1" })).toBe(true);
+  });
+
+  it("takes the first value when the parameter repeats", () => {
+    expect(wantsNewApplication({ new: ["1", "0"] })).toBe(true);
+  });
+
+  it("is false for an ordinary visit", () => {
+    expect(wantsNewApplication({})).toBe(false);
+    expect(wantsNewApplication({ q: "acme", sort: "name" })).toBe(false);
+  });
+
+  it("ignores anything that is not exactly 1", () => {
+    // Everything here comes from the address bar. A stale or hand-edited URL
+    // gets the ordinary page rather than a dialog.
+    expect(wantsNewApplication({ new: "true" })).toBe(false);
+    expect(wantsNewApplication({ new: "" })).toBe(false);
+    expect(wantsNewApplication({ new: "0" })).toBe(false);
+  });
+});
 
 describe("createApplicationSchema", () => {
   it("accepts a reasonable name", () => {

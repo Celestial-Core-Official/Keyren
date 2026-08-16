@@ -6,7 +6,8 @@ import { Check, Circle, X } from "lucide-react";
 import { CreateLicenseDialog } from "@/components/licenses/create-license-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { readUiFlag, writeUiFlag } from "@/lib/preferences";
+import { writeUiFlag } from "@/lib/preferences";
+import { useUiFlag } from "@/lib/use-preferences";
 import { cn } from "@/lib/utils";
 
 /**
@@ -37,11 +38,19 @@ export function OnboardingChecklist({
   const dismissKey = `onboarding-dismissed:${applicationId}`;
   const copiedKey = `copied-snippet:${applicationId}`;
 
-  // Read lazily on the client. On the server both read false, which renders
-  // the card — and a card that appears rather than one that disappears is the
-  // right way round for a hydration difference this small.
-  const [dismissed, setDismissed] = useState(() => readUiFlag(dismissKey));
-  const [copiedSnippet] = useState(() => readUiFlag(copiedKey));
+  // Subscribed, not read during render. Reading storage inside a `useState`
+  // initializer runs it on the server too — where storage does not exist — and
+  // again at hydration, where it does. React then finds a card the server did
+  // not render, or a step count that disagrees, and regenerates the entire
+  // root on the client. `useUiFlag` renders the server's `false` through
+  // hydration and swaps to the stored value immediately after.
+  const storedDismissed = useUiFlag(dismissKey);
+  const copiedSnippet = useUiFlag(copiedKey);
+
+  // A browser that refuses storage still gets to dismiss the card for this
+  // visit; it simply comes back on the next one.
+  const [dismissedHere, setDismissedHere] = useState(false);
+  const dismissed = storedDismissed || dismissedHere;
 
   const steps = [
     {
@@ -111,7 +120,7 @@ export function OnboardingChecklist({
           aria-label="Dismiss getting started"
           onClick={() => {
             writeUiFlag(dismissKey, true);
-            setDismissed(true);
+            setDismissedHere(true);
           }}
         >
           <X className="size-4" />

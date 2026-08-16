@@ -188,10 +188,15 @@ export function BatchResultDialog({
               Generate another
             </Button>
 
-            {/* The key is deliberately NOT carried to the tester in the URL —
-                that would write plaintext into history, the address bar and
-                any referrer. The developer pastes the key they just saved,
-                which is also a useful check that they really saved it. */}
+            {/* The tester lives on the application's Settings tab, not on its
+                overview — sending a real request through the real rate limiter
+                is a deliberate act rather than something to sit beside a
+                license count.
+
+                The key is deliberately NOT carried there in the URL — that
+                would write plaintext into history, the address bar and any
+                referrer. The developer pastes the key they just saved, which
+                is also a useful check that they really saved it. */}
             <Button
               asChild
               variant="ghost"
@@ -200,7 +205,7 @@ export function BatchResultDialog({
               className="gap-1.5"
             >
               <Link
-                href={`/dashboard/applications/${applicationId}#api-tester`}
+                href={`/dashboard/applications/${applicationId}/settings#api-tester`}
                 onClick={(event) => {
                   if (!acknowledged) event.preventDefault();
                   else onAcknowledge();

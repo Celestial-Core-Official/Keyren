@@ -6,9 +6,13 @@ import { KeyRound, Layers, Plus, Settings } from "lucide-react";
 import { searchLicensesAction } from "@/app/dashboard/search-actions";
 import type { LicenseSearchHit } from "@/lib/licenses/query";
 import type { SwitchableApplication } from "@/components/dashboard/application-switcher";
+import { openDialogElement } from "@/components/dashboard/keyboard-shortcuts";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+
+/** Marks the palette's own dialog, so the shortcut can still close it. */
+const PALETTE_ATTRIBUTE = "data-keyren-palette";
 
 type Entry = {
   key: string;
@@ -45,10 +49,20 @@ export function CommandPalette({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setOpen((current) => !current);
-      }
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+
+      // Closing the palette is always allowed; opening it over another modal
+      // is not. The show-once key reveal is the case that decides this: it
+      // deliberately cannot be dismissed by Escape, by a click outside, or by
+      // a close button, because each of those would destroy plaintext keys the
+      // developer has not saved yet. A palette opening on top would hand back
+      // exactly that — a navigation, one keystroke away — and the keys exist
+      // nowhere else once this tree unmounts.
+      const dialog = openDialogElement();
+      if (dialog && dialog.getAttribute(PALETTE_ATTRIBUTE) === null) return;
+
+      event.preventDefault();
+      setOpen((current) => !current);
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -125,7 +139,10 @@ export function CommandPalette({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="top-24 max-w-lg translate-y-0 gap-0 p-0">
+      <DialogContent
+        {...{ [PALETTE_ATTRIBUTE]: "true" }}
+        className="top-24 max-w-lg translate-y-0 gap-0 p-0"
+      >
         <DialogTitle className="sr-only">Search applications and licenses</DialogTitle>
 
         <Input

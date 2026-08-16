@@ -7,6 +7,7 @@ import {
   type ApplicationActionState,
 } from "@/app/dashboard/applications/actions";
 import { FieldError, SubmitButton, useActionFeedback } from "@/components/dashboard/feedback";
+import { useQueryParams } from "@/components/dashboard/use-query-params";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -82,13 +83,40 @@ export function CreateApplicationDialog({
   open: controlledOpen,
   onOpenChange,
   trigger = true,
+  requested = false,
 }: {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   trigger?: boolean;
+  /**
+   * `?new=1` in the URL.
+   *
+   * The application switcher and the command palette both offer "New
+   * application" from anywhere in the dashboard, and neither can open a dialog
+   * that lives on a page they are not on — so they navigate here and say what
+   * they came for. Without this the developer landed on the list and had to
+   * find the button again, which is the friction those entries exist to
+   * remove.
+   */
+  requested?: boolean;
 } = {}) {
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const { setParams } = useQueryParams();
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(requested);
   const [session, setSession] = useState(0);
+
+  // Adjusted during render rather than in an effect, the same way the mobile
+  // nav closes itself on navigation. It matters for the developer who is
+  // already on this page: picking "New application" from the switcher changes
+  // the URL without remounting anything, so only a change in this prop can
+  // open the dialog.
+  const [lastRequested, setLastRequested] = useState(requested);
+  if (requested !== lastRequested) {
+    setLastRequested(requested);
+    if (requested) {
+      setSession((value) => value + 1);
+      setUncontrolledOpen(true);
+    }
+  }
 
   const open = controlledOpen ?? uncontrolledOpen;
 
@@ -96,6 +124,10 @@ export function CreateApplicationDialog({
     if (next) setSession((value) => value + 1);
     if (onOpenChange) onOpenChange(next);
     else setUncontrolledOpen(next);
+
+    // The URL claimed the dialog was open. It is not any more, and leaving the
+    // parameter behind would reopen it on the next refresh or back navigation.
+    if (!next && requested) setParams({ new: null });
   }
 
   return (

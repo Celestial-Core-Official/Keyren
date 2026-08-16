@@ -33,6 +33,22 @@ export function isTypingInFormField(target: EventTarget | null): boolean {
   return EDITABLE.has(target.tagName) || target.isContentEditable;
 }
 
+/**
+ * The modal currently owning the screen, if there is one.
+ *
+ * `alertdialog` is matched alongside `dialog` because Radix gives its
+ * AlertDialog that role, and a confirmation is exactly the kind of modal a
+ * stray shortcut must not fire behind.
+ *
+ * Shared with the command palette so there is one definition of "a dialog is
+ * open" rather than two that can drift apart.
+ */
+export function openDialogElement(): Element | null {
+  return document.querySelector(
+    "[role='dialog'][data-state='open'], [role='alertdialog'][data-state='open']",
+  );
+}
+
 export function KeyboardShortcuts() {
   const [showing, setShowing] = useState(false);
 
@@ -45,7 +61,7 @@ export function KeyboardShortcuts() {
       if (isTypingInFormField(event.target)) return;
 
       // A dialog is open: every letter is content, not a command.
-      if (document.querySelector("[role='dialog'][data-state='open']")) return;
+      if (openDialogElement()) return;
 
       if (event.key === "/") {
         const search = document.querySelector<HTMLInputElement>(

@@ -4,7 +4,11 @@ import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
 import { listApplications } from "@/lib/applications/service";
 import { isApplicationFiltered } from "@/lib/applications/types";
-import { parseApplicationQuery, type RawSearchParams } from "@/lib/validation/dashboard";
+import {
+  parseApplicationQuery,
+  wantsNewApplication,
+  type RawSearchParams,
+} from "@/lib/validation/dashboard";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { CopyButton } from "@/components/dashboard/copy-button";
@@ -28,18 +32,23 @@ export default async function ApplicationsPage({
 }) {
   const ownerId = await requireDeveloperId();
 
-  const query = parseApplicationQuery(await searchParams);
+  const raw = await searchParams;
+  const query = parseApplicationQuery(raw);
   const applications = await listApplications(db, ownerId, query);
 
   const filtering = isApplicationFiltered(query);
   const empty = applications.length === 0;
+
+  // Where the switcher's and the command palette's "New application" entries
+  // land. Only the header's dialog is told, so an empty list does not open two.
+  const requestingNew = wantsNewApplication(raw);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Applications"
         description="Each application has a permanent ID that your software sends when verifying a license."
-        action={<CreateApplicationDialog />}
+        action={<CreateApplicationDialog requested={requestingNew} />}
       />
 
       {!empty || filtering ? <ApplicationFilters query={query} total={applications.length} /> : null}

@@ -8,6 +8,7 @@ import { isFiltered } from "@/lib/licenses/types";
 import { parseLicenseQuery, type RawSearchParams } from "@/lib/validation/dashboard";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Pagination } from "@/components/dashboard/pagination";
+import { ApplyPageSizePreference } from "@/components/licenses/apply-page-size-preference";
 import { CreateLicenseDialog } from "@/components/licenses/create-license-dialog";
 import { LicenseFilters } from "@/components/licenses/license-filters";
 import { LicenseList } from "@/components/licenses/license-list";
@@ -28,14 +29,21 @@ export default async function LicensesPage({
 
   // Parsed from the URL, so the first server render already has the right
   // rows — no shipping everything and narrowing it in the browser.
-  const query = parseLicenseQuery(await searchParams);
+  const raw = await searchParams;
+  const query = parseLicenseQuery(raw);
   const page = await queryLicenses(db, ownerId, applicationId, query);
 
   const filtering = isFiltered(query);
   const empty = page.total === 0;
 
+  // Only when the URL is silent on the matter. A link that names a page size
+  // means it, and must not be overwritten by whoever opens it.
+  const pageSizeFromUrl = raw.pageSize !== undefined;
+
   return (
     <div className="space-y-6">
+      {pageSizeFromUrl ? null : <ApplyPageSizePreference current={query.pageSize} />}
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-medium">Licenses</h2>

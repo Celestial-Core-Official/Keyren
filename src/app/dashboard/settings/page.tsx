@@ -9,7 +9,7 @@ import { RELEASE } from "@/lib/release";
 /**
  * Settings, which until now had none.
  *
- * Through Alpha_v2 this page was three read-only cards — 189 words of prose
+ * Through Alpha_v1 this page was three read-only cards — 189 words of prose
  * and not one control. The Account card spent sixty of those words explaining
  * where to click instead of being a button. Everything that only described
  * something has either become the control it was describing, or moved to

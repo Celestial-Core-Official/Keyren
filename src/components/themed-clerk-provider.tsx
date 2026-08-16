@@ -2,6 +2,7 @@
 
 import { ClerkProvider } from "@clerk/nextjs";
 import { useTheme } from "next-themes";
+import { SIGN_IN_URL, SIGN_UP_URL } from "@/lib/auth/routes";
 
 /**
  * Clerk, following the app's theme.
@@ -61,5 +62,19 @@ export function ThemedClerkProvider({ children }: { children: React.ReactNode })
   // what every existing developer is already running.
   const variables = resolvedTheme === "light" ? LIGHT : DARK;
 
-  return <ClerkProvider appearance={{ variables }}>{children}</ClerkProvider>;
+  return (
+    <ClerkProvider
+      // The client half of the same routing the middleware sets: these are
+      // what Clerk's own components link to, so "Don't have an account?" on
+      // the sign-in page reaches Keyren's sign-up page rather than the hosted
+      // portal. Set in code rather than through
+      // `NEXT_PUBLIC_CLERK_SIGN_IN_URL` because a deployment that forgets an
+      // environment variable would silently go back to the portal.
+      signInUrl={SIGN_IN_URL}
+      signUpUrl={SIGN_UP_URL}
+      appearance={{ variables }}
+    >
+      {children}
+    </ClerkProvider>
+  );
 }

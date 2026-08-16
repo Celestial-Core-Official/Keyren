@@ -83,3 +83,35 @@ export function formatDayUtc(value: Date | null): string {
   if (!value) return ABSENT;
   return dayFormatter.format(value);
 }
+
+/**
+ * The same instant in whatever timezone the reader is sitting in.
+ *
+ * Strictly secondary. UTC stays the primary reading everywhere, because the
+ * verification API answers in UTC and an expiry of Dec 31 must not read as
+ * Jan 1 to a developer in Sydney — a full UTC/local toggle would reintroduce
+ * exactly that confusion. This only ever appears *alongside* the UTC value,
+ * for a developer working out what a deadline means to them.
+ *
+ * No locale and no timezone are pinned, which is the whole point: both come
+ * from the runtime. That makes the output non-deterministic by construction,
+ * so it must never be rendered on the server — every caller reaches it through
+ * the display preference, whose server snapshot is off.
+ *
+ * The zone name is included because a bare local time with nothing to
+ * distinguish it from the UTC line above would be the worst of both.
+ */
+const localFormatter = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZoneName: "short",
+});
+
+export function formatExactLocal(value: Date | null): string {
+  if (!value) return ABSENT;
+  return localFormatter.format(value);
+}

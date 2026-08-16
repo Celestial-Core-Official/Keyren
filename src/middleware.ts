@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { SIGN_IN_URL, SIGN_UP_URL } from "@/lib/auth/routes";
 
 /**
  * Everything under /dashboard requires an authenticated developer.
@@ -15,11 +16,25 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
  */
 const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
 
-export default clerkMiddleware(async (auth, request) => {
-  if (isProtectedRoute(request)) {
-    await auth.protect();
-  }
-});
+export default clerkMiddleware(
+  async (auth, request) => {
+    if (isProtectedRoute(request)) {
+      await auth.protect();
+    }
+  },
+  {
+    // Without these, `auth.protect()` falls through to `redirectToSignIn()`,
+    // which defaults to Clerk's hosted account portal on an accounts.dev
+    // domain — sending a signed-out developer off Keyren entirely, past the
+    // `/sign-in` page this app ships and links to from its own landing page.
+    //
+    // That page is also the only one `ThemedClerkProvider` can theme, so the
+    // portal was permanently light-mode Clerk branding for an app that is dark
+    // by default.
+    signInUrl: SIGN_IN_URL,
+    signUpUrl: SIGN_UP_URL,
+  },
+);
 
 export const config = {
   matcher: [

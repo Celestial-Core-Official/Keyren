@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { LicenseTable } from "@/components/licenses/license-table";
 import { LicenseCardList } from "@/components/licenses/license-card-list";
@@ -108,6 +108,23 @@ describe("LicenseTable — status", () => {
 });
 
 describe("LicenseTable — dates", () => {
+  /**
+   * `RelativeTime` reads the clock itself, and the fixture's `createdAt` is a
+   * fixed instant — so "1 day ago" was only true for the 24 hours after `NOW`
+   * and this assertion started failing on its own once the calendar passed it.
+   *
+   * Only `Date` is faked. Stubbing timers wholesale would take `setTimeout`
+   * with it, which React and Testing Library both need.
+   */
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("renders a relative label with the exact UTC instant behind it", () => {
     render(<LicenseTable licenses={[license()]} applicationId="app_abc" />);
 

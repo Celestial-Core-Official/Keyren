@@ -236,3 +236,17 @@ export function parseApplicationQuery(params: RawSearchParams): ApplicationQuery
     sort: oneOf(params.sort, APPLICATION_SORTS, DEFAULT_APPLICATION_QUERY.sort),
   };
 }
+
+/**
+ * `?new=1` — "open the create-application dialog on arrival".
+ *
+ * Kept out of `ApplicationQuery` on purpose: it is an instruction about the
+ * screen, not a filter over applications, and folding it in would put it into
+ * the sort/search round trip it has nothing to do with.
+ *
+ * Exactly "1" counts. Anything else in that slot is a hand-edited or stale URL
+ * and gets the ordinary page.
+ */
+export function wantsNewApplication(params: RawSearchParams): boolean {
+  return firstValue(params.new) === "1";
+}

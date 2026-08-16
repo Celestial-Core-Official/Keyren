@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 /**
  * The page you land on after signing in.
  *
- * Through Alpha_v2 this was two numbers — applications and licenses — and
+ * Through Alpha_v1 this was two numbers — applications and licenses — and
  * nothing else, which gave nobody a reason to come back to it. It now leads
  * with the one thing worth acting on before a customer writes in: what is
  * about to expire.

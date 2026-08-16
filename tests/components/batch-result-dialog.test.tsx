@@ -209,4 +209,25 @@ describe("BatchResultDialog — exports", () => {
       .calls[0]![0] as string;
     expect(written.split("\n")).toEqual(created(3).map((license) => license.licenseKey));
   });
+
+  it("points 'Test a license' at the page the tester is actually on", () => {
+    // The tester moved to the application's Settings tab. Pointing at the
+    // overview left the developer on a page with no tester and no anchor to
+    // scroll to, at the one moment they hold a key worth testing.
+    renderDialog(1);
+
+    const tester = screen.getByRole("link", { name: /test a license/i });
+    expect(tester.getAttribute("href")).toBe(
+      "/dashboard/applications/app_abc/settings#api-tester",
+    );
+  });
+
+  it("never puts a plaintext key in the tester link", () => {
+    // A key in the URL would be written into history, the address bar and any
+    // referrer — the one place a show-once secret must never land.
+    renderDialog(1);
+
+    const href = screen.getByRole("link", { name: /test a license/i }).getAttribute("href") ?? "";
+    expect(href).not.toContain("KEYREN-");
+  });
 });
