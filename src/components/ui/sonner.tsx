@@ -5,11 +5,15 @@ import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  // `resolvedTheme`, not `theme`: `theme` is "system" whenever the developer
+  // has not chosen explicitly, which hands Sonner a second, independent
+  // media-query read of the same question the ThemeProvider has already
+  // answered. Two resolvers is how they end up disagreeing.
+  const { resolvedTheme } = useTheme()
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={(resolvedTheme === "light" ? "light" : "dark") as ToasterProps["theme"]}
       className="toaster group"
       icons={{
         success: (

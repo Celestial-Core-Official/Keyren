@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { DURATION_OPTIONS, type DurationValue } from "@/lib/licenses/expiration";
-import { BATCH_QUANTITY_MAX, BATCH_QUANTITY_MIN } from "@/lib/licenses/types";
+import {
+  BATCH_QUANTITY_MAX,
+  BATCH_QUANTITY_MIN,
+  PAGE_SIZES,
+  type PageSize,
+} from "@/lib/licenses/types";
 
 /**
  * The developer's last license-creation settings, per product.
@@ -103,9 +108,222 @@ export function writeLicensePreferences(
         ),
       }),
     );
+    emit();
   } catch {
     // A full or unavailable store is not worth telling anyone about.
   }
+}
+
+/**
+ * The same four fields, but as the developer's account-wide default rather
+ * than one product's memory.
+ *
+ * These seed a product that has never been used. A product that already has
+ * its own stored preferences keeps them — changing a default must not silently
+ * rewrite what an established product learned, because the whole point of the
+ * per-product memory is that a product which issues 30-day locked licenses
+ * keeps issuing them.
+ */
+const GLOBAL_DEFAULTS_KEY = "keyren:defaults";
+
+export function readGlobalDefaults(): LicensePreferences {
+  try {
+    const raw = globalThis.localStorage?.getItem(GLOBAL_DEFAULTS_KEY);
+    if (!raw) return DEFAULT_LICENSE_PREFERENCES;
+
+    const parsed = storedSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : DEFAULT_LICENSE_PREFERENCES;
+  } catch {
+    return DEFAULT_LICENSE_PREFERENCES;
+  }
+}
+
+export function writeGlobalDefaults(preferences: LicensePreferences): void {
+  try {
+    globalThis.localStorage?.setItem(
+      GLOBAL_DEFAULTS_KEY,
+      // Same explicit projection as the per-product writer, for the same
+      // reason: this is the boundary that keeps labels, notes and keys out.
+      JSON.stringify({
+        mode: preferences.mode,
+        duration: preferences.duration,
+        hwidLocked: preferences.hwidLocked,
+        quantity: Math.min(
+          Math.max(Math.trunc(preferences.quantity), BATCH_QUANTITY_MIN),
+          BATCH_QUANTITY_MAX,
+        ),
+      }),
+    );
+    emit();
+  } catch {
+    // As above.
+  }
+}
+
+/**
+ * What a creation form should open with.
+ *
+ * Resolution order is per-product, then account default, then built-in. The
+ * absence of a stored product entry is the signal — not a comparison against
+ * the defaults, which would make a product that deliberately matches the
+ * default indistinguishable from one that has never been touched.
+ */
+export function resolveLicensePreferences(productId: string): LicensePreferences {
+  try {
+    const stored = globalThis.localStorage?.getItem(storageKey(productId));
+    if (stored) return readLicensePreferences(productId);
+  } catch {
+    // Fall through to the account default.
+  }
+
+  return readGlobalDefaults();
+}
+
+/**
+ * Display preferences: how much of a list to show, and whether to print local
+ * time next to UTC.
+ *
+ * UTC remains the primary reading everywhere. `showLocalTime` only ever adds a
+ * secondary line — an expiry of Dec 31 must not become Jan 1 for a developer
+ * in Sydney, because the verification API's answer will not have moved.
+ */
+export type DisplayPreferences = {
+  pageSize: PageSize;
+  showLocalTime: boolean;
+};
+
+export const DEFAULT_DISPLAY_PREFERENCES: DisplayPreferences = {
+  pageSize: 25,
+  showLocalTime: false,
+};
+
+function isPageSize(value: unknown): value is PageSize {
+  return (PAGE_SIZES as readonly unknown[]).includes(value);
+}
+
+// Derived from PAGE_SIZES rather than restating 25/50/100, so adding a page
+// size in one place cannot leave this validator silently rejecting it.
+const displaySchema = z.object({
+  pageSize: z.coerce
+    .number()
+    .transform((value) => (isPageSize(value) ? value : DEFAULT_DISPLAY_PREFERENCES.pageSize))
+    .catch(DEFAULT_DISPLAY_PREFERENCES.pageSize),
+  showLocalTime: z.boolean().catch(DEFAULT_DISPLAY_PREFERENCES.showLocalTime),
+});
+
+const DISPLAY_KEY = "keyren:display";
+
+export function readDisplayPreferences(): DisplayPreferences {
+  try {
+    const raw = globalThis.localStorage?.getItem(DISPLAY_KEY);
+    if (!raw) return DEFAULT_DISPLAY_PREFERENCES;
+
+    const parsed = displaySchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : DEFAULT_DISPLAY_PREFERENCES;
+  } catch {
+    return DEFAULT_DISPLAY_PREFERENCES;
+  }
+}
+
+export function writeDisplayPreferences(preferences: DisplayPreferences): void {
+  try {
+    globalThis.localStorage?.setItem(
+      DISPLAY_KEY,
+      JSON.stringify({
+        pageSize: isPageSize(preferences.pageSize)
+          ? preferences.pageSize
+          : DEFAULT_DISPLAY_PREFERENCES.pageSize,
+        showLocalTime: preferences.showLocalTime,
+      }),
+    );
+    emit();
+  } catch {
+    // As above.
+  }
+}
+
+/**
+ * Forgets every remembered preference and dismissed card.
+ *
+ * Until now these were written and never surfaced: a dismissed onboarding
+ * checklist could not be brought back, and a product's remembered quantity
+ * could not be forgotten. Scoped to the `keyren:` prefix so it cannot clear
+ * anything else sharing the origin — including Clerk's session.
+ */
+export function clearStoredPreferences(): void {
+  try {
+    const storage = globalThis.localStorage;
+    if (!storage) return;
+
+    const doomed: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith("keyren:")) doomed.push(key);
+    }
+
+    for (const key of doomed) storage.removeItem(key);
+    emit();
+  } catch {
+    // As above.
+  }
+}
+
+/**
+ * Storage as a subscribable store, so React can read it correctly.
+ *
+ * `localStorage` is external mutable state, and the honest way to read it from
+ * a component is `useSyncExternalStore` — it renders the server snapshot
+ * during hydration and swaps to the real value immediately after, without the
+ * load-in-an-effect dance that both trips the lint rule and paints one frame
+ * of the wrong settings.
+ *
+ * The browser's own `storage` event only fires in OTHER tabs, so writes made
+ * here have to announce themselves. Every writer below calls `emit`.
+ *
+ * Snapshots are cached because `useSyncExternalStore` compares them by
+ * identity: parsing storage afresh on each call returns a new object every
+ * time, which reads as a perpetual change and loops forever.
+ */
+type Listener = () => void;
+const listeners = new Set<Listener>();
+
+let defaultsSnapshot: LicensePreferences | null = null;
+let displaySnapshot: DisplayPreferences | null = null;
+
+function emit(): void {
+  defaultsSnapshot = null;
+  displaySnapshot = null;
+  for (const listener of listeners) listener();
+}
+
+export function subscribePreferences(listener: Listener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+export function getGlobalDefaultsSnapshot(): LicensePreferences {
+  defaultsSnapshot ??= readGlobalDefaults();
+  return defaultsSnapshot;
+}
+
+export function getDisplaySnapshot(): DisplayPreferences {
+  displaySnapshot ??= readDisplayPreferences();
+  return displaySnapshot;
+}
+
+/**
+ * The server has no storage to read, so it renders the built-in defaults.
+ * These must be referentially stable, which is why they are the exported
+ * constants rather than fresh literals.
+ */
+export function getGlobalDefaultsServerSnapshot(): LicensePreferences {
+  return DEFAULT_LICENSE_PREFERENCES;
+}
+
+export function getDisplayServerSnapshot(): DisplayPreferences {
+  return DEFAULT_DISPLAY_PREFERENCES;
 }
 
 /**
@@ -128,6 +346,7 @@ export function writeUiFlag(key: string, value: boolean): void {
   try {
     if (value) globalThis.localStorage?.setItem(`keyren:flag:${key}`, "1");
     else globalThis.localStorage?.removeItem(`keyren:flag:${key}`);
+    emit();
   } catch {
     // Same reasoning as above.
   }

@@ -32,7 +32,7 @@ import {
   LICENSE_NOTES_MAX,
 } from "@/lib/licenses/types";
 import {
-  readLicensePreferences,
+  resolveLicensePreferences,
   writeLicensePreferences,
   type ExpirationMode,
 } from "@/lib/preferences";
@@ -60,7 +60,11 @@ export function LicenseCreateForm({
   // Read once, lazily. This component only ever mounts client-side (the
   // dialog's content does not exist until it opens), so there is no server
   // render to disagree with.
-  const [initial] = useState(() => readLicensePreferences(productId));
+  //
+  // Resolved, not read directly: a product that has never issued a license
+  // opens with the account defaults from Settings, and one that has keeps its
+  // own memory.
+  const [initial] = useState(() => resolveLicensePreferences(productId));
 
   const [mode, setMode] = useState<ExpirationMode>(initial.mode);
   const [duration, setDuration] = useState<DurationValue>(initial.duration);

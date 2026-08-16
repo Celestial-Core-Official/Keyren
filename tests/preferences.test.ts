@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  clearStoredPreferences,
+  DEFAULT_DISPLAY_PREFERENCES,
   DEFAULT_LICENSE_PREFERENCES,
+  readDisplayPreferences,
+  readGlobalDefaults,
   readLicensePreferences,
+  readUiFlag,
+  resolveLicensePreferences,
+  writeDisplayPreferences,
+  writeGlobalDefaults,
   writeLicensePreferences,
+  writeUiFlag,
 } from "@/lib/preferences";
 
 const PRODUCT = "prod_abc123";
@@ -26,6 +35,14 @@ class MemoryStorage {
   }
   raw(key: string) {
     return this.data.get(key);
+  }
+  // `length` and `key(index)` are the enumeration half of the Storage
+  // interface, which `clearStoredPreferences` walks to find its own keys.
+  get length() {
+    return this.data.size;
+  }
+  key(index: number) {
+    return this.keys()[index] ?? null;
   }
 }
 
@@ -181,5 +198,148 @@ describe("license creation preferences — unavailable storage", () => {
     });
 
     expect(readLicensePreferences(PRODUCT)).toEqual(DEFAULT_LICENSE_PREFERENCES);
+  });
+});
+
+describe("account-wide defaults", () => {
+  it("returns the built-in defaults when nothing has been stored", () => {
+    expect(readGlobalDefaults()).toEqual(DEFAULT_LICENSE_PREFERENCES);
+  });
+
+  it("round-trips what the developer chose in Settings", () => {
+    writeGlobalDefaults({
+      mode: "duration",
+      duration: "90d",
+      hwidLocked: false,
+      quantity: 10,
+    });
+
+    expect(readGlobalDefaults()).toEqual({
+      mode: "duration",
+      duration: "90d",
+      hwidLocked: false,
+      quantity: 10,
+    });
+  });
+
+  it("clamps a hand-edited quantity rather than trusting it", () => {
+    storage.setItem(
+      "keyren:defaults",
+      JSON.stringify({ mode: "permanent", duration: "30d", hwidLocked: true, quantity: 10_000 }),
+    );
+
+    expect(readGlobalDefaults().quantity).toBe(100);
+  });
+
+  it("refuses to store anything beyond the four permitted fields", () => {
+    writeGlobalDefaults({
+      mode: "permanent",
+      duration: "30d",
+      hwidLocked: true,
+      quantity: 1,
+      // A label and a key must never reach storage, even if a caller passes them.
+      label: "Acme Corp",
+      licenseKey: "KEYREN-AAAA-BBBB-CCCC-DDDD",
+    } as never);
+
+    const stored = JSON.parse(storage.raw("keyren:defaults") as string);
+    expect(Object.keys(stored).sort()).toEqual([
+      "duration",
+      "hwidLocked",
+      "mode",
+      "quantity",
+    ]);
+  });
+});
+
+describe("resolving what a creation form opens with", () => {
+  it("prefers a product's own memory over the account default", () => {
+    writeGlobalDefaults({ mode: "duration", duration: "7d", hwidLocked: false, quantity: 5 });
+    writeLicensePreferences(PRODUCT, {
+      mode: "permanent",
+      duration: "30d",
+      hwidLocked: true,
+      quantity: 1,
+    });
+
+    expect(resolveLicensePreferences(PRODUCT).mode).toBe("permanent");
+    expect(resolveLicensePreferences(PRODUCT).quantity).toBe(1);
+  });
+
+  it("seeds a product that has never issued a license with the account default", () => {
+    writeGlobalDefaults({ mode: "duration", duration: "7d", hwidLocked: false, quantity: 5 });
+
+    expect(resolveLicensePreferences("prod_never_used")).toEqual({
+      mode: "duration",
+      duration: "7d",
+      hwidLocked: false,
+      quantity: 5,
+    });
+  });
+
+  it("does not treat a product stored as the defaults as untouched", () => {
+    // A product deliberately set to match the account default must still count
+    // as having its own memory, or changing the default would silently rewrite it.
+    writeLicensePreferences(PRODUCT, DEFAULT_LICENSE_PREFERENCES);
+    writeGlobalDefaults({ mode: "duration", duration: "365d", hwidLocked: false, quantity: 50 });
+
+    expect(resolveLicensePreferences(PRODUCT)).toEqual(DEFAULT_LICENSE_PREFERENCES);
+  });
+
+  it("falls back to the built-in defaults when neither is stored", () => {
+    expect(resolveLicensePreferences("prod_nothing")).toEqual(DEFAULT_LICENSE_PREFERENCES);
+  });
+});
+
+describe("display preferences", () => {
+  it("defaults to 25 per page with local time off", () => {
+    expect(readDisplayPreferences()).toEqual(DEFAULT_DISPLAY_PREFERENCES);
+  });
+
+  it("round-trips a chosen page size and local-time setting", () => {
+    writeDisplayPreferences({ pageSize: 100, showLocalTime: true });
+    expect(readDisplayPreferences()).toEqual({ pageSize: 100, showLocalTime: true });
+  });
+
+  it("rejects a page size that is not one of the offered sizes", () => {
+    storage.setItem("keyren:display", JSON.stringify({ pageSize: 7, showLocalTime: false }));
+    expect(readDisplayPreferences().pageSize).toBe(DEFAULT_DISPLAY_PREFERENCES.pageSize);
+  });
+
+  it("degrades a tampered showLocalTime to the default", () => {
+    storage.setItem("keyren:display", JSON.stringify({ pageSize: 50, showLocalTime: "yes" }));
+
+    const result = readDisplayPreferences();
+    expect(result.pageSize).toBe(50);
+    expect(result.showLocalTime).toBe(false);
+  });
+});
+
+describe("resetting remembered settings", () => {
+  it("clears every keyren key", () => {
+    writeGlobalDefaults({ mode: "duration", duration: "7d", hwidLocked: false, quantity: 5 });
+    writeDisplayPreferences({ pageSize: 100, showLocalTime: true });
+    writeLicensePreferences(PRODUCT, DEFAULT_LICENSE_PREFERENCES);
+    writeUiFlag("onboarding-dismissed", true);
+
+    clearStoredPreferences();
+
+    expect(storage.keys()).toEqual([]);
+    expect(readGlobalDefaults()).toEqual(DEFAULT_LICENSE_PREFERENCES);
+    expect(readDisplayPreferences()).toEqual(DEFAULT_DISPLAY_PREFERENCES);
+    expect(readUiFlag("onboarding-dismissed")).toBe(false);
+  });
+
+  it("leaves keys belonging to anything else on the origin alone", () => {
+    // Clerk's session lives on this origin too. Clearing it would sign the
+    // developer out as a side effect of resetting a dropdown.
+    storage.setItem("__clerk_db_jwt", "session-token");
+    storage.setItem("theme", "dark");
+    writeGlobalDefaults(DEFAULT_LICENSE_PREFERENCES);
+
+    clearStoredPreferences();
+
+    expect(storage.raw("__clerk_db_jwt")).toBe("session-token");
+    expect(storage.raw("theme")).toBe("dark");
   });
 });
