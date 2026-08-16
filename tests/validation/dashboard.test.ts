@@ -1,61 +1,85 @@
 import { describe, expect, it } from "vitest";
 import {
   createLicenseSchema,
-  createProductSchema,
+  createApplicationSchema,
   licenseIdSchema,
-  productIdSchema,
-  renameProductSchema,
+  applicationIdSchema,
+  renameApplicationSchema,
+  wantsNewApplication,
 } from "@/lib/validation/dashboard";
 
-describe("createProductSchema", () => {
+describe("wantsNewApplication", () => {
+  it("recognises the parameter the switcher and the palette send", () => {
+    expect(wantsNewApplication({ new: "1" })).toBe(true);
+  });
+
+  it("takes the first value when the parameter repeats", () => {
+    expect(wantsNewApplication({ new: ["1", "0"] })).toBe(true);
+  });
+
+  it("is false for an ordinary visit", () => {
+    expect(wantsNewApplication({})).toBe(false);
+    expect(wantsNewApplication({ q: "acme", sort: "name" })).toBe(false);
+  });
+
+  it("ignores anything that is not exactly 1", () => {
+    // Everything here comes from the address bar. A stale or hand-edited URL
+    // gets the ordinary page rather than a dialog.
+    expect(wantsNewApplication({ new: "true" })).toBe(false);
+    expect(wantsNewApplication({ new: "" })).toBe(false);
+    expect(wantsNewApplication({ new: "0" })).toBe(false);
+  });
+});
+
+describe("createApplicationSchema", () => {
   it("accepts a reasonable name", () => {
-    expect(createProductSchema.safeParse({ name: "Seliware Key" }).success).toBe(true);
+    expect(createApplicationSchema.safeParse({ name: "Seliware Key" }).success).toBe(true);
   });
 
   it("trims surrounding whitespace", () => {
-    expect(createProductSchema.parse({ name: "  Spaced  " }).name).toBe("Spaced");
+    expect(createApplicationSchema.parse({ name: "  Spaced  " }).name).toBe("Spaced");
   });
 
   it("rejects an empty or whitespace-only name", () => {
-    expect(createProductSchema.safeParse({ name: "" }).success).toBe(false);
-    expect(createProductSchema.safeParse({ name: "   " }).success).toBe(false);
+    expect(createApplicationSchema.safeParse({ name: "" }).success).toBe(false);
+    expect(createApplicationSchema.safeParse({ name: "   " }).success).toBe(false);
   });
 
   it("rejects an oversized name", () => {
-    expect(createProductSchema.safeParse({ name: "x".repeat(201) }).success).toBe(false);
+    expect(createApplicationSchema.safeParse({ name: "x".repeat(201) }).success).toBe(false);
   });
 
   it("ignores an ownerId supplied by the client", () => {
     // Ownership comes from Clerk, never from the browser. Even if a crafted
     // request carries one, it must not survive parsing.
-    const parsed = createProductSchema.parse({ name: "Ok", ownerId: "user_attacker" });
+    const parsed = createApplicationSchema.parse({ name: "Ok", ownerId: "user_attacker" });
     expect(parsed).not.toHaveProperty("ownerId");
   });
 });
 
-describe("renameProductSchema", () => {
-  it("requires both a product id and a name", () => {
+describe("renameApplicationSchema", () => {
+  it("requires both an application id and a name", () => {
     expect(
-      renameProductSchema.safeParse({ productId: "prod_ABC", name: "New" }).success,
+      renameApplicationSchema.safeParse({ applicationId: "app_ABC", name: "New" }).success,
     ).toBe(true);
-    expect(renameProductSchema.safeParse({ name: "New" }).success).toBe(false);
+    expect(renameApplicationSchema.safeParse({ name: "New" }).success).toBe(false);
   });
 });
 
 describe("id schemas", () => {
-  it("requires the prod_ prefix", () => {
-    expect(productIdSchema.safeParse("prod_ABC123").success).toBe(true);
-    expect(productIdSchema.safeParse("lic_ABC123").success).toBe(false);
+  it("requires the app_ prefix", () => {
+    expect(applicationIdSchema.safeParse("app_ABC123").success).toBe(true);
+    expect(applicationIdSchema.safeParse("lic_ABC123").success).toBe(false);
   });
 
   it("requires the lic_ prefix", () => {
     expect(licenseIdSchema.safeParse("lic_ABC123").success).toBe(true);
-    expect(licenseIdSchema.safeParse("prod_ABC123").success).toBe(false);
+    expect(licenseIdSchema.safeParse("app_ABC123").success).toBe(false);
   });
 });
 
 describe("createLicenseSchema", () => {
-  const base = { productId: "prod_ABC123", hwidLocked: true };
+  const base = { applicationId: "app_ABC123", hwidLocked: true };
 
   it("accepts permanent", () => {
     expect(createLicenseSchema.safeParse({ ...base, mode: "permanent" }).success).toBe(true);
@@ -96,7 +120,7 @@ describe("createLicenseSchema", () => {
   it("defaults hwidLocked to true when omitted", () => {
     // HWID locking is on by default; an omitted checkbox must not silently
     // produce an unlocked license.
-    const parsed = createLicenseSchema.parse({ productId: "prod_ABC123", mode: "permanent" });
+    const parsed = createLicenseSchema.parse({ applicationId: "app_ABC123", mode: "permanent" });
     expect(parsed.hwidLocked).toBe(true);
   });
 });

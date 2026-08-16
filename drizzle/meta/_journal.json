@@ -8,6 +8,27 @@
       "when": 1786781433786,
       "tag": "0000_glorious_purple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786820068495,
+      "tag": "0001_spooky_star_brand",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786869999489,
+      "tag": "0002_rename_applications",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786872223323,
+      "tag": "0003_disable_applications",
+      "breakpoints": true
     }
   ]
 }

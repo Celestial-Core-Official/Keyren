@@ -7,9 +7,9 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { products } from "./products";
+import { applications } from "./applications";
 
-/** Alpha_v1 supports exactly these two states. Revoking is reversible and
+/** A license is in exactly one of these two states. Revoking is reversible and
  *  never destroys the record. */
 export const licenseStatus = pgEnum("license_status", ["active", "revoked"]);
 
@@ -18,9 +18,9 @@ export const licenses = pgTable(
   {
     id: text("id").primaryKey(),
 
-    productId: text("product_id")
+    applicationId: text("application_id")
       .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
+      .references(() => applications.id, { onDelete: "cascade" }),
 
     /** HMAC-SHA256(server_secret, "license:" + normalized_key), hex.
      *  The plaintext key is never stored anywhere. */
@@ -29,6 +29,16 @@ export const licenses = pgTable(
     /** Final four characters, captured at creation so the dashboard has a
      *  stable non-secret way to refer to a key it can never redisplay. */
     keyLast4: text("key_last4").notNull(),
+
+    /** Optional human-recognisable reference — a customer, an order, a
+     *  seat. Purely a dashboard affordance: it is never returned by the
+     *  public verification API, so it can hold whatever the developer finds
+     *  useful without becoming part of any integration contract. */
+    label: text("label"),
+
+    /** Internal dashboard-only notes. Same reasoning as `label`, with room
+     *  for a sentence rather than a name. */
+    notes: text("notes"),
 
     status: licenseStatus("status").notNull().default("active"),
 
@@ -43,19 +53,26 @@ export const licenses = pgTable(
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
   (table) => [
-    // Globally unique: a collision would let one product's key authenticate
+    // Globally unique: a collision would let one application's key authenticate
     // against another. At 160 bits this will never fire, which is the point —
     // it is a tripwire, not a routine constraint.
     uniqueIndex("licenses_key_hash_unique").on(table.keyHash),
 
     // THE verification path index. The hot query is
-    //   WHERE product_id = $1 AND key_hash = $2
+    //   WHERE application_id = $1 AND key_hash = $2
     // and this covers it exactly, so verification stays an index lookup
     // rather than a scan as the table grows.
-    index("licenses_product_key_hash_idx").on(table.productId, table.keyHash),
+    index("licenses_application_key_hash_idx").on(table.applicationId, table.keyHash),
 
-    // Dashboard listing: licenses for one product, newest first.
-    index("licenses_product_created_idx").on(table.productId, table.createdAt),
+    // Dashboard listing: licenses for one application, newest first.
+    index("licenses_application_created_idx").on(table.applicationId, table.createdAt),
+
+    // Serves `ORDER BY label` within an application, which is one of the offered
+    // sorts. Deliberately NOT an attempt to index the search: `q` matches with
+    // a leading wildcard (ILIKE '%term%'), which no btree can satisfy, and
+    // making it indexable would mean installing pg_trgm — a database extension
+    // is far too much apparatus for filtering one developer's own licenses.
+    index("licenses_application_label_idx").on(table.applicationId, table.label),
   ],
 );
 

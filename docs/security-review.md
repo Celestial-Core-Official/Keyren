@@ -6,6 +6,14 @@
 
 This is a deliberate pass over the finished system, not a re-run of the test suite. Findings are recorded whether or not they were fixed.
 
+> **This document is a historical record of the `Alpha_v1` review** and is
+> deliberately left as it was written. Its findings and its accepted risks
+> remain accurate for the parts of the system it covers. Everything `Alpha_v2`
+> added is reviewed separately in
+> [`security-review-alpha-v2.md`](security-review-alpha-v2.md); the test and
+> assertion counts below describe `Alpha_v1` as it stood, not the current
+> suite.
+
 ---
 
 ## Summary
@@ -75,7 +83,7 @@ The key exists on exactly one path — `createLicense()` generates it → the se
 
 ### Ownership is enforced in SQL
 
-Every product query folds `products.ownerId` into its `WHERE` clause (4 sites). Every license operation routes through `assertOwnsProduct` or `findOwnedLicense` (8 sites), which join `licenses → products` and filter on the owner. There is no fetch-then-compare-in-JavaScript path anywhere.
+Every application query folds `applications.ownerId` into its `WHERE` clause (4 sites). Every license operation routes through `assertOwnsApplication` or `findOwnedLicense` (8 sites), which join `licenses → applications` and filter on the owner. There is no fetch-then-compare-in-JavaScript path anywhere.
 
 A miss returns "not found", never "forbidden", so resource IDs cannot be probed for existence.
 
@@ -91,19 +99,19 @@ A miss returns "not found", never "forbidden", so resource IDs cannot be probed 
 
 ### Enumeration resistance
 
-A license that never existed, one belonging to a different product, and one that was deleted all return a byte-identical `LICENSE_INVALID` / 403. Verified live for all three.
+A license that never existed, one belonging to a different application, and one that was deleted all return a byte-identical `LICENSE_INVALID` / 403. Verified live for all three.
 
-`PRODUCT_INVALID` is deliberately distinguishable: product IDs are shipped inside customer software and are not secret, so telling an integrating developer their product ID is wrong helps them without helping an attacker.
+`APPLICATION_INVALID` is deliberately distinguishable: application IDs are shipped inside customer software and are not secret, so telling an integrating developer their application ID is wrong helps them without helping an attacker.
 
 ### Error messages leak nothing
 
-All eight public messages are fixed strings containing no SQL, schema, identifiers, or exception text. Zod's issue list is referenced **zero** times in the route — verified live, a malformed body returns only `"The request body was malformed."`
+All nine public messages are fixed strings containing no SQL, schema, identifiers, or exception text. Zod's issue list is referenced **zero** times in the route — verified live, a malformed body returns only `"The request body was malformed."`
 
 The catch-all logs `error.message` server-side and returns only `INTERNAL_ERROR`.
 
 ### Verification ordering
 
-Read end to end and confirmed: locate product → derive key hash → locate license **scoped by `productId`** → constant-time digest re-check → **revoked before expired** → expiration against the **server** clock only → device rules → activation bookkeeping. Rate limiting runs before any license lookup, so a flood of guesses never reaches the licenses table.
+Read end to end and confirmed: locate application → derive key hash → locate license **scoped by `applicationId`** → constant-time digest re-check → **revoked before expired** → expiration against the **server** clock only → device rules → activation bookkeeping. Rate limiting runs before any license lookup, so a flood of guesses never reaches the licenses table.
 
 `VerifyInput.now` is a test-only clock injection point and is never populated from the request.
 
@@ -121,11 +129,11 @@ Each is a deliberate Alpha_v1 trade-off, not an oversight.
 
 2. **The rate limiter fails open.** A limiter outage means unmetered traffic rather than every customer's software going offline. This is the correct trade, but it is now logged so the condition is detectable — see SEC-1.
 
-3. **`x-forwarded-for` is client-controllable.** This is precisely why the policy meters on two axes; a per-IP limit alone is not trustworthy, and the per-product axis bounds a distributed attacker.
+3. **`x-forwarded-for` is client-controllable.** This is precisely why the policy meters on two axes; a per-IP limit alone is not trustworthy, and the per-application axis bounds a distributed attacker.
 
-4. **Device fingerprints are spoofable.** A determined attacker who reverse-engineers the integration can forge one. Keyren treats the fingerprint as an identifier that raises the cost of casual key sharing, not as a hardware security primitive. The product documentation states this plainly rather than overclaiming.
+4. **Device fingerprints are spoofable.** A determined attacker who reverse-engineers the integration can forge one. Keyren treats the fingerprint as an identifier that raises the cost of casual key sharing, not as a hardware security primitive. The application documentation states this plainly rather than overclaiming.
 
-5. **Alpha_v1 is online-only.** Keyren is a hard availability dependency for every integrating application. There are no offline licenses and no cached grace tokens. Documented in the README, the API reference, the dashboard settings page, and the per-product integration panel.
+5. **Alpha_v1 is online-only.** Keyren is a hard availability dependency for every integrating application. There are no offline licenses and no cached grace tokens. Documented in the README, the API reference, the dashboard settings page, and the per-application integration panel.
 
 6. **`/dashboard/settings` and the dashboard layout do not call `requireDeveloperId()`.** Both render only static content and navigation — neither queries the database or displays developer-owned data, so there is nothing to leak. They remain gated by middleware. Any future change that makes either read owned data **must** add the call.
 

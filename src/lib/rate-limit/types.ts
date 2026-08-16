@@ -1,7 +1,7 @@
 /**
  * A single axis a request can be limited on.
  *
- * Alpha_v1 checks IP and product. The shape allows more axes — a license
+ * Keyren checks IP and application. The shape allows more axes — a license
  * lookup fingerprint, a request-pattern signature — to be added later
  * without changing the interface or the call site in the route handler.
  *
@@ -10,9 +10,9 @@
  * rotate addresses. Combining axes is the point of this shape.
  */
 export type RateLimitDimension = {
-  /** Axis name, e.g. "ip" or "product". Namespaces the bucket key. */
+  /** Axis name, e.g. "ip" or "application". Namespaces the bucket key. */
   name: string;
-  /** The value on that axis, e.g. the address or the product ID. */
+  /** The value on that axis, e.g. the address or the application ID. */
   value: string;
   /** Requests permitted per window. */
   limit: number;

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { activations, licenses } from "@/db/schema";
 import { createTestDatabase, truncateAll } from "../helpers/db";
-import { DEVELOPER_A, DEVELOPER_B, makeLicense, makeProduct } from "../helpers/factories";
+import { DEVELOPER_A, DEVELOPER_B, makeLicense, makeApplication } from "../helpers/factories";
 import {
   deleteLicense,
   getLicense,
@@ -36,8 +36,8 @@ async function seedActivation(licenseId: string): Promise<void> {
 
 describe("revokeLicense", () => {
   it("marks the license revoked and stamps revokedAt", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const revoked = await revokeLicense(db, DEVELOPER_A, license.id);
     expect(revoked.status).toBe("revoked");
@@ -45,8 +45,8 @@ describe("revokeLicense", () => {
   });
 
   it("does not destroy the record or its activation", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await seedActivation(license.id);
 
     await revokeLicense(db, DEVELOPER_A, license.id);
@@ -60,8 +60,8 @@ describe("revokeLicense", () => {
 
 describe("restoreLicense", () => {
   it("returns a revoked license to active and clears revokedAt", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, status: "revoked" });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, status: "revoked" });
 
     const restored = await restoreLicense(db, DEVELOPER_A, license.id);
     expect(restored.status).toBe("active");
@@ -69,8 +69,8 @@ describe("restoreLicense", () => {
   });
 
   it("is idempotent on an already-active license", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const restored = await restoreLicense(db, DEVELOPER_A, license.id);
     expect(restored.status).toBe("active");
@@ -79,8 +79,8 @@ describe("restoreLicense", () => {
 
 describe("resetActivation", () => {
   it("removes the existing device binding", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await seedActivation(license.id);
 
     await resetActivation(db, DEVELOPER_A, license.id);
@@ -91,8 +91,8 @@ describe("resetActivation", () => {
   });
 
   it("leaves the license itself active and intact", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await seedActivation(license.id);
 
     await resetActivation(db, DEVELOPER_A, license.id);
@@ -103,16 +103,32 @@ describe("resetActivation", () => {
   });
 
   it("succeeds on a license that was never activated", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
-    await expect(resetActivation(db, DEVELOPER_A, license.id)).resolves.toBeUndefined();
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
+
+    // The developer's intent is "this license should be claimable", and it
+    // already is, so resetting nothing is a success rather than an error.
+    const view = await resetActivation(db, DEVELOPER_A, license.id);
+    expect(view.id).toBe(license.id);
+    expect(view.activation).toBeNull();
+  });
+
+  it("returns the license so the caller can name what it reset", async () => {
+    // Without this the action would need a second lookup purely to build a
+    // confirmation message.
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, label: "Acme Corp" });
+    await seedActivation(license.id);
+
+    const view = await resetActivation(db, DEVELOPER_A, license.id);
+    expect(view.label).toBe("Acme Corp");
   });
 });
 
 describe("deleteLicense", () => {
   it("permanently removes the license and cascades to its activation", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await seedActivation(license.id);
 
     await deleteLicense(db, DEVELOPER_A, license.id);
@@ -129,8 +145,8 @@ describe("deleteLicense", () => {
 // that every single one refuses AND leaves the row untouched.
 describe("cross-developer isolation", () => {
   async function foreignLicense(): Promise<string> {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_B });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_B });
+    const license = await makeLicense(db, { applicationId: application.id });
     return license.id;
   }
 
@@ -145,8 +161,8 @@ describe("cross-developer isolation", () => {
   });
 
   it("refuses to restore another developer's license", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_B });
-    const license = await makeLicense(db, { productId: product.id, status: "revoked" });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_B });
+    const license = await makeLicense(db, { applicationId: application.id, status: "revoked" });
     await expect(restoreLicense(db, DEVELOPER_A, license.id)).rejects.toThrow(/not found/i);
     expect((await getLicense(db, DEVELOPER_B, license.id))?.status).toBe("revoked");
   });

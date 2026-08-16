@@ -5,13 +5,13 @@ import type { RateLimitDimension, RateLimitResult, RateLimiter } from "./types";
 /**
  * Fixed-window counters held in Postgres.
  *
- * Chosen over Redis because Alpha_v1 does not justify another dependency, and
+ * Chosen over Redis because Keyren does not yet justify another dependency, and
  * over in-memory counters because a serverless deployment spreads requests
  * across instances that would each keep their own count — an attacker would
  * simply get N times the intended limit.
  *
  * Fixed windows admit up to 2x the limit across a window boundary. That is an
- * accepted trade for Alpha_v1: this class sits behind the RateLimiter
+ * accepted trade for now: this class sits behind the RateLimiter
  * interface, so a sliding window or a token bucket can replace it without the
  * verification path changing.
  */

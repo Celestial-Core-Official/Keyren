@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build Keyren Alpha_v1 — a developer SaaS where a developer signs up with Clerk, creates a product, generates a cryptographically secure license key shown exactly once, and their customer software authenticates that key (with HWID binding) against a public, rate-limited verification API.
+**Goal:** Build Keyren Alpha_v1 — a developer SaaS where a developer signs up with Clerk, creates an application, generates a cryptographically secure license key shown exactly once, and their customer software authenticates that key (with HWID binding) against a public, rate-limited verification API.
 
-**Architecture:** A single Next.js App Router application with a hard split between UI and business logic. All licensing behavior lives in `src/lib/**` as plain TypeScript functions that take an explicit `ownerId` and a database handle; React components and route handlers are thin adapters over those functions. Ownership is enforced *inside the SQL* (every dashboard query joins `products.owner_id`), so it is structurally impossible to mutate another developer's resource by guessing an ID. Plaintext license keys never touch the database — only `HMAC-SHA256(server_secret, normalized_key)` is stored, under a unique index, which doubles as the O(1) verification lookup. The public API lives at `/api/v1/licenses/verify` and is versioned independently of the `Alpha_v1` marketing release name.
+**Architecture:** A single Next.js App Router application with a hard split between UI and business logic. All licensing behavior lives in `src/lib/**` as plain TypeScript functions that take an explicit `ownerId` and a database handle; React components and route handlers are thin adapters over those functions. Ownership is enforced *inside the SQL* (every dashboard query joins `applications.owner_id`), so it is structurally impossible to mutate another developer's resource by guessing an ID. Plaintext license keys never touch the database — only `HMAC-SHA256(server_secret, normalized_key)` is stored, under a unique index, which doubles as the O(1) verification lookup. The public API lives at `/api/v1/licenses/verify` and is versioned independently of the `Alpha_v1` marketing release name.
 
 **Tech Stack:** Next.js 16 (App Router), React 19, TypeScript 5 (strict), Tailwind CSS 4, shadcn/ui, Clerk 7, PostgreSQL, Drizzle ORM 0.45 + drizzle-kit 0.31, Zod 4, Vitest 4 with PGlite 0.5 (in-memory real Postgres) for tests, Vercel as deploy target.
 
@@ -33,8 +33,8 @@ These are the decisions a reviewer should check the code against.
 | Why HMAC not bcrypt/argon2 | Verification must be an indexed equality lookup, so the stored value must be deterministic. A *keyed* construction is used precisely because a plain unsalted SHA-256 would be offline-brute-forceable from a DB dump; HMAC is not, without the server secret. The key's own 160 bits of entropy already defeat brute force. |
 | Domain separation | Device fingerprints hash as `HMAC-SHA256(secret, "device:" + deviceId)`. The `"license:"` / `"device:"` prefixes prevent a value from ever being valid in both contexts. |
 | Constant-time | `crypto.timingSafeEqual` re-checks the fetched row's `key_hash` against the computed one as defense-in-depth, after the indexed lookup. |
-| Enumeration | Any license that is absent, or present but belonging to a different product, returns the identical `LICENSE_INVALID` / 403 response. Product IDs *are* shipped inside customer software, so `PRODUCT_INVALID` is safe to distinguish and helps developers debug integrations. |
-| Ownership | Every dashboard read and mutation is a single SQL statement scoped by `products.owner_id = $ownerId`. There is no fetch-then-compare-in-JS path. A miss returns "not found", never "forbidden", so IDs cannot be probed for existence. |
+| Enumeration | Any license that is absent, or present but belonging to a different application, returns the identical `LICENSE_INVALID` / 403 response. Application IDs *are* shipped inside customer software, so `APPLICATION_INVALID` is safe to distinguish and helps developers debug integrations. |
+| Ownership | Every dashboard read and mutation is a single SQL statement scoped by `applications.owner_id = $ownerId`. There is no fetch-then-compare-in-JS path. A miss returns "not found", never "forbidden", so IDs cannot be probed for existence. |
 | Client trust | `ownerId` is only ever read from Clerk's server-side `auth()`. It is never accepted from a form field, URL, or request body. |
 | Log safety | `src/lib/log.ts` exposes `maskLicenseKey()`; raw keys are never passed to `console.*`. |
 
@@ -42,7 +42,7 @@ These are the decisions a reviewer should check the code against.
 
 ## File Structure
 
-Files that change together live together. Business logic is grouped by domain (`products`, `licenses`), not by technical layer.
+Files that change together live together. Business logic is grouped by domain (`applications`, `licenses`), not by technical layer.
 
 **Config / root**
 - `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `components.json`, `.gitignore`, `.env.example`
@@ -54,19 +54,19 @@ Files that change together live together. Business logic is grouped by domain (`
 - `src/env.ts` — Zod-validated, fail-fast env access. The single place `process.env` is read.
 
 **Persistence** (`src/db/`)
-- `src/db/schema/products.ts`, `licenses.ts`, `activations.ts`, `rate-limits.ts`, `index.ts`
+- `src/db/schema/applications.ts`, `licenses.ts`, `activations.ts`, `rate-limits.ts`, `index.ts`
 - `src/db/index.ts` — postgres.js connection + `db` singleton
 - `src/db/types.ts` — the `Database` type both the real client and PGlite satisfy
 
 **Business logic** (`src/lib/`)
-- `src/lib/crypto/ids.ts` — `generateProductId()`, `generateLicenseId()`
+- `src/lib/crypto/ids.ts` — `generateApplicationId()`, `generateLicenseId()`
 - `src/lib/crypto/random.ts` — unbiased Crockford Base32 generator
 - `src/lib/crypto/license-key.ts` — generate / normalize / hash / constant-time compare
 - `src/lib/crypto/device.ts` — `hashDeviceId()`
 - `src/lib/errors.ts` — `VerificationErrorCode`, `KeyrenError`, HTTP status map
 - `src/lib/log.ts` — `maskLicenseKey()`
-- `src/lib/products/slug.ts` — `slugify()`
-- `src/lib/products/service.ts` — ownership-scoped product CRUD
+- `src/lib/applications/slug.ts` — `slugify()`
+- `src/lib/applications/service.ts` — ownership-scoped application CRUD
 - `src/lib/licenses/expiration.ts` — the three developer-facing modes → `expiresAt: Date | null`
 - `src/lib/licenses/service.ts` — ownership-scoped license CRUD + activation reset
 - `src/lib/licenses/verify.ts` — **the verification engine**; the security core
@@ -81,12 +81,12 @@ Files that change together live together. Business logic is grouped by domain (`
 - `src/app/api/v1/licenses/verify/route.ts` — thin adapter: parse → rate-limit → `verifyLicense()` → serialize
 - `src/app/dashboard/**/actions.ts` — server actions; auth + Zod + delegate to services
 
-**UI** — `src/app/**` pages, `src/components/ui/**` (shadcn), `src/components/dashboard/**`, `src/components/products/**`, `src/components/licenses/**`
+**UI** — `src/app/**` pages, `src/components/ui/**` (shadcn), `src/components/dashboard/**`, `src/components/applications/**`, `src/components/licenses/**`
 
 **Tests** (`tests/`)
 - `tests/helpers/db.ts` — PGlite harness: fresh migrated DB per suite
-- `tests/helpers/factories.ts` — `makeDeveloper()`, `makeProduct()`, `makeLicense()`
-- `tests/crypto/*.test.ts`, `tests/products/*.test.ts`, `tests/licenses/*.test.ts`, `tests/verify/*.test.ts`, `tests/rate-limit/*.test.ts`, `tests/api/*.test.ts`
+- `tests/helpers/factories.ts` — `makeDeveloper()`, `makeApplication()`, `makeLicense()`
+- `tests/crypto/*.test.ts`, `tests/applications/*.test.ts`, `tests/licenses/*.test.ts`, `tests/verify/*.test.ts`, `tests/rate-limit/*.test.ts`, `tests/api/*.test.ts`
 
 ---
 
@@ -98,7 +98,7 @@ The spec lists 17 mandatory scenarios. Each is bound to a task here so none can 
 |---|---|---|---|
 | 1 | valid active license | 17 | `tests/verify/lookup.test.ts` |
 | 2 | invalid license | 17 | `tests/verify/lookup.test.ts` |
-| 3 | wrong product | 17 | `tests/verify/lookup.test.ts` |
+| 3 | wrong application | 17 | `tests/verify/lookup.test.ts` |
 | 4 | revoked license | 18 | `tests/verify/state.test.ts` |
 | 5 | restored license | 18 | `tests/verify/state.test.ts` |
 | 6 | expired license | 18 | `tests/verify/state.test.ts` |
@@ -108,7 +108,7 @@ The spec lists 17 mandatory scenarios. Each is bound to a task here so none can 
 | 10 | different HWID fails | 19 | `tests/verify/hwid.test.ts` |
 | 11 | activation reset | 19 | `tests/verify/hwid.test.ts` |
 | 12 | new HWID succeeds after reset | 19 | `tests/verify/hwid.test.ts` |
-| 13 | developer cannot access another's product | 13 | `tests/products/service.test.ts` |
+| 13 | developer cannot access another's application | 13 | `tests/applications/service.test.ts` |
 | 14 | developer cannot mutate another's license | 16 | `tests/licenses/lifecycle.test.ts` |
 | 15 | deleted license cannot authenticate | 19 | `tests/verify/hwid.test.ts` |
 | 16 | malformed request | 23 | `tests/api/verify-route.test.ts` |
@@ -340,7 +340,7 @@ const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
 
   RATE_LIMIT_VERIFY_PER_MINUTE: z.coerce.number().int().positive().default(60),
-  RATE_LIMIT_VERIFY_PER_PRODUCT_PER_MINUTE: z.coerce
+  RATE_LIMIT_VERIFY_PER_APPLICATION_PER_MINUTE: z.coerce
     .number()
     .int()
     .positive()
@@ -401,7 +401,7 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
 # --- Rate limiting --------------------------------------------------------
 RATE_LIMIT_VERIFY_PER_MINUTE="60"
-RATE_LIMIT_VERIFY_PER_PRODUCT_PER_MINUTE="600"
+RATE_LIMIT_VERIFY_PER_APPLICATION_PER_MINUTE="600"
 ```
 
 - [x] **Step 6: Confirm `.gitignore` covers secrets**
@@ -571,22 +571,22 @@ git add -A && git commit -m "feat: unbiased Crockford Base32 random generator"
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { generateLicenseId, generateProductId } from "@/lib/crypto/ids";
+import { generateLicenseId, generateApplicationId } from "@/lib/crypto/ids";
 
-describe("generateProductId", () => {
+describe("generateApplicationId", () => {
   it("is prefixed and 26 random symbols long", () => {
-    const id = generateProductId();
-    expect(id).toMatch(/^prod_[0-9A-HJKMNP-TV-Z]{26}$/);
+    const id = generateApplicationId();
+    expect(id).toMatch(/^app_[0-9A-HJKMNP-TV-Z]{26}$/);
   });
 
   it("carries at least 128 bits of entropy", () => {
     // 26 symbols from a 32-symbol alphabet = 26 * 5 = 130 bits.
-    const random = generateProductId().slice("prod_".length);
+    const random = generateApplicationId().slice("app_".length);
     expect(random.length * 5).toBeGreaterThanOrEqual(128);
   });
 
   it("is not sequential or guessable across calls", () => {
-    const ids = Array.from({ length: 1000 }, generateProductId);
+    const ids = Array.from({ length: 1000 }, generateApplicationId);
     expect(new Set(ids).size).toBe(1000);
   });
 });
@@ -596,9 +596,9 @@ describe("generateLicenseId", () => {
     expect(generateLicenseId()).toMatch(/^lic_[0-9A-HJKMNP-TV-Z]{26}$/);
   });
 
-  it("is distinct from product ids", () => {
+  it("is distinct from application ids", () => {
     expect(generateLicenseId().startsWith("lic_")).toBe(true);
-    expect(generateProductId().startsWith("prod_")).toBe(true);
+    expect(generateApplicationId().startsWith("app_")).toBe(true);
   });
 });
 ```
@@ -618,13 +618,13 @@ import { randomAlphabetString } from "./random";
 /**
  * 26 Crockford symbols = 130 bits of entropy, comfortably above the 128-bit
  * floor. These IDs are immutable for the lifetime of the resource: renaming a
- * product must never change its ID, because customer software has it compiled
+ * application must never change its ID, because customer software has it compiled
  * in. Nothing here derives from the name, the slug, a timestamp, or a counter.
  */
 const ID_RANDOM_LENGTH = 26;
 
-export function generateProductId(): string {
-  return `prod_${randomAlphabetString(ID_RANDOM_LENGTH)}`;
+export function generateApplicationId(): string {
+  return `app_${randomAlphabetString(ID_RANDOM_LENGTH)}`;
 }
 
 export function generateLicenseId(): string {
@@ -642,13 +642,13 @@ Expected: 5 passed.
 - [x] **Step 5: Commit**
 
 ```bash
-git add -A && git commit -m "feat: immutable prod_/lic_ resource identifiers"
+git add -A && git commit -m "feat: immutable app_/lic_ resource identifiers"
 ```
 
 ---
 ### Task 6: License key generation, normalization and hashing
 
-This is the security centre of the product. Take the time.
+This is the security centre of the application. Take the time.
 
 **Files:**
 - Create: `src/lib/crypto/license-key.ts`
@@ -1014,7 +1014,7 @@ import { maskLicenseKey } from "@/lib/log";
 
 const ALL_CODES: VerificationErrorCode[] = [
   "BAD_REQUEST",
-  "PRODUCT_INVALID",
+  "APPLICATION_INVALID",
   "LICENSE_INVALID",
   "LICENSE_REVOKED",
   "LICENSE_EXPIRED",
@@ -1032,7 +1032,7 @@ describe("verification error taxonomy", () => {
 
   it("uses conventional statuses", () => {
     expect(VERIFICATION_ERROR_STATUS.BAD_REQUEST).toBe(400);
-    expect(VERIFICATION_ERROR_STATUS.PRODUCT_INVALID).toBe(404);
+    expect(VERIFICATION_ERROR_STATUS.APPLICATION_INVALID).toBe(404);
     expect(VERIFICATION_ERROR_STATUS.LICENSE_INVALID).toBe(403);
     expect(VERIFICATION_ERROR_STATUS.LICENSE_REVOKED).toBe(403);
     expect(VERIFICATION_ERROR_STATUS.LICENSE_EXPIRED).toBe(403);
@@ -1086,7 +1086,7 @@ Expected: FAIL — cannot resolve `@/lib/errors`.
  */
 export type VerificationErrorCode =
   | "BAD_REQUEST"
-  | "PRODUCT_INVALID"
+  | "APPLICATION_INVALID"
   | "LICENSE_INVALID"
   | "LICENSE_REVOKED"
   | "LICENSE_EXPIRED"
@@ -1095,13 +1095,13 @@ export type VerificationErrorCode =
   | "INTERNAL_ERROR";
 
 /**
- * 400 the request was malformed, 404 the product does not exist, 403 the
+ * 400 the request was malformed, 404 the application does not exist, 403 the
  * request was well-formed but the license was rejected, 429 throttled,
  * 500 Keyren failed.
  */
 export const VERIFICATION_ERROR_STATUS: Record<VerificationErrorCode, number> = {
   BAD_REQUEST: 400,
-  PRODUCT_INVALID: 404,
+  APPLICATION_INVALID: 404,
   LICENSE_INVALID: 403,
   LICENSE_REVOKED: 403,
   LICENSE_EXPIRED: 403,
@@ -1116,7 +1116,7 @@ export const VERIFICATION_ERROR_STATUS: Record<VerificationErrorCode, number> = 
  */
 export const VERIFICATION_ERROR_MESSAGE: Record<VerificationErrorCode, string> = {
   BAD_REQUEST: "The request body was malformed.",
-  PRODUCT_INVALID: "The provided product is invalid.",
+  APPLICATION_INVALID: "The provided application is invalid.",
   LICENSE_INVALID: "The provided license is invalid.",
   LICENSE_REVOKED: "This license has been revoked.",
   LICENSE_EXPIRED: "This license has expired.",
@@ -1181,7 +1181,7 @@ git add -A && git commit -m "feat: verification error taxonomy and log masking"
 ### Task 9: Database schema
 
 **Files:**
-- Create: `src/db/schema/products.ts`, `src/db/schema/licenses.ts`, `src/db/schema/activations.ts`, `src/db/schema/rate-limits.ts`, `src/db/schema/index.ts`
+- Create: `src/db/schema/applications.ts`, `src/db/schema/licenses.ts`, `src/db/schema/activations.ts`, `src/db/schema/rate-limits.ts`, `src/db/schema/index.ts`
 - Modify: `src/lib/crypto/ids.ts` (add `generateActivationId`)
 - Modify: `tests/crypto/ids.test.ts` (cover it)
 
@@ -1205,22 +1205,22 @@ describe("generateActivationId", () => {
 });
 ```
 
-Update that file's import to `import { generateActivationId, generateLicenseId, generateProductId } from "@/lib/crypto/ids";` and confirm:
+Update that file's import to `import { generateActivationId, generateLicenseId, generateApplicationId } from "@/lib/crypto/ids";` and confirm:
 
 ```bash
 npx vitest run tests/crypto/ids.test.ts
 ```
 Expected: 6 passed.
 
-- [x] **Step 2: Create `src/db/schema/products.ts`**
+- [x] **Step 2: Create `src/db/schema/applications.ts`**
 
 ```ts
 import { index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-export const products = pgTable(
-  "products",
+export const applications = pgTable(
+  "applications",
   {
-    /** Immutable `prod_...` identifier. Never derived from name or slug, and
+    /** Immutable `app_...` identifier. Never derived from name or slug, and
      *  never changed by a rename — customer software has it compiled in. */
     id: text("id").primaryKey(),
 
@@ -1237,13 +1237,13 @@ export const products = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    // Every dashboard product query filters by owner and orders by creation.
-    index("products_owner_created_idx").on(table.ownerId, table.createdAt),
+    // Every dashboard application query filters by owner and orders by creation.
+    index("applications_owner_created_idx").on(table.ownerId, table.createdAt),
   ],
 );
 
-export type ProductRow = typeof products.$inferSelect;
-export type NewProductRow = typeof products.$inferInsert;
+export type ApplicationRow = typeof applications.$inferSelect;
+export type NewApplicationRow = typeof applications.$inferInsert;
 ```
 
 - [x] **Step 3: Create `src/db/schema/licenses.ts`**
@@ -1258,7 +1258,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { products } from "./products";
+import { applications } from "./applications";
 
 /** Alpha_v1 supports exactly these two states. Revoking is reversible and
  *  never destroys the record. */
@@ -1269,9 +1269,9 @@ export const licenses = pgTable(
   {
     id: text("id").primaryKey(),
 
-    productId: text("product_id")
+    applicationId: text("application_id")
       .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
+      .references(() => applications.id, { onDelete: "cascade" }),
 
     /** HMAC-SHA256(server_secret, "license:" + normalized_key), hex.
      *  The plaintext key is never stored anywhere. */
@@ -1294,19 +1294,19 @@ export const licenses = pgTable(
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
   (table) => [
-    // Globally unique: a collision would let one product's key authenticate
+    // Globally unique: a collision would let one application's key authenticate
     // against another. At 160 bits this will never fire, which is the point —
     // it is a tripwire, not a routine constraint.
     uniqueIndex("licenses_key_hash_unique").on(table.keyHash),
 
     // THE verification path index. The hot query is
-    //   WHERE product_id = $1 AND key_hash = $2
+    //   WHERE application_id = $1 AND key_hash = $2
     // and this covers it exactly, so verification stays an index lookup
     // rather than a scan as the table grows.
-    index("licenses_product_key_hash_idx").on(table.productId, table.keyHash),
+    index("licenses_application_key_hash_idx").on(table.applicationId, table.keyHash),
 
-    // Dashboard listing: licenses for one product, newest first.
-    index("licenses_product_created_idx").on(table.productId, table.createdAt),
+    // Dashboard listing: licenses for one application, newest first.
+    index("licenses_application_created_idx").on(table.applicationId, table.createdAt),
   ],
 );
 
@@ -1381,7 +1381,7 @@ export const rateLimitCounters = pgTable(
 - [x] **Step 6: Create `src/db/schema/index.ts`**
 
 ```ts
-export * from "./products";
+export * from "./applications";
 export * from "./licenses";
 export * from "./activations";
 export * from "./rate-limits";
@@ -1411,12 +1411,12 @@ export default defineConfig({
 ```bash
 npm run db:generate
 ```
-Expected: a `drizzle/0000_*.sql` file plus `drizzle/meta/`. Open the SQL and confirm it contains `CREATE TABLE "products"`, `"licenses"`, `"activations"`, `"rate_limit_counters"`, the `license_status` enum, both foreign keys, and the three unique indexes.
+Expected: a `drizzle/0000_*.sql` file plus `drizzle/meta/`. Open the SQL and confirm it contains `CREATE TABLE "applications"`, `"licenses"`, `"activations"`, `"rate_limit_counters"`, the `license_status` enum, both foreign keys, and the three unique indexes.
 
 - [x] **Step 8: Typecheck and commit**
 
 ```bash
-npm run typecheck && git add -A && git commit -m "feat: database schema for products, licenses, activations, rate limits"
+npm run typecheck && git add -A && git commit -m "feat: database schema for applications, licenses, activations, rate limits"
 ```
 
 ---
@@ -1538,7 +1538,7 @@ export async function createTestDatabase(): Promise<{
 /** Wipes all rows between tests without paying to rebuild the schema. */
 export async function truncateAll(db: Database): Promise<void> {
   await db.execute(
-    sql`TRUNCATE TABLE activations, licenses, products, rate_limit_counters RESTART IDENTITY CASCADE`,
+    sql`TRUNCATE TABLE activations, licenses, applications, rate_limit_counters RESTART IDENTITY CASCADE`,
   );
 }
 
@@ -1572,16 +1572,16 @@ describe("PGlite harness", () => {
       sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`,
     );
     const names = [...result].map((row) => row.table_name);
-    for (const table of ["products", "licenses", "activations", "rate_limit_counters"]) {
+    for (const table of ["applications", "licenses", "activations", "rate_limit_counters"]) {
       expect(names).toContain(table);
     }
   });
 
-  it("enforces the foreign key from licenses to products", async () => {
+  it("enforces the foreign key from licenses to applications", async () => {
     await expect(
       db.execute(
-        sql`INSERT INTO licenses (id, product_id, key_hash, key_last4)
-            VALUES ('lic_x', 'prod_does_not_exist', 'hash', 'WXYZ')`,
+        sql`INSERT INTO licenses (id, application_id, key_hash, key_last4)
+            VALUES ('lic_x', 'app_does_not_exist', 'hash', 'WXYZ')`,
       ),
     ).rejects.toThrow();
   });
@@ -1600,28 +1600,28 @@ Expected: 2 passed.
 - [x] **Step 4: Create `tests/helpers/factories.ts`**
 
 ```ts
-import { generateLicenseId, generateProductId } from "@/lib/crypto/ids";
+import { generateLicenseId, generateApplicationId } from "@/lib/crypto/ids";
 import {
   generateLicenseKey,
   hashLicenseKey,
   licenseKeyLast4,
 } from "@/lib/crypto/license-key";
-import { licenses, products } from "@/db/schema";
+import { licenses, applications } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { TEST_HMAC_SECRET } from "./db";
 
 export const DEVELOPER_A = "user_developer_a";
 export const DEVELOPER_B = "user_developer_b";
 
-export async function makeProduct(
+export async function makeApplication(
   db: Database,
   options: { ownerId?: string; name?: string } = {},
 ): Promise<{ id: string; ownerId: string; name: string }> {
-  const id = generateProductId();
+  const id = generateApplicationId();
   const ownerId = options.ownerId ?? DEVELOPER_A;
-  const name = options.name ?? "Test Product";
+  const name = options.name ?? "Test Application";
 
-  await db.insert(products).values({ id, ownerId, name, slug: "test_product" });
+  await db.insert(applications).values({ id, ownerId, name, slug: "test_application" });
 
   return { id, ownerId, name };
 }
@@ -1629,7 +1629,7 @@ export async function makeProduct(
 export async function makeLicense(
   db: Database,
   options: {
-    productId: string;
+    applicationId: string;
     hwidLocked?: boolean;
     expiresAt?: Date | null;
     status?: "active" | "revoked";
@@ -1640,7 +1640,7 @@ export async function makeLicense(
 
   await db.insert(licenses).values({
     id,
-    productId: options.productId,
+    applicationId: options.applicationId,
     keyHash: hashLicenseKey(plaintextKey, TEST_HMAC_SECRET),
     keyLast4: licenseKeyLast4(plaintextKey),
     hwidLocked: options.hwidLocked ?? true,
@@ -1660,21 +1660,21 @@ npx vitest run && git add -A && git commit -m "test: PGlite harness and fixtures
 ```
 
 ---
-## Phase 3 — Products
+## Phase 3 — Applications
 
 ### Task 12: Slug generation
 
 **Files:**
-- Create: `src/lib/products/slug.ts`
-- Create: `tests/products/slug.test.ts`
+- Create: `src/lib/applications/slug.ts`
+- Create: `tests/applications/slug.test.ts`
 
 - [x] **Step 1: Write the failing test**
 
-`tests/products/slug.test.ts`:
+`tests/applications/slug.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { slugify } from "@/lib/products/slug";
+import { slugify } from "@/lib/applications/slug";
 
 describe("slugify", () => {
   it("lowercases and underscore-joins words", () => {
@@ -1694,7 +1694,7 @@ describe("slugify", () => {
   });
 
   it("keeps digits", () => {
-    expect(slugify("Product 42")).toBe("product_42");
+    expect(slugify("Application 42")).toBe("application_42");
   });
 
   it("transliterates accented characters", () => {
@@ -1702,11 +1702,11 @@ describe("slugify", () => {
   });
 
   it("falls back when the name has no usable characters", () => {
-    // Slugs are cosmetic, so an unusable name must not block product
-    // creation. The immutable prod_ ID is the real identifier.
-    expect(slugify("日本語")).toBe("product");
-    expect(slugify("!!!")).toBe("product");
-    expect(slugify("")).toBe("product");
+    // Slugs are cosmetic, so an unusable name must not block application
+    // creation. The immutable app_ ID is the real identifier.
+    expect(slugify("日本語")).toBe("application");
+    expect(slugify("!!!")).toBe("application");
+    expect(slugify("")).toBe("application");
   });
 
   it("truncates very long names without a trailing separator", () => {
@@ -1720,22 +1720,22 @@ describe("slugify", () => {
 - [x] **Step 2: Run and watch it fail**
 
 ```bash
-npx vitest run tests/products/slug.test.ts
+npx vitest run tests/applications/slug.test.ts
 ```
-Expected: FAIL — cannot resolve `@/lib/products/slug`.
+Expected: FAIL — cannot resolve `@/lib/applications/slug`.
 
-- [x] **Step 3: Implement `src/lib/products/slug.ts`**
+- [x] **Step 3: Implement `src/lib/applications/slug.ts`**
 
 ```ts
 const MAX_SLUG_LENGTH = 64;
 
 /**
- * Derives a human-readable slug from a product name.
+ * Derives a human-readable slug from an application name.
  *
  * Purely cosmetic. Slugs are not unique, are not used for lookup, and are not
- * an identity — duplicate product names are explicitly allowed. The immutable
- * `prod_` ID is the only authoritative identifier, which is why this function
- * can afford to be lossy and can always fall back to "product".
+ * an identity — duplicate application names are explicitly allowed. The immutable
+ * `app_` ID is the only authoritative identifier, which is why this function
+ * can afford to be lossy and can always fall back to "application".
  */
 export function slugify(name: string): string {
   const slug = name
@@ -1752,46 +1752,46 @@ export function slugify(name: string): string {
     .slice(0, MAX_SLUG_LENGTH)
     .replace(/_+$/g, "");
 
-  return slug.length > 0 ? slug : "product";
+  return slug.length > 0 ? slug : "application";
 }
 ```
 
 - [x] **Step 4: Run the tests**
 
 ```bash
-npx vitest run tests/products/slug.test.ts
+npx vitest run tests/applications/slug.test.ts
 ```
 Expected: 8 passed.
 
 - [x] **Step 5: Commit**
 
 ```bash
-git add -A && git commit -m "feat: product slug generation"
+git add -A && git commit -m "feat: application slug generation"
 ```
 
 ---
 
-### Task 13: Product service with ownership enforced in SQL
+### Task 13: Application service with ownership enforced in SQL
 
 **Files:**
-- Create: `src/lib/products/service.ts`
-- Create: `tests/products/service.test.ts`
+- Create: `src/lib/applications/service.ts`
+- Create: `tests/applications/service.test.ts`
 
 - [x] **Step 1: Write the failing test**
 
-`tests/products/service.test.ts`:
+`tests/applications/service.test.ts`:
 
 ```ts
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestDatabase, truncateAll } from "../helpers/db";
-import { DEVELOPER_A, DEVELOPER_B, makeLicense, makeProduct } from "../helpers/factories";
+import { DEVELOPER_A, DEVELOPER_B, makeLicense, makeApplication } from "../helpers/factories";
 import {
-  createProduct,
-  deleteProduct,
-  getProduct,
-  listProducts,
-  renameProduct,
-} from "@/lib/products/service";
+  createApplication,
+  deleteApplication,
+  getApplication,
+  listApplications,
+  renameApplication,
+} from "@/lib/applications/service";
 import type { Database } from "@/db/types";
 
 let db: Database;
@@ -1807,115 +1807,115 @@ beforeEach(async () => {
   await truncateAll(db);
 });
 
-describe("createProduct", () => {
-  it("assigns an immutable prod_ id and a derived slug", async () => {
-    const product = await createProduct(db, DEVELOPER_A, { name: "Seliware Key" });
-    expect(product.id).toMatch(/^prod_[0-9A-HJKMNP-TV-Z]{26}$/);
-    expect(product.slug).toBe("seliware_key");
-    expect(product.name).toBe("Seliware Key");
+describe("createApplication", () => {
+  it("assigns an immutable app_ id and a derived slug", async () => {
+    const application = await createApplication(db, DEVELOPER_A, { name: "Seliware Key" });
+    expect(application.id).toMatch(/^app_[0-9A-HJKMNP-TV-Z]{26}$/);
+    expect(application.slug).toBe("seliware_key");
+    expect(application.name).toBe("Seliware Key");
   });
 
   it("allows duplicate names for the same developer", async () => {
-    const first = await createProduct(db, DEVELOPER_A, { name: "Same Name" });
-    const second = await createProduct(db, DEVELOPER_A, { name: "Same Name" });
+    const first = await createApplication(db, DEVELOPER_A, { name: "Same Name" });
+    const second = await createApplication(db, DEVELOPER_A, { name: "Same Name" });
     expect(first.id).not.toBe(second.id);
     expect(first.slug).toBe(second.slug);
   });
 });
 
-describe("listProducts", () => {
-  it("returns only the calling developer's products", async () => {
-    await makeProduct(db, { ownerId: DEVELOPER_A, name: "A one" });
-    await makeProduct(db, { ownerId: DEVELOPER_A, name: "A two" });
-    await makeProduct(db, { ownerId: DEVELOPER_B, name: "B one" });
+describe("listApplications", () => {
+  it("returns only the calling developer's applications", async () => {
+    await makeApplication(db, { ownerId: DEVELOPER_A, name: "A one" });
+    await makeApplication(db, { ownerId: DEVELOPER_A, name: "A two" });
+    await makeApplication(db, { ownerId: DEVELOPER_B, name: "B one" });
 
-    const listed = await listProducts(db, DEVELOPER_A);
+    const listed = await listApplications(db, DEVELOPER_A);
     expect(listed).toHaveLength(2);
     expect(listed.map((p) => p.name).sort()).toEqual(["A one", "A two"]);
   });
 
-  it("includes a license count per product", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    await makeLicense(db, { productId: product.id });
-    await makeLicense(db, { productId: product.id });
+  it("includes a license count per application", async () => {
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    await makeLicense(db, { applicationId: application.id });
+    await makeLicense(db, { applicationId: application.id });
 
-    const [listed] = await listProducts(db, DEVELOPER_A);
+    const [listed] = await listApplications(db, DEVELOPER_A);
     expect(listed?.licenseCount).toBe(2);
   });
 
-  it("reports zero licenses for an empty product", async () => {
-    await makeProduct(db, { ownerId: DEVELOPER_A });
-    const [listed] = await listProducts(db, DEVELOPER_A);
+  it("reports zero licenses for an empty application", async () => {
+    await makeApplication(db, { ownerId: DEVELOPER_A });
+    const [listed] = await listApplications(db, DEVELOPER_A);
     expect(listed?.licenseCount).toBe(0);
   });
 });
 
-describe("getProduct", () => {
-  it("returns the developer's own product", async () => {
-    const created = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const found = await getProduct(db, DEVELOPER_A, created.id);
+describe("getApplication", () => {
+  it("returns the developer's own application", async () => {
+    const created = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const found = await getApplication(db, DEVELOPER_A, created.id);
     expect(found?.id).toBe(created.id);
   });
 
-  // Spec test #13: a developer cannot access another developer's product.
-  it("returns null for another developer's product", async () => {
-    const created = await makeProduct(db, { ownerId: DEVELOPER_B });
-    expect(await getProduct(db, DEVELOPER_A, created.id)).toBeNull();
+  // Spec test #13: a developer cannot access another developer's application.
+  it("returns null for another developer's application", async () => {
+    const created = await makeApplication(db, { ownerId: DEVELOPER_B });
+    expect(await getApplication(db, DEVELOPER_A, created.id)).toBeNull();
   });
 
   it("returns null for an id that does not exist", async () => {
-    expect(await getProduct(db, DEVELOPER_A, "prod_NOPE")).toBeNull();
+    expect(await getApplication(db, DEVELOPER_A, "app_NOPE")).toBeNull();
   });
 });
 
-describe("renameProduct", () => {
+describe("renameApplication", () => {
   it("updates name and slug but never the id", async () => {
-    const created = await createProduct(db, DEVELOPER_A, { name: "Old Name" });
-    const renamed = await renameProduct(db, DEVELOPER_A, created.id, "Brand New Name");
+    const created = await createApplication(db, DEVELOPER_A, { name: "Old Name" });
+    const renamed = await renameApplication(db, DEVELOPER_A, created.id, "Brand New Name");
     expect(renamed.id).toBe(created.id);
     expect(renamed.name).toBe("Brand New Name");
     expect(renamed.slug).toBe("brand_new_name");
   });
 
   it("advances updatedAt", async () => {
-    const created = await createProduct(db, DEVELOPER_A, { name: "Old" });
+    const created = await createApplication(db, DEVELOPER_A, { name: "Old" });
     await new Promise((resolve) => setTimeout(resolve, 10));
-    const renamed = await renameProduct(db, DEVELOPER_A, created.id, "New");
+    const renamed = await renameApplication(db, DEVELOPER_A, created.id, "New");
     expect(renamed.updatedAt.getTime()).toBeGreaterThanOrEqual(created.updatedAt.getTime());
   });
 
-  it("refuses to rename another developer's product", async () => {
-    const created = await makeProduct(db, { ownerId: DEVELOPER_B, name: "Theirs" });
-    await expect(renameProduct(db, DEVELOPER_A, created.id, "Mine")).rejects.toThrow(
+  it("refuses to rename another developer's application", async () => {
+    const created = await makeApplication(db, { ownerId: DEVELOPER_B, name: "Theirs" });
+    await expect(renameApplication(db, DEVELOPER_A, created.id, "Mine")).rejects.toThrow(
       /not found/i,
     );
 
     // And the row is genuinely untouched.
-    const stillTheirs = await getProduct(db, DEVELOPER_B, created.id);
+    const stillTheirs = await getApplication(db, DEVELOPER_B, created.id);
     expect(stillTheirs?.name).toBe("Theirs");
   });
 });
 
-describe("deleteProduct", () => {
-  it("deletes the developer's own product", async () => {
-    const created = await makeProduct(db, { ownerId: DEVELOPER_A });
-    await deleteProduct(db, DEVELOPER_A, created.id);
-    expect(await getProduct(db, DEVELOPER_A, created.id)).toBeNull();
+describe("deleteApplication", () => {
+  it("deletes the developer's own application", async () => {
+    const created = await makeApplication(db, { ownerId: DEVELOPER_A });
+    await deleteApplication(db, DEVELOPER_A, created.id);
+    expect(await getApplication(db, DEVELOPER_A, created.id)).toBeNull();
   });
 
-  it("cascades to the product's licenses", async () => {
-    const created = await makeProduct(db, { ownerId: DEVELOPER_A });
-    await makeLicense(db, { productId: created.id });
-    await deleteProduct(db, DEVELOPER_A, created.id);
+  it("cascades to the application's licenses", async () => {
+    const created = await makeApplication(db, { ownerId: DEVELOPER_A });
+    await makeLicense(db, { applicationId: created.id });
+    await deleteApplication(db, DEVELOPER_A, created.id);
 
     const remaining = await db.query.licenses.findMany();
     expect(remaining).toHaveLength(0);
   });
 
-  it("refuses to delete another developer's product", async () => {
-    const created = await makeProduct(db, { ownerId: DEVELOPER_B });
-    await expect(deleteProduct(db, DEVELOPER_A, created.id)).rejects.toThrow(/not found/i);
-    expect(await getProduct(db, DEVELOPER_B, created.id)).not.toBeNull();
+  it("refuses to delete another developer's application", async () => {
+    const created = await makeApplication(db, { ownerId: DEVELOPER_B });
+    await expect(deleteApplication(db, DEVELOPER_A, created.id)).rejects.toThrow(/not found/i);
+    expect(await getApplication(db, DEVELOPER_B, created.id)).not.toBeNull();
   });
 });
 ```
@@ -1923,21 +1923,21 @@ describe("deleteProduct", () => {
 - [x] **Step 2: Run and watch it fail**
 
 ```bash
-npx vitest run tests/products/service.test.ts
+npx vitest run tests/applications/service.test.ts
 ```
-Expected: FAIL — cannot resolve `@/lib/products/service`.
+Expected: FAIL — cannot resolve `@/lib/applications/service`.
 
-- [x] **Step 3: Implement `src/lib/products/service.ts`**
+- [x] **Step 3: Implement `src/lib/applications/service.ts`**
 
 ```ts
 import { and, count, desc, eq } from "drizzle-orm";
-import { licenses, products } from "@/db/schema";
+import { licenses, applications } from "@/db/schema";
 import type { Database } from "@/db/types";
-import { generateProductId } from "@/lib/crypto/ids";
+import { generateApplicationId } from "@/lib/crypto/ids";
 import { notFound } from "@/lib/errors";
 import { slugify } from "./slug";
 
-export type Product = {
+export type Application = {
   id: string;
   name: string;
   slug: string;
@@ -1945,7 +1945,7 @@ export type Product = {
   updatedAt: Date;
 };
 
-export type ProductListItem = Product & { licenseCount: number };
+export type ApplicationListItem = Application & { licenseCount: number };
 
 /**
  * Every function here takes `ownerId` as an explicit argument and folds it
@@ -1958,16 +1958,16 @@ export type ProductListItem = Product & { licenseCount: number };
  * never accepted from a request body, form field, or URL.
  */
 
-export async function createProduct(
+export async function createApplication(
   db: Database,
   ownerId: string,
   input: { name: string },
-): Promise<Product> {
+): Promise<Application> {
   const now = new Date();
   const [row] = await db
-    .insert(products)
+    .insert(applications)
     .values({
-      id: generateProductId(),
+      id: generateApplicationId(),
       ownerId,
       name: input.name,
       slug: slugify(input.name),
@@ -1976,82 +1976,82 @@ export async function createProduct(
     })
     .returning();
 
-  if (!row) throw new Error("Failed to create product");
-  return toProduct(row);
+  if (!row) throw new Error("Failed to create application");
+  return toApplication(row);
 }
 
-export async function listProducts(
+export async function listApplications(
   db: Database,
   ownerId: string,
-): Promise<ProductListItem[]> {
-  // A LEFT JOIN with GROUP BY rather than a query-per-product, so the
-  // products page stays one round trip regardless of how many products exist.
+): Promise<ApplicationListItem[]> {
+  // A LEFT JOIN with GROUP BY rather than a query-per-application, so the
+  // applications page stays one round trip regardless of how many applications exist.
   const rows = await db
     .select({
-      id: products.id,
-      name: products.name,
-      slug: products.slug,
-      createdAt: products.createdAt,
-      updatedAt: products.updatedAt,
+      id: applications.id,
+      name: applications.name,
+      slug: applications.slug,
+      createdAt: applications.createdAt,
+      updatedAt: applications.updatedAt,
       licenseCount: count(licenses.id),
     })
-    .from(products)
-    .leftJoin(licenses, eq(licenses.productId, products.id))
-    .where(eq(products.ownerId, ownerId))
-    .groupBy(products.id)
-    .orderBy(desc(products.createdAt));
+    .from(applications)
+    .leftJoin(licenses, eq(licenses.applicationId, applications.id))
+    .where(eq(applications.ownerId, ownerId))
+    .groupBy(applications.id)
+    .orderBy(desc(applications.createdAt));
 
   return rows.map((row) => ({ ...row, licenseCount: Number(row.licenseCount) }));
 }
 
-export async function getProduct(
+export async function getApplication(
   db: Database,
   ownerId: string,
-  productId: string,
-): Promise<Product | null> {
+  applicationId: string,
+): Promise<Application | null> {
   const [row] = await db
     .select()
-    .from(products)
-    .where(and(eq(products.id, productId), eq(products.ownerId, ownerId)))
+    .from(applications)
+    .where(and(eq(applications.id, applicationId), eq(applications.ownerId, ownerId)))
     .limit(1);
 
-  return row ? toProduct(row) : null;
+  return row ? toApplication(row) : null;
 }
 
-export async function renameProduct(
+export async function renameApplication(
   db: Database,
   ownerId: string,
-  productId: string,
+  applicationId: string,
   name: string,
-): Promise<Product> {
+): Promise<Application> {
   // Note that `id` is not in the SET clause. A rename must never change the
   // identifier customer software authenticates against.
   const [row] = await db
-    .update(products)
+    .update(applications)
     .set({ name, slug: slugify(name), updatedAt: new Date() })
-    .where(and(eq(products.id, productId), eq(products.ownerId, ownerId)))
+    .where(and(eq(applications.id, applicationId), eq(applications.ownerId, ownerId)))
     .returning();
 
-  if (!row) throw notFound("Product");
-  return toProduct(row);
+  if (!row) throw notFound("Application");
+  return toApplication(row);
 }
 
-export async function deleteProduct(
+export async function deleteApplication(
   db: Database,
   ownerId: string,
-  productId: string,
+  applicationId: string,
 ): Promise<void> {
   const deleted = await db
-    .delete(products)
-    .where(and(eq(products.id, productId), eq(products.ownerId, ownerId)))
-    .returning({ id: products.id });
+    .delete(applications)
+    .where(and(eq(applications.id, applicationId), eq(applications.ownerId, ownerId)))
+    .returning({ id: applications.id });
 
-  // Zero rows means the product does not exist OR belongs to someone else.
+  // Zero rows means the application does not exist OR belongs to someone else.
   // Both produce the same error on purpose.
-  if (deleted.length === 0) throw notFound("Product");
+  if (deleted.length === 0) throw notFound("Application");
 }
 
-function toProduct(row: typeof products.$inferSelect): Product {
+function toApplication(row: typeof applications.$inferSelect): Application {
   return {
     id: row.id,
     name: row.name,
@@ -2065,7 +2065,7 @@ function toProduct(row: typeof products.$inferSelect): Product {
 - [x] **Step 4: Run the tests**
 
 ```bash
-npx vitest run tests/products/service.test.ts
+npx vitest run tests/applications/service.test.ts
 ```
 Expected: 14 passed.
 
@@ -2074,7 +2074,7 @@ Expected: 14 passed.
 - [x] **Step 5: Commit**
 
 ```bash
-git add -A && git commit -m "feat: product service with SQL-level ownership enforcement"
+git add -A && git commit -m "feat: application service with SQL-level ownership enforcement"
 ```
 
 ---
@@ -2258,7 +2258,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { licenses } from "@/db/schema";
 import { createTestDatabase, TEST_HMAC_SECRET, truncateAll } from "../helpers/db";
-import { DEVELOPER_A, DEVELOPER_B, makeProduct } from "../helpers/factories";
+import { DEVELOPER_A, DEVELOPER_B, makeApplication } from "../helpers/factories";
 import { createLicense, listLicenses } from "@/lib/licenses/service";
 import { LICENSE_KEY_PATTERN, hashLicenseKey } from "@/lib/crypto/license-key";
 import type { Database } from "@/db/types";
@@ -2278,9 +2278,9 @@ beforeEach(async () => {
 
 describe("createLicense", () => {
   it("returns the plaintext key exactly once, in the creation response", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const created = await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "permanent" },
       hwidLocked: true,
       secret: TEST_HMAC_SECRET,
@@ -2290,9 +2290,9 @@ describe("createLicense", () => {
   });
 
   it("never persists the plaintext key", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const created = await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "permanent" },
       hwidLocked: true,
       secret: TEST_HMAC_SECRET,
@@ -2308,9 +2308,9 @@ describe("createLicense", () => {
   });
 
   it("stores the last four characters for masked display", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const created = await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "permanent" },
       hwidLocked: true,
       secret: TEST_HMAC_SECRET,
@@ -2320,9 +2320,9 @@ describe("createLicense", () => {
   });
 
   it("defaults to active, HWID-locked, never expiring", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const created = await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "permanent" },
       hwidLocked: true,
       secret: TEST_HMAC_SECRET,
@@ -2334,9 +2334,9 @@ describe("createLicense", () => {
   });
 
   it("resolves a duration into an absolute expiry", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const created = await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "duration", duration: "30d" },
       hwidLocked: false,
       secret: TEST_HMAC_SECRET,
@@ -2347,11 +2347,11 @@ describe("createLicense", () => {
     expect(Math.abs(created.license.expiresAt!.getTime() - expected)).toBeLessThan(5000);
   });
 
-  it("refuses to create a license under another developer's product", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_B });
+  it("refuses to create a license under another developer's application", async () => {
+    const application = await makeApplication(db, { ownerId: DEVELOPER_B });
     await expect(
       createLicense(db, DEVELOPER_A, {
-        productId: product.id,
+        applicationId: application.id,
         expiration: { mode: "permanent" },
         hwidLocked: true,
         secret: TEST_HMAC_SECRET,
@@ -2364,15 +2364,15 @@ describe("createLicense", () => {
 
 describe("listLicenses", () => {
   it("returns masked references and never a key hash", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const created = await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "permanent" },
       hwidLocked: true,
       secret: TEST_HMAC_SECRET,
     });
 
-    const listed = await listLicenses(db, DEVELOPER_A, product.id);
+    const listed = await listLicenses(db, DEVELOPER_A, application.id);
     expect(listed).toHaveLength(1);
 
     const serialized = JSON.stringify(listed);
@@ -2384,21 +2384,21 @@ describe("listLicenses", () => {
   });
 
   it("reports activation state", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "permanent" },
       hwidLocked: true,
       secret: TEST_HMAC_SECRET,
     });
 
-    const [listed] = await listLicenses(db, DEVELOPER_A, product.id);
+    const [listed] = await listLicenses(db, DEVELOPER_A, application.id);
     expect(listed?.activation).toBeNull();
   });
 
   it("refuses to list another developer's licenses", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_B });
-    await expect(listLicenses(db, DEVELOPER_A, product.id)).rejects.toThrow(/not found/i);
+    const application = await makeApplication(db, { ownerId: DEVELOPER_B });
+    await expect(listLicenses(db, DEVELOPER_A, application.id)).rejects.toThrow(/not found/i);
   });
 });
 ```
@@ -2414,7 +2414,7 @@ Expected: FAIL — cannot resolve `@/lib/licenses/service`.
 
 ```ts
 import { and, desc, eq } from "drizzle-orm";
-import { activations, licenses, products } from "@/db/schema";
+import { activations, licenses, applications } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { generateLicenseId } from "@/lib/crypto/ids";
 import {
@@ -2434,7 +2434,7 @@ import { resolveExpiresAt, type ExpirationInput } from "./expiration";
  */
 export type LicenseView = {
   id: string;
-  productId: string;
+  applicationId: string;
   keyLast4: string;
   status: "active" | "revoked";
   expiresAt: Date | null;
@@ -2446,29 +2446,29 @@ export type LicenseView = {
 };
 
 export type CreateLicenseInput = {
-  productId: string;
+  applicationId: string;
   expiration: ExpirationInput;
   hwidLocked: boolean;
   secret: string;
 };
 
 /**
- * Confirms the product exists AND belongs to this developer, in one query.
+ * Confirms the application exists AND belongs to this developer, in one query.
  * Every license operation funnels through this, which is what makes the
- * `Clerk user -> owns product -> product owns license` chain unskippable.
+ * `Clerk user -> owns application -> application owns license` chain unskippable.
  */
-async function assertOwnsProduct(
+async function assertOwnsApplication(
   db: Database,
   ownerId: string,
-  productId: string,
+  applicationId: string,
 ): Promise<void> {
   const [row] = await db
-    .select({ id: products.id })
-    .from(products)
-    .where(and(eq(products.id, productId), eq(products.ownerId, ownerId)))
+    .select({ id: applications.id })
+    .from(applications)
+    .where(and(eq(applications.id, applicationId), eq(applications.ownerId, ownerId)))
     .limit(1);
 
-  if (!row) throw notFound("Product");
+  if (!row) throw notFound("Application");
 }
 
 export async function createLicense(
@@ -2476,7 +2476,7 @@ export async function createLicense(
   ownerId: string,
   input: CreateLicenseInput,
 ): Promise<{ license: LicenseView; plaintextKey: string }> {
-  await assertOwnsProduct(db, ownerId, input.productId);
+  await assertOwnsApplication(db, ownerId, input.applicationId);
 
   const now = new Date();
   const plaintextKey = generateLicenseKey();
@@ -2486,7 +2486,7 @@ export async function createLicense(
     .insert(licenses)
     .values({
       id: generateLicenseId(),
-      productId: input.productId,
+      applicationId: input.applicationId,
       // The plaintext is hashed here and then only ever returned to the
       // caller. It is not logged, not cached, and not written anywhere.
       keyHash: hashLicenseKey(plaintextKey, input.secret),
@@ -2507,15 +2507,15 @@ export async function createLicense(
 export async function listLicenses(
   db: Database,
   ownerId: string,
-  productId: string,
+  applicationId: string,
 ): Promise<LicenseView[]> {
-  await assertOwnsProduct(db, ownerId, productId);
+  await assertOwnsApplication(db, ownerId, applicationId);
 
   const rows = await db
     .select({ license: licenses, activation: activations })
     .from(licenses)
     .leftJoin(activations, eq(activations.licenseId, licenses.id))
-    .where(eq(licenses.productId, productId))
+    .where(eq(licenses.applicationId, applicationId))
     .orderBy(desc(licenses.createdAt));
 
   return rows.map((row) => toLicenseView(row.license, row.activation));
@@ -2527,7 +2527,7 @@ export function toLicenseView(
 ): LicenseView {
   return {
     id: row.id,
-    productId: row.productId,
+    applicationId: row.applicationId,
     keyLast4: row.keyLast4,
     status: row.status,
     expiresAt: row.expiresAt,
@@ -2571,7 +2571,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { activations, licenses } from "@/db/schema";
 import { createTestDatabase, truncateAll } from "../helpers/db";
-import { DEVELOPER_A, DEVELOPER_B, makeLicense, makeProduct } from "../helpers/factories";
+import { DEVELOPER_A, DEVELOPER_B, makeLicense, makeApplication } from "../helpers/factories";
 import {
   deleteLicense,
   getLicense,
@@ -2605,8 +2605,8 @@ async function seedActivation(licenseId: string): Promise<void> {
 
 describe("revokeLicense", () => {
   it("marks the license revoked and stamps revokedAt", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const revoked = await revokeLicense(db, DEVELOPER_A, license.id);
     expect(revoked.status).toBe("revoked");
@@ -2614,8 +2614,8 @@ describe("revokeLicense", () => {
   });
 
   it("does not destroy the record or its activation", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await seedActivation(license.id);
 
     await revokeLicense(db, DEVELOPER_A, license.id);
@@ -2629,8 +2629,8 @@ describe("revokeLicense", () => {
 
 describe("restoreLicense", () => {
   it("returns a revoked license to active and clears revokedAt", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, status: "revoked" });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, status: "revoked" });
 
     const restored = await restoreLicense(db, DEVELOPER_A, license.id);
     expect(restored.status).toBe("active");
@@ -2638,8 +2638,8 @@ describe("restoreLicense", () => {
   });
 
   it("is idempotent on an already-active license", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const restored = await restoreLicense(db, DEVELOPER_A, license.id);
     expect(restored.status).toBe("active");
@@ -2648,8 +2648,8 @@ describe("restoreLicense", () => {
 
 describe("resetActivation", () => {
   it("removes the existing device binding", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await seedActivation(license.id);
 
     await resetActivation(db, DEVELOPER_A, license.id);
@@ -2660,8 +2660,8 @@ describe("resetActivation", () => {
   });
 
   it("leaves the license itself active and intact", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await seedActivation(license.id);
 
     await resetActivation(db, DEVELOPER_A, license.id);
@@ -2672,16 +2672,16 @@ describe("resetActivation", () => {
   });
 
   it("succeeds on a license that was never activated", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await expect(resetActivation(db, DEVELOPER_A, license.id)).resolves.toBeUndefined();
   });
 });
 
 describe("deleteLicense", () => {
   it("permanently removes the license and cascades to its activation", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await seedActivation(license.id);
 
     await deleteLicense(db, DEVELOPER_A, license.id);
@@ -2698,8 +2698,8 @@ describe("deleteLicense", () => {
 // that every single one refuses AND leaves the row untouched.
 describe("cross-developer isolation", () => {
   async function foreignLicense(): Promise<string> {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_B });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_B });
+    const license = await makeLicense(db, { applicationId: application.id });
     return license.id;
   }
 
@@ -2714,8 +2714,8 @@ describe("cross-developer isolation", () => {
   });
 
   it("refuses to restore another developer's license", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_B });
-    const license = await makeLicense(db, { productId: product.id, status: "revoked" });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_B });
+    const license = await makeLicense(db, { applicationId: application.id, status: "revoked" });
     await expect(restoreLicense(db, DEVELOPER_A, license.id)).rejects.toThrow(/not found/i);
     expect((await getLicense(db, DEVELOPER_B, license.id))?.status).toBe("revoked");
   });
@@ -2744,12 +2744,12 @@ Expected: FAIL — `revokeLicense` is not exported.
 
 - [x] **Step 3: Append to `src/lib/licenses/service.ts`**
 
-The appended code uses only `and` and `eq` from `drizzle-orm` and the `activations` / `licenses` / `products` tables, all of which Task 15 already imported at the top of this file. No new imports are needed. Append:
+The appended code uses only `and` and `eq` from `drizzle-orm` and the `activations` / `licenses` / `applications` tables, all of which Task 15 already imported at the top of this file. No new imports are needed. Append:
 
 ```ts
 /**
  * Resolves a license ID to its row only if the calling developer owns the
- * product that owns it. This is the `Clerk user -> owns product -> product
+ * application that owns it. This is the `Clerk user -> owns application -> application
  * owns license` chain expressed as a single join, so no caller can perform a
  * mutation without it having been proven.
  */
@@ -2761,8 +2761,8 @@ async function findOwnedLicense(
   const [row] = await db
     .select({ license: licenses })
     .from(licenses)
-    .innerJoin(products, eq(products.id, licenses.productId))
-    .where(and(eq(licenses.id, licenseId), eq(products.ownerId, ownerId)))
+    .innerJoin(applications, eq(applications.id, licenses.applicationId))
+    .where(and(eq(licenses.id, licenseId), eq(applications.ownerId, ownerId)))
     .limit(1);
 
   return row?.license ?? null;
@@ -2776,9 +2776,9 @@ export async function getLicense(
   const [row] = await db
     .select({ license: licenses, activation: activations })
     .from(licenses)
-    .innerJoin(products, eq(products.id, licenses.productId))
+    .innerJoin(applications, eq(applications.id, licenses.applicationId))
     .leftJoin(activations, eq(activations.licenseId, licenses.id))
-    .where(and(eq(licenses.id, licenseId), eq(products.ownerId, ownerId)))
+    .where(and(eq(licenses.id, licenseId), eq(applications.ownerId, ownerId)))
     .limit(1);
 
   return row ? toLicenseView(row.license, row.activation) : null;
@@ -2883,7 +2883,7 @@ git add -A && git commit -m "feat: license revoke, restore, activation reset and
 
 This is the code that decides whether paid software runs. It is worth reading twice.
 
-### Task 17: Verification core — product, key lookup, enumeration resistance
+### Task 17: Verification core — application, key lookup, enumeration resistance
 
 **Files:**
 - Create: `src/lib/licenses/verify.ts`
@@ -2896,7 +2896,7 @@ This is the code that decides whether paid software runs. It is worth reading tw
 ```ts
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestDatabase, TEST_HMAC_SECRET, truncateAll } from "../helpers/db";
-import { DEVELOPER_A, makeLicense, makeProduct } from "../helpers/factories";
+import { DEVELOPER_A, makeLicense, makeApplication } from "../helpers/factories";
 import { verifyLicense } from "@/lib/licenses/verify";
 import { generateLicenseKey } from "@/lib/crypto/license-key";
 import type { Database } from "@/db/types";
@@ -2919,11 +2919,11 @@ const DEVICE = "device-fingerprint-one";
 // Spec test #1
 describe("valid active license", () => {
   it("succeeds and reports active status with a null expiry", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
     const result = await verifyLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       licenseKey: license.plaintextKey,
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
@@ -2936,11 +2936,11 @@ describe("valid active license", () => {
   });
 
   it("accepts a lowercase or whitespace-mangled key", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const result = await verifyLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       licenseKey: `  ${license.plaintextKey.toLowerCase()} `,
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
@@ -2953,10 +2953,10 @@ describe("valid active license", () => {
 // Spec test #2
 describe("invalid license", () => {
   it("rejects a well-formed key that was never issued", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
 
     const result = await verifyLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       licenseKey: generateLicenseKey(),
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
@@ -2969,11 +2969,11 @@ describe("invalid license", () => {
 
   it("rejects a key hashed under a different server secret", async () => {
     // Simulates a stolen database being replayed against a rotated secret.
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const result = await verifyLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       licenseKey: license.plaintextKey,
       deviceId: DEVICE,
       secret: "a-completely-different-server-secret-value",
@@ -2986,14 +2986,14 @@ describe("invalid license", () => {
 });
 
 // Spec test #3
-describe("wrong product", () => {
-  it("rejects a real key presented against another product", async () => {
-    const productOne = await makeProduct(db, { ownerId: DEVELOPER_A, name: "One" });
-    const productTwo = await makeProduct(db, { ownerId: DEVELOPER_A, name: "Two" });
-    const license = await makeLicense(db, { productId: productOne.id });
+describe("wrong application", () => {
+  it("rejects a real key presented against another application", async () => {
+    const applicationOne = await makeApplication(db, { ownerId: DEVELOPER_A, name: "One" });
+    const applicationTwo = await makeApplication(db, { ownerId: DEVELOPER_A, name: "Two" });
+    const license = await makeLicense(db, { applicationId: applicationOne.id });
 
     const result = await verifyLicense(db, {
-      productId: productTwo.id,
+      applicationId: applicationTwo.id,
       licenseKey: license.plaintextKey,
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
@@ -3001,14 +3001,14 @@ describe("wrong product", () => {
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error("expected failure");
-    // Not a distinct "wrong product for this key" code — that would confirm
+    // Not a distinct "wrong application for this key" code — that would confirm
     // the key exists somewhere, which is exactly what an enumerator wants.
     expect(result.error.code).toBe("LICENSE_INVALID");
   });
 
-  it("returns PRODUCT_INVALID for an unknown product id", async () => {
+  it("returns APPLICATION_INVALID for an unknown application id", async () => {
     const result = await verifyLicense(db, {
-      productId: "prod_DOESNOTEXIST0000000000000",
+      applicationId: "app_DOESNOTEXIST0000000000000",
       licenseKey: generateLicenseKey(),
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
@@ -3016,27 +3016,27 @@ describe("wrong product", () => {
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error("expected failure");
-    // Product IDs ship inside customer software, so distinguishing this case
+    // Application IDs ship inside customer software, so distinguishing this case
     // helps an integrating developer without helping an attacker.
-    expect(result.error.code).toBe("PRODUCT_INVALID");
+    expect(result.error.code).toBe("APPLICATION_INVALID");
   });
 });
 
 describe("enumeration resistance", () => {
   it("returns byte-identical responses for absent and foreign licenses", async () => {
-    const productOne = await makeProduct(db, { ownerId: DEVELOPER_A, name: "One" });
-    const productTwo = await makeProduct(db, { ownerId: DEVELOPER_A, name: "Two" });
-    const realKeyOfAnotherProduct = await makeLicense(db, { productId: productOne.id });
+    const applicationOne = await makeApplication(db, { ownerId: DEVELOPER_A, name: "One" });
+    const applicationTwo = await makeApplication(db, { ownerId: DEVELOPER_A, name: "Two" });
+    const realKeyOfAnotherApplication = await makeLicense(db, { applicationId: applicationOne.id });
 
     const absent = await verifyLicense(db, {
-      productId: productTwo.id,
+      applicationId: applicationTwo.id,
       licenseKey: generateLicenseKey(),
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
     });
     const foreign = await verifyLicense(db, {
-      productId: productTwo.id,
-      licenseKey: realKeyOfAnotherProduct.plaintextKey,
+      applicationId: applicationTwo.id,
+      licenseKey: realKeyOfAnotherApplication.plaintextKey,
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
     });
@@ -3045,11 +3045,11 @@ describe("enumeration resistance", () => {
   });
 
   it("never echoes internal identifiers in a failure", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, status: "revoked" });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, status: "revoked" });
 
     const result = await verifyLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       licenseKey: license.plaintextKey,
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
@@ -3074,7 +3074,7 @@ Expected: FAIL — cannot resolve `@/lib/licenses/verify`.
 
 ```ts
 import { and, eq } from "drizzle-orm";
-import { activations, licenses, products } from "@/db/schema";
+import { activations, licenses, applications } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { generateActivationId } from "@/lib/crypto/ids";
 import { hashDeviceId } from "@/lib/crypto/device";
@@ -3086,7 +3086,7 @@ import {
 import { isExpired } from "./expiration";
 
 export type VerifyInput = {
-  productId: string;
+  applicationId: string;
   licenseKey: string;
   deviceId: string;
   secret: string;
@@ -3106,7 +3106,7 @@ function failure(code: VerificationErrorCode): VerifyResult {
  * Decides whether a running instance of a customer's software is licensed.
  *
  * Order of operations matters and follows the specification exactly:
- * locate product, derive lookup value, locate license, check state, check
+ * locate application, derive lookup value, locate license, check state, check
  * expiration, check device rules, then bind or refresh the activation.
  *
  * Rate limiting happens upstream in the route handler, before this function
@@ -3119,31 +3119,31 @@ function failure(code: VerificationErrorCode): VerifyResult {
 export async function verifyLicense(db: Database, input: VerifyInput): Promise<VerifyResult> {
   const now = input.now ?? new Date();
 
-  // 1. Locate the product. Product IDs are shipped inside customer software
+  // 1. Locate the application. Application IDs are shipped inside customer software
   //    and are not secret, so distinguishing this case is safe and helps a
   //    developer debug a bad integration.
-  const [product] = await db
-    .select({ id: products.id })
-    .from(products)
-    .where(eq(products.id, input.productId))
+  const [application] = await db
+    .select({ id: applications.id })
+    .from(applications)
+    .where(eq(applications.id, input.applicationId))
     .limit(1);
 
-  if (!product) return failure("PRODUCT_INVALID");
+  if (!application) return failure("APPLICATION_INVALID");
 
   // 2. Derive the lookup value. The plaintext key never touches the database
   //    and is never logged.
   const keyHash = hashLicenseKey(input.licenseKey, input.secret);
 
-  // 3. Locate the license *within this product*. Scoping the lookup by
-  //    product_id in the WHERE clause is what makes a key issued for one
-  //    product useless against another. Index: licenses_product_key_hash_idx.
+  // 3. Locate the license *within this application*. Scoping the lookup by
+  //    application_id in the WHERE clause is what makes a key issued for one
+  //    application useless against another. Index: licenses_application_key_hash_idx.
   const [license] = await db
     .select()
     .from(licenses)
-    .where(and(eq(licenses.productId, product.id), eq(licenses.keyHash, keyHash)))
+    .where(and(eq(licenses.applicationId, application.id), eq(licenses.keyHash, keyHash)))
     .limit(1);
 
-  // A missing license and a license belonging to a different product are
+  // A missing license and a license belonging to a different application are
   // indistinguishable from out here, by design.
   if (!license) return failure("LICENSE_INVALID");
 
@@ -3260,7 +3260,7 @@ The engine from Task 17 already claims these behaviours. This task proves them. 
 ```ts
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestDatabase, TEST_HMAC_SECRET, truncateAll } from "../helpers/db";
-import { DEVELOPER_A, makeLicense, makeProduct } from "../helpers/factories";
+import { DEVELOPER_A, makeLicense, makeApplication } from "../helpers/factories";
 import { verifyLicense } from "@/lib/licenses/verify";
 import { restoreLicense, revokeLicense } from "@/lib/licenses/service";
 import type { Database } from "@/db/types";
@@ -3280,9 +3280,9 @@ beforeEach(async () => {
 
 const DEVICE = "device-fingerprint-one";
 
-async function verify(productId: string, key: string, now?: Date) {
+async function verify(applicationId: string, key: string, now?: Date) {
   return verifyLicense(db, {
-    productId,
+    applicationId,
     licenseKey: key,
     deviceId: DEVICE,
     secret: TEST_HMAC_SECRET,
@@ -3293,11 +3293,11 @@ async function verify(productId: string, key: string, now?: Date) {
 // Spec test #4
 describe("revoked license", () => {
   it("returns LICENSE_REVOKED", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await revokeLicense(db, DEVELOPER_A, license.id);
 
-    const result = await verify(product.id, license.plaintextKey);
+    const result = await verify(application.id, license.plaintextKey);
     expect(result.success).toBe(false);
     if (result.success) throw new Error("expected failure");
     expect(result.error.code).toBe("LICENSE_REVOKED");
@@ -3306,14 +3306,14 @@ describe("revoked license", () => {
   it("reports revoked rather than expired when both are true", async () => {
     // Revocation is the developer's deliberate act, so it is the more useful
     // signal to surface.
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const license = await makeLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       expiresAt: new Date("2020-01-01T00:00:00.000Z"),
     });
     await revokeLicense(db, DEVELOPER_A, license.id);
 
-    const result = await verify(product.id, license.plaintextKey);
+    const result = await verify(application.id, license.plaintextKey);
     if (result.success) throw new Error("expected failure");
     expect(result.error.code).toBe("LICENSE_REVOKED");
   });
@@ -3322,15 +3322,15 @@ describe("revoked license", () => {
 // Spec test #5
 describe("restored license", () => {
   it("authenticates again after being restored", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     await revokeLicense(db, DEVELOPER_A, license.id);
-    const whileRevoked = await verify(product.id, license.plaintextKey);
+    const whileRevoked = await verify(application.id, license.plaintextKey);
     expect(whileRevoked.success).toBe(false);
 
     await restoreLicense(db, DEVELOPER_A, license.id);
-    const afterRestore = await verify(product.id, license.plaintextKey);
+    const afterRestore = await verify(application.id, license.plaintextKey);
     expect(afterRestore.success).toBe(true);
   });
 });
@@ -3338,14 +3338,14 @@ describe("restored license", () => {
 // Spec test #6
 describe("expired license", () => {
   it("returns LICENSE_EXPIRED once the deadline has passed", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const license = await makeLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       expiresAt: new Date("2026-01-01T00:00:00.000Z"),
     });
 
     const result = await verify(
-      product.id,
+      application.id,
       license.plaintextKey,
       new Date("2026-01-02T00:00:00.000Z"),
     );
@@ -3354,14 +3354,14 @@ describe("expired license", () => {
   });
 
   it("still authenticates one second before the deadline", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const license = await makeLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       expiresAt: new Date("2026-01-01T00:00:00.000Z"),
     });
 
     const result = await verify(
-      product.id,
+      application.id,
       license.plaintextKey,
       new Date("2025-12-31T23:59:59.000Z"),
     );
@@ -3369,14 +3369,14 @@ describe("expired license", () => {
   });
 
   it("returns the expiry as an ISO-8601 UTC string on success", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const license = await makeLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       expiresAt: new Date("2027-01-01T00:00:00.000Z"),
     });
 
     const result = await verify(
-      product.id,
+      application.id,
       license.plaintextKey,
       new Date("2026-01-01T00:00:00.000Z"),
     );
@@ -3387,14 +3387,14 @@ describe("expired license", () => {
   it("ignores the client clock entirely", async () => {
     // The `now` parameter is server-side only; nothing in the request body
     // can influence expiry evaluation.
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const license = await makeLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       expiresAt: new Date("2020-01-01T00:00:00.000Z"),
     });
 
     const result = await verifyLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       licenseKey: license.plaintextKey,
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
@@ -3407,11 +3407,11 @@ describe("expired license", () => {
 // Spec test #7
 describe("permanent license", () => {
   it("authenticates with a null expiry, far into the future", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, expiresAt: null });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, expiresAt: null });
 
     const result = await verify(
-      product.id,
+      application.id,
       license.plaintextKey,
       new Date("2099-12-31T00:00:00.000Z"),
     );
@@ -3451,7 +3451,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { activations } from "@/db/schema";
 import { createTestDatabase, TEST_HMAC_SECRET, truncateAll } from "../helpers/db";
-import { DEVELOPER_A, makeLicense, makeProduct } from "../helpers/factories";
+import { DEVELOPER_A, makeLicense, makeApplication } from "../helpers/factories";
 import { verifyLicense } from "@/lib/licenses/verify";
 import { deleteLicense, resetActivation } from "@/lib/licenses/service";
 import { hashDeviceId } from "@/lib/crypto/device";
@@ -3473,9 +3473,9 @@ beforeEach(async () => {
 const DEVICE_ONE = "device-fingerprint-one";
 const DEVICE_TWO = "device-fingerprint-two";
 
-async function verify(productId: string, key: string, deviceId: string) {
+async function verify(applicationId: string, key: string, deviceId: string) {
   return verifyLicense(db, {
-    productId,
+    applicationId,
     licenseKey: key,
     deviceId,
     secret: TEST_HMAC_SECRET,
@@ -3485,10 +3485,10 @@ async function verify(productId: string, key: string, deviceId: string) {
 // Spec test #8
 describe("first HWID activation", () => {
   it("binds the first device and creates an activation record", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
-    const result = await verify(product.id, license.plaintextKey, DEVICE_ONE);
+    const result = await verify(application.id, license.plaintextKey, DEVICE_ONE);
     expect(result.success).toBe(true);
 
     const rows = await db.select().from(activations).where(eq(activations.licenseId, license.id));
@@ -3497,9 +3497,9 @@ describe("first HWID activation", () => {
   });
 
   it("stores only the hashed fingerprint, never the raw value", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
-    await verify(product.id, license.plaintextKey, DEVICE_ONE);
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
+    await verify(application.id, license.plaintextKey, DEVICE_ONE);
 
     const rows = await db.select().from(activations);
     expect(JSON.stringify(rows)).not.toContain(DEVICE_ONE);
@@ -3509,15 +3509,15 @@ describe("first HWID activation", () => {
 // Spec test #9
 describe("same HWID authenticates again", () => {
   it("accepts repeat authentication and advances lastSeenAt", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
-    await verify(product.id, license.plaintextKey, DEVICE_ONE);
+    await verify(application.id, license.plaintextKey, DEVICE_ONE);
     const [first] = await db.select().from(activations).where(eq(activations.licenseId, license.id));
 
     await new Promise((resolve) => setTimeout(resolve, 15));
 
-    const second = await verify(product.id, license.plaintextKey, DEVICE_ONE);
+    const second = await verify(application.id, license.plaintextKey, DEVICE_ONE);
     expect(second.success).toBe(true);
 
     const [after] = await db.select().from(activations).where(eq(activations.licenseId, license.id));
@@ -3527,12 +3527,12 @@ describe("same HWID authenticates again", () => {
   });
 
   it("does not create a second activation row", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
-    await verify(product.id, license.plaintextKey, DEVICE_ONE);
-    await verify(product.id, license.plaintextKey, DEVICE_ONE);
-    await verify(product.id, license.plaintextKey, DEVICE_ONE);
+    await verify(application.id, license.plaintextKey, DEVICE_ONE);
+    await verify(application.id, license.plaintextKey, DEVICE_ONE);
+    await verify(application.id, license.plaintextKey, DEVICE_ONE);
 
     expect(await db.select().from(activations)).toHaveLength(1);
   });
@@ -3541,11 +3541,11 @@ describe("same HWID authenticates again", () => {
 // Spec test #10
 describe("different HWID fails", () => {
   it("returns DEVICE_MISMATCH for a second device", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
-    await verify(product.id, license.plaintextKey, DEVICE_ONE);
-    const result = await verify(product.id, license.plaintextKey, DEVICE_TWO);
+    await verify(application.id, license.plaintextKey, DEVICE_ONE);
+    const result = await verify(application.id, license.plaintextKey, DEVICE_TWO);
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error("expected failure");
@@ -3553,23 +3553,23 @@ describe("different HWID fails", () => {
   });
 
   it("leaves the original binding untouched after a rejected attempt", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
-    await verify(product.id, license.plaintextKey, DEVICE_ONE);
-    await verify(product.id, license.plaintextKey, DEVICE_TWO);
+    await verify(application.id, license.plaintextKey, DEVICE_ONE);
+    await verify(application.id, license.plaintextKey, DEVICE_TWO);
 
     const [row] = await db.select().from(activations).where(eq(activations.licenseId, license.id));
     expect(row?.deviceHash).toBe(hashDeviceId(DEVICE_ONE, TEST_HMAC_SECRET));
   });
 
   it("still admits the original device afterwards", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
-    await verify(product.id, license.plaintextKey, DEVICE_ONE);
-    await verify(product.id, license.plaintextKey, DEVICE_TWO);
-    const again = await verify(product.id, license.plaintextKey, DEVICE_ONE);
+    await verify(application.id, license.plaintextKey, DEVICE_ONE);
+    await verify(application.id, license.plaintextKey, DEVICE_TWO);
+    const again = await verify(application.id, license.plaintextKey, DEVICE_ONE);
 
     expect(again.success).toBe(true);
   });
@@ -3577,19 +3577,19 @@ describe("different HWID fails", () => {
 
 describe("licenses without HWID locking", () => {
   it("accepts any device", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: false });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: false });
 
-    expect((await verify(product.id, license.plaintextKey, DEVICE_ONE)).success).toBe(true);
-    expect((await verify(product.id, license.plaintextKey, DEVICE_TWO)).success).toBe(true);
+    expect((await verify(application.id, license.plaintextKey, DEVICE_ONE)).success).toBe(true);
+    expect((await verify(application.id, license.plaintextKey, DEVICE_TWO)).success).toBe(true);
   });
 
   it("tracks the most recently seen device in a single row", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: false });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: false });
 
-    await verify(product.id, license.plaintextKey, DEVICE_ONE);
-    await verify(product.id, license.plaintextKey, DEVICE_TWO);
+    await verify(application.id, license.plaintextKey, DEVICE_ONE);
+    await verify(application.id, license.plaintextKey, DEVICE_TWO);
 
     const rows = await db.select().from(activations).where(eq(activations.licenseId, license.id));
     expect(rows).toHaveLength(1);
@@ -3600,15 +3600,15 @@ describe("licenses without HWID locking", () => {
 // Spec tests #11 and #12
 describe("activation reset", () => {
   it("clears the binding and lets a new device claim the license", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
-    await verify(product.id, license.plaintextKey, DEVICE_ONE);
-    expect((await verify(product.id, license.plaintextKey, DEVICE_TWO)).success).toBe(false);
+    await verify(application.id, license.plaintextKey, DEVICE_ONE);
+    expect((await verify(application.id, license.plaintextKey, DEVICE_TWO)).success).toBe(false);
 
     await resetActivation(db, DEVELOPER_A, license.id);
 
-    const afterReset = await verify(product.id, license.plaintextKey, DEVICE_TWO);
+    const afterReset = await verify(application.id, license.plaintextKey, DEVICE_TWO);
     expect(afterReset.success).toBe(true);
 
     const [row] = await db.select().from(activations).where(eq(activations.licenseId, license.id));
@@ -3616,14 +3616,14 @@ describe("activation reset", () => {
   });
 
   it("locks out the previously bound device once a new one claims it", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
-    await verify(product.id, license.plaintextKey, DEVICE_ONE);
+    await verify(application.id, license.plaintextKey, DEVICE_ONE);
     await resetActivation(db, DEVELOPER_A, license.id);
-    await verify(product.id, license.plaintextKey, DEVICE_TWO);
+    await verify(application.id, license.plaintextKey, DEVICE_TWO);
 
-    const result = await verify(product.id, license.plaintextKey, DEVICE_ONE);
+    const result = await verify(application.id, license.plaintextKey, DEVICE_ONE);
     expect(result.success).toBe(false);
     if (result.success) throw new Error("expected failure");
     expect(result.error.code).toBe("DEVICE_MISMATCH");
@@ -3633,14 +3633,14 @@ describe("activation reset", () => {
 // Spec test #15
 describe("deleted license", () => {
   it("can no longer authenticate", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
-    expect((await verify(product.id, license.plaintextKey, DEVICE_ONE)).success).toBe(true);
+    expect((await verify(application.id, license.plaintextKey, DEVICE_ONE)).success).toBe(true);
 
     await deleteLicense(db, DEVELOPER_A, license.id);
 
-    const result = await verify(product.id, license.plaintextKey, DEVICE_ONE);
+    const result = await verify(application.id, license.plaintextKey, DEVICE_ONE);
     expect(result.success).toBe(false);
     if (result.success) throw new Error("expected failure");
     // Indistinguishable from a key that never existed.
@@ -3685,7 +3685,7 @@ git add -A && git commit -m "test: HWID binding, activation reset and deletion b
 /**
  * A single axis a request can be limited on.
  *
- * Alpha_v1 checks IP and product. The shape allows more axes — a license
+ * Alpha_v1 checks IP and application. The shape allows more axes — a license
  * lookup fingerprint, a request-pattern signature — to be added later
  * without changing the interface or the call site in the route handler.
  *
@@ -3694,9 +3694,9 @@ git add -A && git commit -m "test: HWID binding, activation reset and deletion b
  * rotate addresses. Combining axes is the point of this shape.
  */
 export type RateLimitDimension = {
-  /** Axis name, e.g. "ip" or "product". Namespaces the bucket key. */
+  /** Axis name, e.g. "ip" or "application". Namespaces the bucket key. */
   name: string;
-  /** The value on that axis, e.g. the address or the product ID. */
+  /** The value on that axis, e.g. the address or the application ID. */
   value: string;
   /** Requests permitted per window. */
   limit: number;
@@ -3776,8 +3776,8 @@ describe("PostgresRateLimiter", () => {
 
   it("keeps separate counters per axis", async () => {
     const limiter = new PostgresRateLimiter(db);
-    const product: RateLimitDimension = {
-      name: "product",
+    const application: RateLimitDimension = {
+      name: "application",
       value: "1.1.1.1",
       limit: 3,
       windowSeconds: 60,
@@ -3785,12 +3785,12 @@ describe("PostgresRateLimiter", () => {
     for (let i = 0; i < 3; i += 1) await limiter.consume([ip("1.1.1.1")]);
 
     // Same value, different axis — must not share a bucket.
-    expect((await limiter.consume([product])).allowed).toBe(true);
+    expect((await limiter.consume([application])).allowed).toBe(true);
   });
 
   it("denies when any one dimension is exhausted", async () => {
     const limiter = new PostgresRateLimiter(db);
-    const dims = [ip("1.1.1.1", 2), { name: "product", value: "prod_x", limit: 100, windowSeconds: 60 }];
+    const dims = [ip("1.1.1.1", 2), { name: "application", value: "app_x", limit: 100, windowSeconds: 60 }];
 
     expect((await limiter.consume(dims)).allowed).toBe(true);
     expect((await limiter.consume(dims)).allowed).toBe(true);
@@ -3957,32 +3957,32 @@ describe("clientIpFrom", () => {
 });
 
 describe("verifyDimensions", () => {
-  it("limits on both IP and product", () => {
-    const dims = verifyDimensions({ ip: "203.0.113.5", productId: "prod_abc" });
-    expect(dims.map((d) => d.name).sort()).toEqual(["ip", "product"]);
+  it("limits on both IP and application", () => {
+    const dims = verifyDimensions({ ip: "203.0.113.5", applicationId: "app_abc" });
+    expect(dims.map((d) => d.name).sort()).toEqual(["ip", "application"]);
   });
 
-  it("gives the product axis a higher ceiling than a single IP", () => {
-    // One product legitimately serves many customers; one IP does not.
-    const dims = verifyDimensions({ ip: "203.0.113.5", productId: "prod_abc" });
+  it("gives the application axis a higher ceiling than a single IP", () => {
+    // One application legitimately serves many customers; one IP does not.
+    const dims = verifyDimensions({ ip: "203.0.113.5", applicationId: "app_abc" });
     const ip = dims.find((d) => d.name === "ip");
-    const product = dims.find((d) => d.name === "product");
-    expect(product!.limit).toBeGreaterThan(ip!.limit);
+    const application = dims.find((d) => d.name === "application");
+    expect(application!.limit).toBeGreaterThan(ip!.limit);
   });
 
   it("uses one-minute windows", () => {
-    for (const dimension of verifyDimensions({ ip: "1.1.1.1", productId: "prod_abc" })) {
+    for (const dimension of verifyDimensions({ ip: "1.1.1.1", applicationId: "app_abc" })) {
       expect(dimension.windowSeconds).toBe(60);
     }
   });
 
   it("honours configured overrides", () => {
     const dims = verifyDimensions(
-      { ip: "1.1.1.1", productId: "prod_abc" },
-      { perIpPerMinute: 5, perProductPerMinute: 50 },
+      { ip: "1.1.1.1", applicationId: "app_abc" },
+      { perIpPerMinute: 5, perApplicationPerMinute: 50 },
     );
     expect(dims.find((d) => d.name === "ip")?.limit).toBe(5);
-    expect(dims.find((d) => d.name === "product")?.limit).toBe(50);
+    expect(dims.find((d) => d.name === "application")?.limit).toBe(50);
   });
 });
 ```
@@ -4006,7 +4006,7 @@ export { PostgresRateLimiter } from "./postgres";
  * Extracts the client address behind Vercel's proxy.
  *
  * `x-forwarded-for` is client-controllable in general, which is why an IP
- * limit alone is never the whole policy — the product axis covers the case of
+ * limit alone is never the whole policy — the application axis covers the case of
  * an attacker rotating or forging addresses.
  */
 export function clientIpFrom(headers: Headers): string {
@@ -4025,7 +4025,7 @@ export function clientIpFrom(headers: Headers): string {
 
 export type VerifyLimitConfig = {
   perIpPerMinute: number;
-  perProductPerMinute: number;
+  perApplicationPerMinute: number;
 };
 
 /**
@@ -4033,20 +4033,20 @@ export type VerifyLimitConfig = {
  *
  * Two axes deliberately, not one: a per-IP limit alone punishes offices and
  * campuses behind a single NAT while doing nothing about a distributed
- * attacker, and a per-product limit alone lets one abusive client exhaust a
+ * attacker, and a per-application limit alone lets one abusive client exhaust a
  * developer's entire budget. Neither is sufficient; together they bound both
  * shapes of abuse.
  */
 export function verifyDimensions(
-  request: { ip: string; productId: string },
-  config: VerifyLimitConfig = { perIpPerMinute: 60, perProductPerMinute: 600 },
+  request: { ip: string; applicationId: string },
+  config: VerifyLimitConfig = { perIpPerMinute: 60, perApplicationPerMinute: 600 },
 ): RateLimitDimension[] {
   return [
     { name: "ip", value: request.ip, limit: config.perIpPerMinute, windowSeconds: 60 },
     {
-      name: "product",
-      value: request.productId,
-      limit: config.perProductPerMinute,
+      name: "application",
+      value: request.applicationId,
+      limit: config.perApplicationPerMinute,
       windowSeconds: 60,
     },
   ];
@@ -4063,7 +4063,7 @@ Expected: 8 passed.
 - [x] **Step 5: Commit**
 
 ```bash
-git add -A && git commit -m "feat: verification rate-limit policy across IP and product axes"
+git add -A && git commit -m "feat: verification rate-limit policy across IP and application axes"
 ```
 
 ---
@@ -4083,7 +4083,7 @@ import { describe, expect, it } from "vitest";
 import { verifyRequestSchema } from "@/lib/validation/verify-request";
 
 const valid = {
-  productId: "prod_ABCDEFGHJKMNPQRSTVWXYZ012",
+  applicationId: "app_ABCDEFGHJKMNPQRSTVWXYZ012",
   licenseKey: "KEYREN-ABCDEFGH-ABCDEFGH-ABCDEFGH-ABCDEFGH",
   deviceId: "device-fingerprint",
 };
@@ -4093,7 +4093,7 @@ describe("verifyRequestSchema", () => {
     expect(verifyRequestSchema.safeParse(valid).success).toBe(true);
   });
 
-  it.each(["productId", "licenseKey", "deviceId"] as const)(
+  it.each(["applicationId", "licenseKey", "deviceId"] as const)(
     "rejects a body missing %s",
     (field) => {
       const body: Record<string, unknown> = { ...valid };
@@ -4102,15 +4102,15 @@ describe("verifyRequestSchema", () => {
     },
   );
 
-  it.each(["productId", "licenseKey", "deviceId"] as const)(
+  it.each(["applicationId", "licenseKey", "deviceId"] as const)(
     "rejects a non-string %s",
     (field) => {
       expect(verifyRequestSchema.safeParse({ ...valid, [field]: 12345 }).success).toBe(false);
     },
   );
 
-  it("rejects a product id without the prod_ prefix", () => {
-    expect(verifyRequestSchema.safeParse({ ...valid, productId: "abc123" }).success).toBe(false);
+  it("rejects an application id without the app_ prefix", () => {
+    expect(verifyRequestSchema.safeParse({ ...valid, applicationId: "abc123" }).success).toBe(false);
   });
 
   it("rejects an empty device id", () => {
@@ -4170,17 +4170,17 @@ import { z } from "zod";
  * the HMAC. Unknown keys are stripped rather than passed through, so a client
  * cannot smuggle a field that some later refactor starts reading.
  *
- * Note what is NOT accepted: no owner ID, no product secret, no status
+ * Note what is NOT accepted: no owner ID, no application secret, no status
  * override, no expiry. The client supplies identifiers only; every decision
  * is made from server-held state.
  */
 export const verifyRequestSchema = z
   .object({
-    productId: z
+    applicationId: z
       .string()
       .min(1)
       .max(64)
-      .regex(/^prod_[0-9A-Za-z]+$/, "Invalid product id"),
+      .regex(/^app_[0-9A-Za-z]+$/, "Invalid application id"),
 
     // Format is not enforced strictly here — normalization happens in the
     // crypto layer, and a wrong-format key must fail as LICENSE_INVALID
@@ -4229,7 +4229,7 @@ The route reads `env` and `db` at module scope, so the test mocks those two modu
 ```ts
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestDatabase, truncateAll } from "../helpers/db";
-import { DEVELOPER_A, makeLicense, makeProduct } from "../helpers/factories";
+import { DEVELOPER_A, makeLicense, makeApplication } from "../helpers/factories";
 import type { Database } from "@/db/types";
 
 let db: Database;
@@ -4245,7 +4245,7 @@ vi.mock("@/env", () => ({
   env: {
     KEYREN_LICENSE_HMAC_SECRET: "test-hmac-secret-value-at-least-32-chars-long",
     RATE_LIMIT_VERIFY_PER_MINUTE: 5,
-    RATE_LIMIT_VERIFY_PER_PRODUCT_PER_MINUTE: 100,
+    RATE_LIMIT_VERIFY_PER_APPLICATION_PER_MINUTE: 100,
   },
 }));
 
@@ -4270,12 +4270,12 @@ function request(body: unknown, ip = "203.0.113.5"): Request {
 describe("POST /api/v1/licenses/verify", () => {
   it("returns 200 and the documented success envelope", async () => {
     const { POST } = await import("@/app/api/v1/licenses/verify/route");
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const response = await POST(
       request({
-        productId: product.id,
+        applicationId: application.id,
         licenseKey: license.plaintextKey,
         deviceId: "device-one",
       }),
@@ -4290,11 +4290,11 @@ describe("POST /api/v1/licenses/verify", () => {
 
   it("returns 403 LICENSE_INVALID for an unissued key", async () => {
     const { POST } = await import("@/app/api/v1/licenses/verify/route");
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
 
     const response = await POST(
       request({
-        productId: product.id,
+        applicationId: application.id,
         licenseKey: "KEYREN-ABCDEFGH-ABCDEFGH-ABCDEFGH-ABCDEFGH",
         deviceId: "device-one",
       }),
@@ -4306,26 +4306,26 @@ describe("POST /api/v1/licenses/verify", () => {
     expect(body.error.code).toBe("LICENSE_INVALID");
   });
 
-  it("returns 404 PRODUCT_INVALID for an unknown product", async () => {
+  it("returns 404 APPLICATION_INVALID for an unknown application", async () => {
     const { POST } = await import("@/app/api/v1/licenses/verify/route");
     const response = await POST(
       request({
-        productId: "prod_UNKNOWN0000000000000000",
+        applicationId: "app_UNKNOWN0000000000000000",
         licenseKey: "KEYREN-ABCDEFGH-ABCDEFGH-ABCDEFGH-ABCDEFGH",
         deviceId: "device-one",
       }),
     );
 
     expect(response.status).toBe(404);
-    expect((await response.json()).error.code).toBe("PRODUCT_INVALID");
+    expect((await response.json()).error.code).toBe("APPLICATION_INVALID");
   });
 
   it("returns 403 DEVICE_MISMATCH for a second device", async () => {
     const { POST } = await import("@/app/api/v1/licenses/verify/route");
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
-    const body = { productId: product.id, licenseKey: license.plaintextKey };
+    const body = { applicationId: application.id, licenseKey: license.plaintextKey };
     await POST(request({ ...body, deviceId: "device-one" }));
     const response = await POST(request({ ...body, deviceId: "device-two" }));
 
@@ -4344,7 +4344,7 @@ describe("POST /api/v1/licenses/verify", () => {
 
     it("returns 400 for a body missing required fields", async () => {
       const { POST } = await import("@/app/api/v1/licenses/verify/route");
-      const response = await POST(request({ productId: "prod_ABC" }));
+      const response = await POST(request({ applicationId: "app_ABC" }));
       expect(response.status).toBe(400);
       expect((await response.json()).error.code).toBe("BAD_REQUEST");
     });
@@ -4370,11 +4370,11 @@ describe("POST /api/v1/licenses/verify", () => {
   describe("rate limiting", () => {
     it("returns 429 RATE_LIMITED once the per-IP limit is exceeded", async () => {
       const { POST } = await import("@/app/api/v1/licenses/verify/route");
-      const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-      const license = await makeLicense(db, { productId: product.id, hwidLocked: false });
+      const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+      const license = await makeLicense(db, { applicationId: application.id, hwidLocked: false });
 
       const body = {
-        productId: product.id,
+        applicationId: application.id,
         licenseKey: license.plaintextKey,
         deviceId: "device-one",
       };
@@ -4391,10 +4391,10 @@ describe("POST /api/v1/licenses/verify", () => {
 
     it("sets a Retry-After header", async () => {
       const { POST } = await import("@/app/api/v1/licenses/verify/route");
-      const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-      const license = await makeLicense(db, { productId: product.id, hwidLocked: false });
+      const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+      const license = await makeLicense(db, { applicationId: application.id, hwidLocked: false });
       const body = {
-        productId: product.id,
+        applicationId: application.id,
         licenseKey: license.plaintextKey,
         deviceId: "device-one",
       };
@@ -4408,10 +4408,10 @@ describe("POST /api/v1/licenses/verify", () => {
 
     it("does not limit a different IP", async () => {
       const { POST } = await import("@/app/api/v1/licenses/verify/route");
-      const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-      const license = await makeLicense(db, { productId: product.id, hwidLocked: false });
+      const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+      const license = await makeLicense(db, { applicationId: application.id, hwidLocked: false });
       const body = {
-        productId: product.id,
+        applicationId: application.id,
         licenseKey: license.plaintextKey,
         deviceId: "device-one",
       };
@@ -4425,7 +4425,7 @@ describe("POST /api/v1/licenses/verify", () => {
       // guesses cannot be used to probe the licenses table.
       const { POST } = await import("@/app/api/v1/licenses/verify/route");
       const junk = {
-        productId: "prod_UNKNOWN0000000000000000",
+        applicationId: "app_UNKNOWN0000000000000000",
         licenseKey: "KEYREN-ABCDEFGH-ABCDEFGH-ABCDEFGH-ABCDEFGH",
         deviceId: "device-one",
       };
@@ -4440,12 +4440,12 @@ describe("POST /api/v1/licenses/verify", () => {
 
   it("never echoes the submitted license key", async () => {
     const { POST } = await import("@/app/api/v1/licenses/verify/route");
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, status: "revoked" });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, status: "revoked" });
 
     const response = await POST(
       request({
-        productId: product.id,
+        applicationId: application.id,
         licenseKey: license.plaintextKey,
         deviceId: "device-one",
       }),
@@ -4526,17 +4526,17 @@ export async function POST(request: Request): Promise<NextResponse> {
       return errorResponse("BAD_REQUEST");
     }
 
-    const { productId, licenseKey, deviceId } = parsed.data;
+    const { applicationId, licenseKey, deviceId } = parsed.data;
 
     // 2. Rate limit BEFORE any license lookup, so a flood of guesses never
     //    reaches the database.
     const limiter = new PostgresRateLimiter(db);
     const limit = await limiter.consume(
       verifyDimensions(
-        { ip: clientIpFrom(request.headers), productId },
+        { ip: clientIpFrom(request.headers), applicationId },
         {
           perIpPerMinute: env.RATE_LIMIT_VERIFY_PER_MINUTE,
-          perProductPerMinute: env.RATE_LIMIT_VERIFY_PER_PRODUCT_PER_MINUTE,
+          perApplicationPerMinute: env.RATE_LIMIT_VERIFY_PER_APPLICATION_PER_MINUTE,
         },
       ),
     );
@@ -4551,7 +4551,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     // 3. Delegate every licensing decision to the engine.
     const result = await verifyLicense(db, {
-      productId,
+      applicationId,
       licenseKey,
       deviceId,
       secret: env.KEYREN_LICENSE_HMAC_SECRET,
@@ -4768,8 +4768,8 @@ git add -A && git commit -m "feat: Clerk developer authentication and route prot
 
 **Files:**
 - Create: `src/lib/validation/dashboard.ts`
-- Create: `src/app/dashboard/products/actions.ts`
-- Create: `src/app/dashboard/products/[productId]/licenses/actions.ts`
+- Create: `src/app/dashboard/applications/actions.ts`
+- Create: `src/app/dashboard/applications/[applicationId]/licenses/actions.ts`
 - Create: `tests/validation/dashboard.test.ts`
 
 - [x] **Step 1: Write the failing test**
@@ -4780,61 +4780,61 @@ git add -A && git commit -m "feat: Clerk developer authentication and route prot
 import { describe, expect, it } from "vitest";
 import {
   createLicenseSchema,
-  createProductSchema,
+  createApplicationSchema,
   licenseIdSchema,
-  productIdSchema,
-  renameProductSchema,
+  applicationIdSchema,
+  renameApplicationSchema,
 } from "@/lib/validation/dashboard";
 
-describe("createProductSchema", () => {
+describe("createApplicationSchema", () => {
   it("accepts a reasonable name", () => {
-    expect(createProductSchema.safeParse({ name: "Seliware Key" }).success).toBe(true);
+    expect(createApplicationSchema.safeParse({ name: "Seliware Key" }).success).toBe(true);
   });
 
   it("trims surrounding whitespace", () => {
-    expect(createProductSchema.parse({ name: "  Spaced  " }).name).toBe("Spaced");
+    expect(createApplicationSchema.parse({ name: "  Spaced  " }).name).toBe("Spaced");
   });
 
   it("rejects an empty or whitespace-only name", () => {
-    expect(createProductSchema.safeParse({ name: "" }).success).toBe(false);
-    expect(createProductSchema.safeParse({ name: "   " }).success).toBe(false);
+    expect(createApplicationSchema.safeParse({ name: "" }).success).toBe(false);
+    expect(createApplicationSchema.safeParse({ name: "   " }).success).toBe(false);
   });
 
   it("rejects an oversized name", () => {
-    expect(createProductSchema.safeParse({ name: "x".repeat(201) }).success).toBe(false);
+    expect(createApplicationSchema.safeParse({ name: "x".repeat(201) }).success).toBe(false);
   });
 
   it("ignores an ownerId supplied by the client", () => {
     // Ownership comes from Clerk, never from the browser. Even if a crafted
     // request carries one, it must not survive parsing.
-    const parsed = createProductSchema.parse({ name: "Ok", ownerId: "user_attacker" });
+    const parsed = createApplicationSchema.parse({ name: "Ok", ownerId: "user_attacker" });
     expect(parsed).not.toHaveProperty("ownerId");
   });
 });
 
-describe("renameProductSchema", () => {
-  it("requires both a product id and a name", () => {
+describe("renameApplicationSchema", () => {
+  it("requires both an application id and a name", () => {
     expect(
-      renameProductSchema.safeParse({ productId: "prod_ABC", name: "New" }).success,
+      renameApplicationSchema.safeParse({ applicationId: "app_ABC", name: "New" }).success,
     ).toBe(true);
-    expect(renameProductSchema.safeParse({ name: "New" }).success).toBe(false);
+    expect(renameApplicationSchema.safeParse({ name: "New" }).success).toBe(false);
   });
 });
 
 describe("id schemas", () => {
-  it("requires the prod_ prefix", () => {
-    expect(productIdSchema.safeParse("prod_ABC123").success).toBe(true);
-    expect(productIdSchema.safeParse("lic_ABC123").success).toBe(false);
+  it("requires the app_ prefix", () => {
+    expect(applicationIdSchema.safeParse("app_ABC123").success).toBe(true);
+    expect(applicationIdSchema.safeParse("lic_ABC123").success).toBe(false);
   });
 
   it("requires the lic_ prefix", () => {
     expect(licenseIdSchema.safeParse("lic_ABC123").success).toBe(true);
-    expect(licenseIdSchema.safeParse("prod_ABC123").success).toBe(false);
+    expect(licenseIdSchema.safeParse("app_ABC123").success).toBe(false);
   });
 });
 
 describe("createLicenseSchema", () => {
-  const base = { productId: "prod_ABC123", hwidLocked: true };
+  const base = { applicationId: "app_ABC123", hwidLocked: true };
 
   it("accepts permanent", () => {
     expect(createLicenseSchema.safeParse({ ...base, mode: "permanent" }).success).toBe(true);
@@ -4875,7 +4875,7 @@ describe("createLicenseSchema", () => {
   it("defaults hwidLocked to true when omitted", () => {
     // HWID locking is on by default; an omitted checkbox must not silently
     // produce an unlocked license.
-    const parsed = createLicenseSchema.parse({ productId: "prod_ABC123", mode: "permanent" });
+    const parsed = createLicenseSchema.parse({ applicationId: "app_ABC123", mode: "permanent" });
     expect(parsed.hwidLocked).toBe(true);
   });
 });
@@ -4902,16 +4902,16 @@ import { DURATION_OPTIONS } from "@/lib/licenses/expiration";
  * a crafted form submission to declare one.
  */
 
-export const productIdSchema = z.string().regex(/^prod_[0-9A-Za-z]+$/, "Invalid product id");
+export const applicationIdSchema = z.string().regex(/^app_[0-9A-Za-z]+$/, "Invalid application id");
 export const licenseIdSchema = z.string().regex(/^lic_[0-9A-Za-z]+$/, "Invalid license id");
 
-const productName = z.string().trim().min(1, "Name is required").max(200, "Name is too long");
+const applicationName = z.string().trim().min(1, "Name is required").max(200, "Name is too long");
 
-export const createProductSchema = z.object({ name: productName });
+export const createApplicationSchema = z.object({ name: applicationName });
 
-export const renameProductSchema = z.object({
-  productId: productIdSchema,
-  name: productName,
+export const renameApplicationSchema = z.object({
+  applicationId: applicationIdSchema,
+  name: applicationName,
 });
 
 // Must stay narrowed to DurationValue, not widened to string: `z.enum()` over
@@ -4925,18 +4925,18 @@ const durationValues = DURATION_OPTIONS.map((option) => option.value) as [
 export const createLicenseSchema = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("permanent"),
-    productId: productIdSchema,
+    applicationId: applicationIdSchema,
     hwidLocked: z.boolean().default(true),
   }),
   z.object({
     mode: z.literal("date"),
-    productId: productIdSchema,
+    applicationId: applicationIdSchema,
     hwidLocked: z.boolean().default(true),
     expiresAt: z.coerce.date(),
   }),
   z.object({
     mode: z.literal("duration"),
-    productId: productIdSchema,
+    applicationId: applicationIdSchema,
     hwidLocked: z.boolean().default(true),
     duration: z.enum(durationValues),
   }),
@@ -4954,7 +4954,7 @@ Expected: 15 passed.
 
 > `z.discriminatedUnion` with `.default()` on a shared field: if Zod 4 rejects a default inside a discriminated union member, move `hwidLocked` to a `.transform()` that fills it, or preprocess the form data. Do not remove the default — an omitted checkbox producing an unlocked license is a real security regression.
 
-- [x] **Step 5: Create `src/app/dashboard/products/actions.ts`**
+- [x] **Step 5: Create `src/app/dashboard/applications/actions.ts`**
 
 ```ts
 "use server";
@@ -4963,8 +4963,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
-import { createProduct, deleteProduct, renameProduct } from "@/lib/products/service";
-import { createProductSchema, productIdSchema, renameProductSchema } from "@/lib/validation/dashboard";
+import { createApplication, deleteApplication, renameApplication } from "@/lib/applications/service";
+import { createApplicationSchema, applicationIdSchema, renameApplicationSchema } from "@/lib/validation/dashboard";
 
 /**
  * Server actions are thin: authenticate, validate, delegate.
@@ -4976,31 +4976,31 @@ import { createProductSchema, productIdSchema, renameProductSchema } from "@/lib
 
 export type ActionState = { error: string } | { error: null };
 
-export async function createProductAction(
+export async function createApplicationAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
   const ownerId = await requireDeveloperId();
 
-  const parsed = createProductSchema.safeParse({ name: formData.get("name") });
+  const parsed = createApplicationSchema.safeParse({ name: formData.get("name") });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  const product = await createProduct(db, ownerId, { name: parsed.data.name });
+  const application = await createApplication(db, ownerId, { name: parsed.data.name });
 
-  revalidatePath("/dashboard/products");
-  redirect(`/dashboard/products/${product.id}`);
+  revalidatePath("/dashboard/applications");
+  redirect(`/dashboard/applications/${application.id}`);
 }
 
-export async function renameProductAction(
+export async function renameApplicationAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
   const ownerId = await requireDeveloperId();
 
-  const parsed = renameProductSchema.safeParse({
-    productId: formData.get("productId"),
+  const parsed = renameApplicationSchema.safeParse({
+    applicationId: formData.get("applicationId"),
     name: formData.get("name"),
   });
   if (!parsed.success) {
@@ -5008,38 +5008,38 @@ export async function renameProductAction(
   }
 
   try {
-    await renameProduct(db, ownerId, parsed.data.productId, parsed.data.name);
+    await renameApplication(db, ownerId, parsed.data.applicationId, parsed.data.name);
   } catch {
     // Includes the "belongs to another developer" case, reported identically.
-    return { error: "Product not found." };
+    return { error: "Application not found." };
   }
 
-  revalidatePath("/dashboard/products");
-  revalidatePath(`/dashboard/products/${parsed.data.productId}`);
+  revalidatePath("/dashboard/applications");
+  revalidatePath(`/dashboard/applications/${parsed.data.applicationId}`);
   return { error: null };
 }
 
-export async function deleteProductAction(
+export async function deleteApplicationAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
   const ownerId = await requireDeveloperId();
 
-  const parsed = productIdSchema.safeParse(formData.get("productId"));
-  if (!parsed.success) return { error: "Invalid product." };
+  const parsed = applicationIdSchema.safeParse(formData.get("applicationId"));
+  if (!parsed.success) return { error: "Invalid application." };
 
   try {
-    await deleteProduct(db, ownerId, parsed.data);
+    await deleteApplication(db, ownerId, parsed.data);
   } catch {
-    return { error: "Product not found." };
+    return { error: "Application not found." };
   }
 
-  revalidatePath("/dashboard/products");
-  redirect("/dashboard/products");
+  revalidatePath("/dashboard/applications");
+  redirect("/dashboard/applications");
 }
 ```
 
-- [x] **Step 6: Create `src/app/dashboard/products/[productId]/licenses/actions.ts`**
+- [x] **Step 6: Create `src/app/dashboard/applications/[applicationId]/licenses/actions.ts`**
 
 ```ts
 "use server";
@@ -5079,7 +5079,7 @@ export async function createLicenseAction(
   const ownerId = await requireDeveloperId();
 
   const parsed = createLicenseSchema.safeParse({
-    productId: formData.get("productId"),
+    applicationId: formData.get("applicationId"),
     mode: formData.get("mode"),
     duration: formData.get("duration") ?? undefined,
     expiresAt: formData.get("expiresAt") ?? undefined,
@@ -5100,13 +5100,13 @@ export async function createLicenseAction(
 
   try {
     const { plaintextKey } = await createLicense(db, ownerId, {
-      productId: parsed.data.productId,
+      applicationId: parsed.data.applicationId,
       expiration,
       hwidLocked: parsed.data.hwidLocked,
       secret: env.KEYREN_LICENSE_HMAC_SECRET,
     });
 
-    revalidatePath(`/dashboard/products/${parsed.data.productId}/licenses`);
+    revalidatePath(`/dashboard/applications/${parsed.data.applicationId}/licenses`);
     return { error: null, plaintextKey };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not create license.";
@@ -5127,7 +5127,7 @@ function licenseMutation(
     const parsed = licenseActionSchema.safeParse({ licenseId: formData.get("licenseId") });
     if (!parsed.success) return { error: "Invalid license." };
 
-    const productId = formData.get("productId");
+    const applicationId = formData.get("applicationId");
 
     try {
       await run(ownerId, parsed.data.licenseId);
@@ -5135,8 +5135,8 @@ function licenseMutation(
       return { error: "License not found." };
     }
 
-    if (typeof productId === "string") {
-      revalidatePath(`/dashboard/products/${productId}/licenses`);
+    if (typeof applicationId === "string") {
+      revalidatePath(`/dashboard/applications/${applicationId}/licenses`);
     }
     return { error: null };
   };
@@ -5163,7 +5163,7 @@ export const deleteLicenseAction = licenseMutation((ownerId, licenseId) =>
 
 ```bash
 npm run typecheck && npx vitest run
-git add -A && git commit -m "feat: dashboard server actions for products and licenses"
+git add -A && git commit -m "feat: dashboard server actions for applications and licenses"
 ```
 
 ---
@@ -5245,7 +5245,7 @@ git add -A && git commit -m "feat: shadcn/ui with dark-first design tokens"
 
 - [x] **Step 1: Create `src/components/dashboard/copy-button.tsx`**
 
-Used in several places — product IDs, license keys, the integration snippet.
+Used in several places — application IDs, license keys, the integration snippet.
 
 ```tsx
 "use client";
@@ -5333,7 +5333,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutGrid, exact: true },
-  { href: "/dashboard/products", label: "Products", icon: Package, exact: false },
+  { href: "/dashboard/applications", label: "Applications", icon: Package, exact: false },
   { href: "/dashboard/settings", label: "Settings", icon: Settings, exact: true },
 ] as const;
 
@@ -5410,16 +5410,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 import Link from "next/link";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
-import { listProducts } from "@/lib/products/service";
+import { listApplications } from "@/lib/applications/service";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function OverviewPage() {
   const ownerId = await requireDeveloperId();
-  const products = await listProducts(db, ownerId);
+  const applications = await listApplications(db, ownerId);
 
-  const totalLicenses = products.reduce((sum, product) => sum + product.licenseCount, 0);
+  const totalLicenses = applications.reduce((sum, application) => sum + application.licenseCount, 0);
 
   return (
     <div className="space-y-8">
@@ -5428,7 +5428,7 @@ export default async function OverviewPage() {
         description="Your licensing footprint at a glance."
         action={
           <Button asChild size="sm">
-            <Link href="/dashboard/products">Manage products</Link>
+            <Link href="/dashboard/applications">Manage applications</Link>
           </Button>
         }
       />
@@ -5437,11 +5437,11 @@ export default async function OverviewPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Products
+              Applications
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-semibold tabular-nums">{products.length}</p>
+            <p className="text-3xl font-semibold tabular-nums">{applications.length}</p>
           </CardContent>
         </Card>
 
@@ -5457,17 +5457,17 @@ export default async function OverviewPage() {
         </Card>
       </div>
 
-      {products.length === 0 ? (
+      {applications.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-start gap-3 py-8">
             <div className="space-y-1">
-              <p className="text-sm font-medium">No products yet</p>
+              <p className="text-sm font-medium">No applications yet</p>
               <p className="text-sm text-muted-foreground">
-                Create a product to get a product ID and start issuing licenses.
+                Create an application to get an application ID and start issuing licenses.
               </p>
             </div>
             <Button asChild size="sm">
-              <Link href="/dashboard/products">Create a product</Link>
+              <Link href="/dashboard/applications">Create an application</Link>
             </Button>
           </CardContent>
         </Card>
@@ -5535,20 +5535,20 @@ npm run typecheck && git add -A && git commit -m "feat: dashboard shell, overvie
 
 ---
 
-### Task 28: Products page
+### Task 28: Applications page
 
 **Files:**
-- Create: `src/components/products/create-product-dialog.tsx`, `src/components/products/product-actions.tsx`
-- Create: `src/app/dashboard/products/page.tsx`
+- Create: `src/components/applications/create-application-dialog.tsx`, `src/components/applications/application-actions.tsx`
+- Create: `src/app/dashboard/applications/page.tsx`
 
-- [x] **Step 1: Create `src/components/products/create-product-dialog.tsx`**
+- [x] **Step 1: Create `src/components/applications/create-application-dialog.tsx`**
 
 ```tsx
 "use client";
 
 import { useActionState, useState } from "react";
 import { Plus } from "lucide-react";
-import { createProductAction, type ActionState } from "@/app/dashboard/products/actions";
+import { createApplicationAction, type ActionState } from "@/app/dashboard/applications/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -5564,31 +5564,31 @@ import { Label } from "@/components/ui/label";
 
 const INITIAL: ActionState = { error: null };
 
-export function CreateProductDialog() {
+export function CreateApplicationDialog() {
   const [open, setOpen] = useState(false);
-  const [state, formAction, pending] = useActionState(createProductAction, INITIAL);
+  const [state, formAction, pending] = useActionState(createApplicationAction, INITIAL);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" className="gap-1.5">
           <Plus className="size-4" />
-          New product
+          New application
         </Button>
       </DialogTrigger>
 
       <DialogContent>
         <form action={formAction}>
           <DialogHeader>
-            <DialogTitle>Create product</DialogTitle>
+            <DialogTitle>Create application</DialogTitle>
             <DialogDescription>
-              Keyren assigns a permanent product ID. Renaming the product later never
+              Keyren assigns a permanent application ID. Renaming the application later never
               changes it.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2 py-5">
-            <Label htmlFor="name">Product name</Label>
+            <Label htmlFor="name">Application name</Label>
             <Input id="name" name="name" placeholder="Seliware Key" autoFocus required maxLength={200} />
             {state.error ? (
               <p className="text-sm text-destructive">{state.error}</p>
@@ -5600,7 +5600,7 @@ export function CreateProductDialog() {
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
-              {pending ? "Creating…" : "Create product"}
+              {pending ? "Creating…" : "Create application"}
             </Button>
           </DialogFooter>
         </form>
@@ -5610,9 +5610,9 @@ export function CreateProductDialog() {
 }
 ```
 
-- [x] **Step 2: Create `src/components/products/product-actions.tsx`**
+- [x] **Step 2: Create `src/components/applications/application-actions.tsx`**
 
-Rename and delete, with delete requiring the product name to be typed.
+Rename and delete, with delete requiring the application name to be typed.
 
 ```tsx
 "use client";
@@ -5620,10 +5620,10 @@ Rename and delete, with delete requiring the product name to be typed.
 import { useActionState, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 import {
-  deleteProductAction,
-  renameProductAction,
+  deleteApplicationAction,
+  renameApplicationAction,
   type ActionState,
-} from "@/app/dashboard/products/actions";
+} from "@/app/dashboard/applications/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -5644,13 +5644,13 @@ import { Label } from "@/components/ui/label";
 
 const INITIAL: ActionState = { error: null };
 
-export function ProductActions({ productId, name }: { productId: string; name: string }) {
+export function ApplicationActions({ applicationId, name }: { applicationId: string; name: string }) {
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmation, setConfirmation] = useState("");
 
-  const [renameState, renameAction, renamePending] = useActionState(renameProductAction, INITIAL);
-  const [deleteState, deleteAction, deletePending] = useActionState(deleteProductAction, INITIAL);
+  const [renameState, renameAction, renamePending] = useActionState(renameApplicationAction, INITIAL);
+  const [deleteState, deleteAction, deletePending] = useActionState(deleteApplicationAction, INITIAL);
 
   return (
     <>
@@ -5671,16 +5671,16 @@ export function ProductActions({ productId, name }: { productId: string; name: s
       <Dialog open={renaming} onOpenChange={setRenaming}>
         <DialogContent>
           <form action={renameAction}>
-            <input type="hidden" name="productId" value={productId} />
+            <input type="hidden" name="applicationId" value={applicationId} />
             <DialogHeader>
-              <DialogTitle>Rename product</DialogTitle>
+              <DialogTitle>Rename application</DialogTitle>
               <DialogDescription>
-                The product ID stays the same, so deployed software keeps working.
+                The application ID stays the same, so deployed software keeps working.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2 py-5">
-              <Label htmlFor={`rename-${productId}`}>Product name</Label>
-              <Input id={`rename-${productId}`} name="name" defaultValue={name} required maxLength={200} />
+              <Label htmlFor={`rename-${applicationId}`}>Application name</Label>
+              <Input id={`rename-${applicationId}`} name="name" defaultValue={name} required maxLength={200} />
               {renameState.error ? (
                 <p className="text-sm text-destructive">{renameState.error}</p>
               ) : null}
@@ -5700,21 +5700,21 @@ export function ProductActions({ productId, name }: { productId: string; name: s
       <Dialog open={deleting} onOpenChange={setDeleting}>
         <DialogContent>
           <form action={deleteAction}>
-            <input type="hidden" name="productId" value={productId} />
+            <input type="hidden" name="applicationId" value={applicationId} />
             <DialogHeader>
               <DialogTitle>Delete {name}?</DialogTitle>
               <DialogDescription>
-                This permanently deletes the product and every license under it. Software
+                This permanently deletes the application and every license under it. Software
                 using those licenses will stop authenticating immediately. This cannot be
                 undone.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2 py-5">
-              <Label htmlFor={`confirm-${productId}`}>
+              <Label htmlFor={`confirm-${applicationId}`}>
                 Type <span className="font-mono text-foreground">{name}</span> to confirm
               </Label>
               <Input
-                id={`confirm-${productId}`}
+                id={`confirm-${applicationId}`}
                 value={confirmation}
                 onChange={(event) => setConfirmation(event.target.value)}
                 autoComplete="off"
@@ -5732,7 +5732,7 @@ export function ProductActions({ productId, name }: { productId: string; name: s
                 variant="destructive"
                 disabled={deletePending || confirmation !== name}
               >
-                {deletePending ? "Deleting…" : "Delete product"}
+                {deletePending ? "Deleting…" : "Delete application"}
               </Button>
             </DialogFooter>
           </form>
@@ -5743,17 +5743,17 @@ export function ProductActions({ productId, name }: { productId: string; name: s
 }
 ```
 
-- [x] **Step 3: Create `src/app/dashboard/products/page.tsx`**
+- [x] **Step 3: Create `src/app/dashboard/applications/page.tsx`**
 
 ```tsx
 import Link from "next/link";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
-import { listProducts } from "@/lib/products/service";
+import { listApplications } from "@/lib/applications/service";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { CopyButton } from "@/components/dashboard/copy-button";
-import { CreateProductDialog } from "@/components/products/create-product-dialog";
-import { ProductActions } from "@/components/products/product-actions";
+import { CreateApplicationDialog } from "@/components/applications/create-application-dialog";
+import { ApplicationActions } from "@/components/applications/application-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -5764,24 +5764,24 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export default async function ProductsPage() {
+export default async function ApplicationsPage() {
   const ownerId = await requireDeveloperId();
-  const products = await listProducts(db, ownerId);
+  const applications = await listApplications(db, ownerId);
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Products"
-        description="Each product has a permanent ID that your software sends when verifying a license."
-        action={<CreateProductDialog />}
+        title="Applications"
+        description="Each application has a permanent ID that your software sends when verifying a license."
+        action={<CreateApplicationDialog />}
       />
 
-      {products.length === 0 ? (
+      {applications.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-sm font-medium">No products yet</p>
+            <p className="text-sm font-medium">No applications yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Create your first product to start issuing licenses.
+              Create your first application to start issuing licenses.
             </p>
           </CardContent>
         </Card>
@@ -5791,40 +5791,40 @@ export default async function ProductsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Product ID</TableHead>
+                <TableHead>Application ID</TableHead>
                 <TableHead className="text-right">Licenses</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="w-12" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((product) => (
-                <TableRow key={product.id}>
+              {applications.map((application) => (
+                <TableRow key={application.id}>
                   <TableCell>
                     <Link
-                      href={`/dashboard/products/${product.id}`}
+                      href={`/dashboard/applications/${application.id}`}
                       className="font-medium hover:underline"
                     >
-                      {product.name}
+                      {application.name}
                     </Link>
-                    <p className="text-xs text-muted-foreground">{product.slug}</p>
+                    <p className="text-xs text-muted-foreground">{application.slug}</p>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                        {product.id}
+                        {application.id}
                       </code>
-                      <CopyButton value={product.id} label="" />
+                      <CopyButton value={application.id} label="" />
                     </div>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {product.licenseCount}
+                    {application.licenseCount}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {product.createdAt.toISOString().slice(0, 10)}
+                    {application.createdAt.toISOString().slice(0, 10)}
                   </TableCell>
                   <TableCell>
-                    <ProductActions productId={product.id} name={product.name} />
+                    <ApplicationActions applicationId={application.id} name={application.name} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -5840,72 +5840,72 @@ export default async function ProductsPage() {
 - [x] **Step 4: Verify and commit**
 
 ```bash
-npm run typecheck && git add -A && git commit -m "feat: products page with create, rename and confirmed delete"
+npm run typecheck && git add -A && git commit -m "feat: applications page with create, rename and confirmed delete"
 ```
 
 ---
-### Task 29: Product detail page and integration documentation
+### Task 29: Application detail page and integration documentation
 
 **Files:**
-- Create: `src/app/dashboard/products/[productId]/layout.tsx`, `src/app/dashboard/products/[productId]/page.tsx`
-- Create: `src/components/products/integration-snippet.tsx`
+- Create: `src/app/dashboard/applications/[applicationId]/layout.tsx`, `src/app/dashboard/applications/[applicationId]/page.tsx`
+- Create: `src/components/applications/integration-snippet.tsx`
 
-- [x] **Step 1: Create `src/app/dashboard/products/[productId]/layout.tsx`**
+- [x] **Step 1: Create `src/app/dashboard/applications/[applicationId]/layout.tsx`**
 
-Fetches the product once (ownership-scoped) and renders the two product-level tabs.
+Fetches the application once (ownership-scoped) and renders the two application-level tabs.
 
 ```tsx
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
-import { getProduct } from "@/lib/products/service";
+import { getApplication } from "@/lib/applications/service";
 import { CopyButton } from "@/components/dashboard/copy-button";
 
-export default async function ProductLayout({
+export default async function ApplicationLayout({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ productId: string }>;
+  params: Promise<{ applicationId: string }>;
 }) {
-  const { productId } = await params;
+  const { applicationId } = await params;
   const ownerId = await requireDeveloperId();
 
-  // Scoped by owner. A product belonging to another developer resolves to
+  // Scoped by owner. An application belonging to another developer resolves to
   // null and renders the same 404 as one that does not exist.
-  const product = await getProduct(db, ownerId, productId);
-  if (!product) notFound();
+  const application = await getApplication(db, ownerId, applicationId);
+  if (!application) notFound();
 
   return (
     <div className="space-y-8">
       <div className="space-y-4 border-b border-border pb-6">
         <Link
-          href="/dashboard/products"
+          href="/dashboard/applications"
           className="text-sm text-muted-foreground hover:text-foreground"
         >
-          ← Products
+          ← Applications
         </Link>
 
         <div className="space-y-2">
-          <h1 className="text-xl font-semibold tracking-tight">{product.name}</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{application.name}</h1>
           <div className="flex items-center gap-1">
             <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-              {product.id}
+              {application.id}
             </code>
-            <CopyButton value={product.id} label="" />
+            <CopyButton value={application.id} label="" />
           </div>
         </div>
 
-        <nav className="flex gap-1" aria-label="Product sections">
+        <nav className="flex gap-1" aria-label="Application sections">
           <Link
-            href={`/dashboard/products/${product.id}`}
+            href={`/dashboard/applications/${application.id}`}
             className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
           >
             Overview
           </Link>
           <Link
-            href={`/dashboard/products/${product.id}/licenses`}
+            href={`/dashboard/applications/${application.id}/licenses`}
             className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
           >
             Licenses
@@ -5919,19 +5919,19 @@ export default async function ProductLayout({
 }
 ```
 
-- [x] **Step 2: Create `src/components/products/integration-snippet.tsx`**
+- [x] **Step 2: Create `src/components/applications/integration-snippet.tsx`**
 
-The Alpha_v1 integration documentation, rendered with the developer's real product ID substituted in.
+The Alpha_v1 integration documentation, rendered with the developer's real application ID substituted in.
 
 ```tsx
 import { CopyButton } from "@/components/dashboard/copy-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function IntegrationSnippet({
-  productId,
+  applicationId,
   appUrl,
 }: {
-  productId: string;
+  applicationId: string;
   appUrl: string;
 }) {
   const snippet = `const response = await fetch("${appUrl}/api/v1/licenses/verify", {
@@ -5940,7 +5940,7 @@ export function IntegrationSnippet({
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
-    productId: "${productId}",
+    applicationId: "${applicationId}",
     licenseKey: "KEYREN-...",
     deviceId: "your-device-fingerprint",
   }),
@@ -5975,7 +5975,7 @@ if (!result.success) {
           <p className="font-medium text-foreground">Before you ship this</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
-              The product ID above is not a secret and is safe to embed in software you
+              The application ID above is not a secret and is safe to embed in software you
               distribute. It is an identifier, not a credential.
             </li>
             <li>
@@ -6003,7 +6003,7 @@ if (!result.success) {
               <code className="font-mono text-xs">LICENSE_REVOKED</code>,{" "}
               <code className="font-mono text-xs">LICENSE_EXPIRED</code>,{" "}
               <code className="font-mono text-xs">DEVICE_MISMATCH</code>,{" "}
-              <code className="font-mono text-xs">PRODUCT_INVALID</code>,{" "}
+              <code className="font-mono text-xs">APPLICATION_INVALID</code>,{" "}
               <code className="font-mono text-xs">RATE_LIMITED</code>,{" "}
               <code className="font-mono text-xs">INTERNAL_ERROR</code>,{" "}
               <code className="font-mono text-xs">BAD_REQUEST</code>.
@@ -6016,7 +6016,7 @@ if (!result.success) {
 }
 ```
 
-- [x] **Step 3: Create `src/app/dashboard/products/[productId]/page.tsx`**
+- [x] **Step 3: Create `src/app/dashboard/applications/[applicationId]/page.tsx`**
 
 ```tsx
 import Link from "next/link";
@@ -6024,24 +6024,24 @@ import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { env } from "@/env";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
-import { getProduct } from "@/lib/products/service";
+import { getApplication } from "@/lib/applications/service";
 import { listLicenses } from "@/lib/licenses/service";
-import { IntegrationSnippet } from "@/components/products/integration-snippet";
+import { IntegrationSnippet } from "@/components/applications/integration-snippet";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default async function ProductOverviewPage({
+export default async function ApplicationOverviewPage({
   params,
 }: {
-  params: Promise<{ productId: string }>;
+  params: Promise<{ applicationId: string }>;
 }) {
-  const { productId } = await params;
+  const { applicationId } = await params;
   const ownerId = await requireDeveloperId();
 
-  const product = await getProduct(db, ownerId, productId);
-  if (!product) notFound();
+  const application = await getApplication(db, ownerId, applicationId);
+  if (!application) notFound();
 
-  const licenses = await listLicenses(db, ownerId, productId);
+  const licenses = await listLicenses(db, ownerId, applicationId);
   const active = licenses.filter((license) => license.status === "active").length;
   const activated = licenses.filter((license) => license.activation !== null).length;
 
@@ -6068,11 +6068,11 @@ export default async function ProductOverviewPage({
 
       <div className="flex justify-end">
         <Button asChild size="sm" variant="outline">
-          <Link href={`/dashboard/products/${product.id}/licenses`}>Manage licenses</Link>
+          <Link href={`/dashboard/applications/${application.id}/licenses`}>Manage licenses</Link>
         </Button>
       </div>
 
-      <IntegrationSnippet productId={product.id} appUrl={env.NEXT_PUBLIC_APP_URL} />
+      <IntegrationSnippet applicationId={application.id} appUrl={env.NEXT_PUBLIC_APP_URL} />
     </div>
   );
 }
@@ -6081,14 +6081,14 @@ export default async function ProductOverviewPage({
 - [x] **Step 4: Verify and commit**
 
 ```bash
-npm run typecheck && git add -A && git commit -m "feat: product overview with integration documentation"
+npm run typecheck && git add -A && git commit -m "feat: application overview with integration documentation"
 ```
 
 ---
 
 ### Task 30: License creation dialog with show-once key
 
-The single most important piece of UX in the product. If the developer dismisses this without saving the key, it is gone.
+The single most important piece of UX in the application. If the developer dismisses this without saving the key, it is gone.
 
 **Files:**
 - Create: `src/components/licenses/create-license-dialog.tsx`
@@ -6103,7 +6103,7 @@ import { AlertTriangle, Plus } from "lucide-react";
 import {
   createLicenseAction,
   type CreateLicenseState,
-} from "@/app/dashboard/products/[productId]/licenses/actions";
+} from "@/app/dashboard/applications/[applicationId]/licenses/actions";
 import { DURATION_OPTIONS } from "@/lib/licenses/expiration";
 import { CopyButton } from "@/components/dashboard/copy-button";
 import { Button } from "@/components/ui/button";
@@ -6131,7 +6131,7 @@ const INITIAL: CreateLicenseState = { error: null, plaintextKey: null };
 
 type Mode = "permanent" | "date" | "duration";
 
-export function CreateLicenseDialog({ productId }: { productId: string }) {
+export function CreateLicenseDialog({ applicationId }: { applicationId: string }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("permanent");
   const [hwidLocked, setHwidLocked] = useState(true);
@@ -6239,7 +6239,7 @@ export function CreateLicenseDialog({ productId }: { productId: string }) {
 
       <DialogContent>
         <form action={formAction}>
-          <input type="hidden" name="productId" value={productId} />
+          <input type="hidden" name="applicationId" value={applicationId} />
           <input type="hidden" name="mode" value={mode} />
           <input type="hidden" name="hwidLocked" value={hwidLocked ? "on" : "off"} />
 
@@ -6337,7 +6337,7 @@ npm run typecheck && git add -A && git commit -m "feat: license creation dialog 
 
 **Files:**
 - Create: `src/components/licenses/license-row-actions.tsx`, `src/components/licenses/license-status-badge.tsx`
-- Create: `src/app/dashboard/products/[productId]/licenses/page.tsx`
+- Create: `src/app/dashboard/applications/[applicationId]/licenses/page.tsx`
 
 - [x] **Step 1: Create `src/components/licenses/license-status-badge.tsx`**
 
@@ -6380,7 +6380,7 @@ import {
   restoreLicenseAction,
   revokeLicenseAction,
   type LicenseActionState,
-} from "@/app/dashboard/products/[productId]/licenses/actions";
+} from "@/app/dashboard/applications/[applicationId]/licenses/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -6403,13 +6403,13 @@ const INITIAL: LicenseActionState = { error: null };
 
 export function LicenseRowActions({
   licenseId,
-  productId,
+  applicationId,
   status,
   hasActivation,
   maskedKey,
 }: {
   licenseId: string;
-  productId: string;
+  applicationId: string;
   status: "active" | "revoked";
   hasActivation: boolean;
   maskedKey: string;
@@ -6428,7 +6428,7 @@ export function LicenseRowActions({
     return (
       <>
         <input type="hidden" name="licenseId" value={licenseId} />
-        <input type="hidden" name="productId" value={productId} />
+        <input type="hidden" name="applicationId" value={applicationId} />
       </>
     );
   }
@@ -6537,13 +6537,13 @@ export function LicenseRowActions({
 }
 ```
 
-- [x] **Step 3: Create `src/app/dashboard/products/[productId]/licenses/page.tsx`**
+- [x] **Step 3: Create `src/app/dashboard/applications/[applicationId]/licenses/page.tsx`**
 
 ```tsx
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
-import { getProduct } from "@/lib/products/service";
+import { getApplication } from "@/lib/applications/service";
 import { listLicenses } from "@/lib/licenses/service";
 import { maskedLicenseKey } from "@/lib/crypto/license-key";
 import { CreateLicenseDialog } from "@/components/licenses/create-license-dialog";
@@ -6566,15 +6566,15 @@ function formatDate(value: Date | null): string {
 export default async function LicensesPage({
   params,
 }: {
-  params: Promise<{ productId: string }>;
+  params: Promise<{ applicationId: string }>;
 }) {
-  const { productId } = await params;
+  const { applicationId } = await params;
   const ownerId = await requireDeveloperId();
 
-  const product = await getProduct(db, ownerId, productId);
-  if (!product) notFound();
+  const application = await getApplication(db, ownerId, applicationId);
+  if (!application) notFound();
 
-  const licenses = await listLicenses(db, ownerId, productId);
+  const licenses = await listLicenses(db, ownerId, applicationId);
 
   return (
     <div className="space-y-6">
@@ -6585,7 +6585,7 @@ export default async function LicensesPage({
             Keys are shown once at creation and cannot be retrieved afterwards.
           </p>
         </div>
-        <CreateLicenseDialog productId={product.id} />
+        <CreateLicenseDialog applicationId={application.id} />
       </div>
 
       {licenses.length === 0 ? (
@@ -6593,7 +6593,7 @@ export default async function LicensesPage({
           <CardContent className="py-12 text-center">
             <p className="text-sm font-medium">No licenses yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Generate one to start authenticating installations of {product.name}.
+              Generate one to start authenticating installations of {application.name}.
             </p>
           </CardContent>
         </Card>
@@ -6649,7 +6649,7 @@ export default async function LicensesPage({
                   <TableCell>
                     <LicenseRowActions
                       licenseId={license.id}
-                      productId={product.id}
+                      applicationId={application.id}
                       status={license.status}
                       hasActivation={license.activation !== null}
                       maskedKey={maskedLicenseKey(license.keyLast4)}
@@ -6693,7 +6693,7 @@ const SNIPPET = `const response = await fetch("https://keyren.dev/api/v1/license
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    productId: "prod_...",
+    applicationId: "app_...",
     licenseKey: "KEYREN-...",
     deviceId: "your-device-fingerprint",
   }),
@@ -6810,17 +6810,17 @@ Document `POST /api/v1/licenses/verify` completely: the request body fields, the
 | Code | Status | Meaning |
 |---|---|---|
 | `BAD_REQUEST` | 400 | The body was missing fields, malformed, or not JSON. |
-| `PRODUCT_INVALID` | 404 | No product with that ID exists. |
-| `LICENSE_INVALID` | 403 | The key is not valid for this product. Also returned for a deleted key. |
+| `APPLICATION_INVALID` | 404 | No application with that ID exists. |
+| `LICENSE_INVALID` | 403 | The key is not valid for this application. Also returned for a deleted key. |
 | `LICENSE_REVOKED` | 403 | The developer revoked this license. Restorable. |
 | `LICENSE_EXPIRED` | 403 | Past its expiry. |
 | `DEVICE_MISMATCH` | 403 | HWID-locked and already bound to a different device. |
 | `RATE_LIMITED` | 429 | Too many requests. Honour `Retry-After`. |
 | `INTERNAL_ERROR` | 500 | Keyren failed. Safe to retry with backoff. |
 
-State plainly that `LICENSE_INVALID` deliberately does not distinguish "never existed" from "belongs to another product" from "was deleted", because doing so would help an attacker enumerate valid keys.
+State plainly that `LICENSE_INVALID` deliberately does not distinguish "never existed" from "belongs to another application" from "was deleted", because doing so would help an attacker enumerate valid keys.
 
-Include an "Integrating safely" section repeating: the product ID is not a credential and is safe to embed; never ship dashboard credentials or the HMAC secret in distributed software; assume anything in a shipped binary is readable; send a precomputed fingerprint rather than raw hardware identifiers; and Alpha_v1 is online-only, so decide deliberately what your application does when Keyren is unreachable.
+Include an "Integrating safely" section repeating: the application ID is not a credential and is safe to embed; never ship dashboard credentials or the HMAC secret in distributed software; assume anything in a shipped binary is readable; send a precomputed fingerprint rather than raw hardware identifiers; and Alpha_v1 is online-only, so decide deliberately what your application does when Keyren is unreachable.
 
 - [x] **Step 3: Commit**
 
@@ -6862,8 +6862,8 @@ npm run dev
 Then walk the exact flow from the specification, confirming each step in the browser and with `curl`:
 
 1. Sign up → land on `/dashboard`.
-2. Create a product → an immutable `prod_...` ID appears.
-3. Rename the product → the ID is unchanged.
+2. Create an application → an immutable `app_...` ID appears.
+3. Rename the application → the ID is unchanged.
 4. Generate a license → the plaintext key is shown once, with the acknowledgement gate.
 5. Copy the key, dismiss the dialog → the table shows only the masked reference.
 6. Confirm the database holds no plaintext:
@@ -6877,7 +6877,7 @@ psql "$DATABASE_URL" -c "SELECT id, key_hash, key_last4 FROM licenses LIMIT 5;"
 ```bash
 curl -s -X POST http://localhost:3000/api/v1/licenses/verify \
   -H 'Content-Type: application/json' \
-  -d '{"productId":"prod_...","licenseKey":"KEYREN-...","deviceId":"device-one"}' | jq
+  -d '{"applicationId":"app_...","licenseKey":"KEYREN-...","deviceId":"device-one"}' | jq
 ```
 Expected: `{"success":true,"license":{"status":"active","expiresAt":null}}`.
 
@@ -6923,7 +6923,7 @@ Review every hit. None may receive a license key, a `keyHash`, a raw `deviceId`,
 
 - [x] **Step 3: Confirm every mutation is ownership-scoped**
 
-Read `src/lib/products/service.ts` and `src/lib/licenses/service.ts` and check that every exported function either takes `ownerId` and folds it into the WHERE clause, or calls `assertOwnsProduct` / `findOwnedLicense` first. Then:
+Read `src/lib/applications/service.ts` and `src/lib/licenses/service.ts` and check that every exported function either takes `ownerId` and folds it into the WHERE clause, or calls `assertOwnsApplication` / `findOwnedLicense` first. Then:
 
 ```bash
 grep -rn "requireDeveloperId" src/app/
@@ -6941,7 +6941,7 @@ Re-read `middleware.ts` and confirm `createRouteMatcher` covers only `/dashboard
 
 - [x] **Step 5: Re-read the verification engine end to end**
 
-Read `src/lib/licenses/verify.ts` in full and check each claim: the product lookup precedes the key lookup; the license query is scoped by `productId`; revoked is checked before expired; expiry uses the server clock only; `DEVICE_MISMATCH` is returned only for HWID-locked licenses bound elsewhere; no branch returns an internal ID or a distinct code that reveals whether a key exists.
+Read `src/lib/licenses/verify.ts` in full and check each claim: the application lookup precedes the key lookup; the license query is scoped by `applicationId`; revoked is checked before expired; expiry uses the server clock only; `DEVICE_MISMATCH` is returned only for HWID-locked licenses bound elsewhere; no branch returns an internal ID or a distinct code that reveals whether a key exists.
 
 - [x] **Step 6: Write up the findings**
 
@@ -6949,7 +6949,7 @@ Create `docs/security-review.md` recording what was checked, what passed, and an
 
 - Fixed-window rate limiting admits up to 2x the limit across a window boundary.
 - The rate limiter fails open, so a limiter outage means unmetered traffic rather than unavailable licensing.
-- `x-forwarded-for` is client-controllable; the product axis exists because the IP axis alone is not trustworthy.
+- `x-forwarded-for` is client-controllable; the application axis exists because the IP axis alone is not trustworthy.
 - Device fingerprints are spoofable by a determined attacker who reverse engineers the integration.
 - Alpha_v1 is online-only, so Keyren is a hard dependency for every customer application.
 
@@ -6963,12 +6963,12 @@ git add -A && git commit -m "docs: security review findings"
 
 Checked against the specification before handing off.
 
-**Spec coverage.** Every Alpha_v1 requirement maps to a task: developer accounts (24), product CRUD (13, 28), immutable product IDs (5), slugs (12), license generation and format (6, 15), show-once plaintext (15, 30), derived-value storage (6, 9), license states and restore (16), the three expiration modes (14), HWID locking and one-device-per-license (9, 17, 19), activation reset (16, 19), the verification API and its response envelopes (17, 23), all eight error codes (8), rate limiting across multiple dimensions (20, 21), the four-table schema with foreign keys and verification-path indexes (9), server-side ownership on every mutation (13, 16, 25), the dashboard structure with exactly three nav items (27), the products page with copyable IDs (28), the licenses table with masked references (31), integration documentation (29, 33), `.env.example` and startup validation (3), and all 17 mandated tests.
+**Spec coverage.** Every Alpha_v1 requirement maps to a task: developer accounts (24), application CRUD (13, 28), immutable application IDs (5), slugs (12), license generation and format (6, 15), show-once plaintext (15, 30), derived-value storage (6, 9), license states and restore (16), the three expiration modes (14), HWID locking and one-device-per-license (9, 17, 19), activation reset (16, 19), the verification API and its response envelopes (17, 23), all eight error codes (8), rate limiting across multiple dimensions (20, 21), the four-table schema with foreign keys and verification-path indexes (9), server-side ownership on every mutation (13, 16, 25), the dashboard structure with exactly three nav items (27), the applications page with copyable IDs (28), the licenses table with masked references (31), integration documentation (29, 33), `.env.example` and startup validation (3), and all 17 mandated tests.
 
 **Deliberate deviations, each stated in the task that makes them:**
 - `activations.id` is a real column with a unique index on `license_id`, rather than relying on the license ID as the primary key. Same one-device invariant, smaller migration later.
 - `BAD_REQUEST` is added to the error codes. The spec's list says "including", and a malformed body needs to be distinguishable from a rejected license.
-- Integration docs live on the product overview page rather than a nav item, because the spec forbids nav entries that are not part of the three-item structure.
+- Integration docs live on the application overview page rather than a nav item, because the spec forbids nav entries that are not part of the three-item structure.
 - The settings page states release limitations rather than offering configuration, because Alpha_v1 has none and fake toggles would be worse than an honest page.
 
 **Not implemented, by instruction:** every item on the future-features list. No SDKs, no offline licenses, no grace tokens, no end-user resets, no multi-device, no orgs/teams/roles, no billing, no management API keys, no webhooks, no analytics, no audit UI, no Redis, no queues.

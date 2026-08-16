@@ -2,13 +2,14 @@ import Link from "next/link";
 import { Show } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env";
+import { RELEASE, verifyUrl } from "@/lib/release";
 
 function integrationSnippet(appUrl: string): string {
-  return `const response = await fetch("${appUrl}/api/v1/licenses/verify", {
+  return `const response = await fetch("${verifyUrl(appUrl)}", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    productId: "prod_...",
+    applicationId: "app_...",
     licenseKey: "KEYREN-...",
     deviceId: "your-device-fingerprint",
   }),
@@ -22,14 +23,14 @@ if (!result.success) {
 }
 
 export default function LandingPage() {
-  const snippet = integrationSnippet(env.NEXT_PUBLIC_APP_URL.replace(/\/$/, ""));
+  const snippet = integrationSnippet(env.NEXT_PUBLIC_APP_URL);
   return (
     <div className="min-h-screen">
       <header className="flex h-14 items-center justify-between border-b border-border px-6">
         <div className="flex items-center gap-2">
           <span className="font-semibold tracking-tight">Keyren</span>
           <span className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium tracking-wider text-muted-foreground">
-            Alpha_v1
+            {RELEASE.name}
           </span>
         </div>
 
@@ -88,7 +89,7 @@ export default function LandingPage() {
             },
             {
               title: "Online validation",
-              body: "Alpha_v1 verifies against Keyren on every check. There are no offline licenses or cached grace periods yet.",
+              body: `${RELEASE.name} verifies against Keyren on every check. There are no offline licenses or cached grace periods yet.`,
             },
           ].map((feature) => (
             <div key={feature.title} className="space-y-1.5">

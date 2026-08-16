@@ -1,10 +1,35 @@
 # Keyren — Build Progress & Handoff
 
 **Last updated:** 2026-08-15
-**Release being built:** `Alpha_v1` (private/testing release — never call it "v1" in product UI)
+**Current release:** `Alpha_v2` (package `0.1.2`) — private/testing release.
+Never call it "v2" in application UI; `/api/v1/...` is versioned separately and did
+not move.
 
 > **If you are a new assistant picking this up (ChatGPT, a fresh Claude session, a human):**
-> read this whole file first. **All 35 tasks are complete.** Alpha_v1 is built, tested, and reviewed.
+>
+> - **`Alpha_v2` is complete.** What it changed is in
+>   [`docs/alpha-v2.md`](docs/alpha-v2.md); its security review is in
+>   [`docs/security-review-alpha-v2.md`](docs/security-review-alpha-v2.md).
+> - **The rest of this file describes the `Alpha_v1` build** and is kept as the
+>   record of how the foundation was made. Its architecture, layering rules and
+>   security invariants all still apply — `Alpha_v2` added to them and weakened
+>   none. Its *counts* (35 tasks, 194 tests, 20 files) describe `Alpha_v1` as it
+>   stood; run `npm test` for the current figure.
+> - The release name and version live in `src/lib/release.ts` and nowhere else.
+
+---
+
+## `Alpha_v2` at a glance
+
+| | |
+|---|---|
+| **Status** | complete — 15 of 15 tasks |
+| **Theme** | quality of life; no change to the application's shape or its API |
+| **Migration** | one additive migration (`drizzle/0001_*.sql`): nullable `label`, `notes`, one index |
+| **Public API** | unchanged — same fields, envelopes, codes and statuses |
+| **Headline changes** | labels and notes · batch generation (1–100, atomic) · one-time CSV/JSON key export · URL-driven search, filters, sort, pagination · bulk actions with metadata export · JS/Python/cURL/C# examples · in-dashboard API tester · onboarding checklist · mobile navigation and cards · keyboard shortcuts · corrected Active/Bound-device counts |
+
+---
 
 ---
 
@@ -53,7 +78,7 @@ Progress is also tracked as `- [x]` checkboxes inside the plan file itself. All 
 
 2. **This file** — what's actually been done, plus environment gotchas the plan couldn't know in advance.
 
-The original product specification lives in the conversation that produced the plan. The plan's header section (Assumptions, Security decisions, File Structure, Test coverage map) faithfully summarizes it — treat the plan as the spec of record.
+The original application specification lives in the conversation that produced the plan. The plan's header section (Assumptions, Security decisions, File Structure, Test coverage map) faithfully summarizes it — treat the plan as the spec of record.
 
 ---
 
@@ -63,8 +88,8 @@ A developer SaaS for software licensing and license-key authentication, for deve
 
 Two completely separate authentication systems, which must never be conflated:
 
-- **Developer authentication** — developers log into the Keyren dashboard via Clerk. Controls products, licenses, activation resets, revocation, deletion.
-- **License authentication** — customer software POSTs `{productId, licenseKey, deviceId}` to a public API. No Clerk involvement whatsoever.
+- **Developer authentication** — developers log into the Keyren dashboard via Clerk. Controls applications, licenses, activation resets, revocation, deletion.
+- **License authentication** — customer software POSTs `{applicationId, licenseKey, deviceId}` to a public API. No Clerk involvement whatsoever.
 
 ---
 
@@ -75,7 +100,7 @@ Breaking any of these is a defect, not a style preference. They're the reason th
 1. **Assume every client is compromised.** Browsers, customer applications, JS integrations, future C++ SDKs, HWIDs, network traffic — all untrusted. Only the Keyren backend and backend-held secrets are trusted.
 2. **Never store plaintext license keys.** Only `HMAC-SHA256(server_secret, "license:" + normalized_key)`. Plaintext is shown to the developer exactly once, at creation, and is unrecoverable afterwards.
 3. **Never put secrets in client-side code.** `KEYREN_LICENSE_HMAC_SECRET` and `CLERK_SECRET_KEY` are server-only, forever.
-4. **Ownership is enforced in SQL, not JavaScript.** Every dashboard read/mutation is one statement scoped by `products.owner_id`. A miss returns "not found", never "forbidden" — so IDs cannot be probed for existence. There is deliberately no fetch-then-compare-in-JS path.
+4. **Ownership is enforced in SQL, not JavaScript.** Every dashboard read/mutation is one statement scoped by `applications.owner_id`. A miss returns "not found", never "forbidden" — so IDs cannot be probed for existence. There is deliberately no fetch-then-compare-in-JS path.
 5. **`ownerId` comes only from Clerk's server-side `auth()`.** Never from a form field, URL, header, or request body.
 6. **Never log a raw license key or raw device fingerprint.** Use `maskLicenseKey()`.
 7. **No `any`.** Strict TypeScript is enabled and passing — keep it that way.
@@ -158,16 +183,16 @@ src/
 ├── lib/
 │   ├── crypto/
 │   │   ├── random.ts         # CROCKFORD_ALPHABET, randomAlphabetString()
-│   │   ├── ids.ts            # generateProductId(), generateLicenseId(), generateActivationId()
+│   │   ├── ids.ts            # generateApplicationId(), generateLicenseId(), generateActivationId()
 │   │   ├── license-key.ts    # generateLicenseKey, normalizeLicenseKey, hashLicenseKey,
 │   │   │                     #   keyHashesEqual, licenseKeyLast4, maskedLicenseKey
 │   │   └── device.ts         # hashDeviceId()
 │   ├── errors.ts              # VerificationErrorCode, VERIFICATION_ERROR_STATUS/MESSAGE,
 │   │                          #   KeyrenError, notFound()
 │   ├── log.ts                  # maskLicenseKey()
-│   ├── products/
+│   ├── applications/
 │   │   ├── slug.ts             # slugify()
-│   │   └── service.ts          # createProduct/listProducts/getProduct/renameProduct/deleteProduct
+│   │   └── service.ts          # createApplication/listApplications/getApplication/renameApplication/deleteApplication
 │   ├── licenses/
 │   │   ├── expiration.ts       # DURATION_OPTIONS, resolveExpiresAt(), isExpired()
 │   │   ├── service.ts          # createLicense/listLicenses/getLicense/revokeLicense/
@@ -176,7 +201,7 @@ src/
 │   ├── rate-limit/
 │   │   ├── types.ts            # RateLimitDimension, RateLimitResult, RateLimiter interface
 │   │   ├── postgres.ts         # PostgresRateLimiter — fixed-window counters, fails open
-│   │   └── index.ts            # clientIpFrom(), verifyDimensions() — the IP+product policy
+│   │   └── index.ts            # clientIpFrom(), verifyDimensions() — the IP+application policy
 │   └── validation/
 │       └── verify-request.ts   # verifyRequestSchema (Zod) — the public verify body
 ├── app/
@@ -184,7 +209,7 @@ src/
 │       └── route.ts            # POST /api/v1/licenses/verify — the public endpoint; GET → 405
 └── db/
     ├── schema/
-    │   ├── products.ts       # products table
+    │   ├── applications.ts       # applications table
     │   ├── licenses.ts       # licenses table, licenseStatus enum ("active"|"revoked")
     │   ├── activations.ts    # activations table
     │   ├── rate-limits.ts    # rateLimitCounters table
@@ -203,8 +228,8 @@ tests/
 ├── helpers/
 │   ├── db.ts                  # createTestDatabase(), truncateAll(), TEST_HMAC_SECRET — not a test file
 │   ├── db.test.ts             # 2 passing — proves the PGlite harness itself works
-│   └── factories.ts           # makeProduct(), makeLicense(), DEVELOPER_A/DEVELOPER_B — not a test file
-├── products/
+│   └── factories.ts           # makeApplication(), makeLicense(), DEVELOPER_A/DEVELOPER_B — not a test file
+├── applications/
 │   ├── slug.test.ts           # 8 passing
 │   └── service.test.ts        # 14 passing
 ├── licenses/
@@ -235,7 +260,7 @@ export const CROCKFORD_ALPHABET: string          // exactly 32 symbols — see b
 export function randomAlphabetString(length: number): string
 
 // src/lib/crypto/ids.ts
-export function generateProductId(): string      // "prod_" + 26 symbols = 130 bits
+export function generateApplicationId(): string      // "app_" + 26 symbols = 130 bits
 export function generateLicenseId(): string      // "lic_"  + 26 symbols
 export function generateActivationId(): string   // "act_"  + 26 symbols
 
@@ -254,7 +279,7 @@ export function hashDeviceId(deviceId: string, secret: string): string
 
 // src/lib/errors.ts
 export type VerificationErrorCode =
-  | "BAD_REQUEST" | "PRODUCT_INVALID" | "LICENSE_INVALID" | "LICENSE_REVOKED"
+  | "BAD_REQUEST" | "APPLICATION_INVALID" | "LICENSE_INVALID" | "LICENSE_REVOKED"
   | "LICENSE_EXPIRED" | "DEVICE_MISMATCH" | "RATE_LIMITED" | "INTERNAL_ERROR";
 export const VERIFICATION_ERROR_STATUS: Record<VerificationErrorCode, number>
 export const VERIFICATION_ERROR_MESSAGE: Record<VerificationErrorCode, string>
@@ -265,10 +290,10 @@ export function notFound(resource: string): KeyrenError
 // src/lib/log.ts
 export function maskLicenseKey(licenseKey: string): string
 
-// src/db/schema/index.ts (re-exports products.ts, licenses.ts, activations.ts, rate-limits.ts)
-export const products, licenses, activations, rateLimitCounters   // pgTable instances
+// src/db/schema/index.ts (re-exports applications.ts, licenses.ts, activations.ts, rate-limits.ts)
+export const applications, licenses, activations, rateLimitCounters   // pgTable instances
 export const licenseStatus                       // pgEnum("license_status", ["active","revoked"])
-export type ProductRow, NewProductRow, LicenseRow, NewLicenseRow, ActivationRow, LicenseStatus
+export type ApplicationRow, NewApplicationRow, LicenseRow, NewLicenseRow, ActivationRow, LicenseStatus
 
 // src/db/types.ts
 export type Database = PgDatabase<PgQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>
@@ -282,17 +307,17 @@ export { schema }
 export function parseEnv(source): Env            // exported separately so tests
 export const env: Env                            // can validate without ambient env
 
-// src/lib/products/slug.ts
-export function slugify(name: string): string     // falls back to "product" if unusable
+// src/lib/applications/slug.ts
+export function slugify(name: string): string     // falls back to "application" if unusable
 
-// src/lib/products/service.ts
-export type Product = { id, name, slug, createdAt, updatedAt }
-export type ProductListItem = Product & { licenseCount: number }
-export function createProduct(db, ownerId, input: { name }): Promise<Product>
-export function listProducts(db, ownerId): Promise<ProductListItem[]>
-export function getProduct(db, ownerId, productId): Promise<Product | null>
-export function renameProduct(db, ownerId, productId, name): Promise<Product>   // throws notFound()
-export function deleteProduct(db, ownerId, productId): Promise<void>            // throws notFound()
+// src/lib/applications/service.ts
+export type Application = { id, name, slug, createdAt, updatedAt }
+export type ApplicationListItem = Application & { licenseCount: number }
+export function createApplication(db, ownerId, input: { name }): Promise<Application>
+export function listApplications(db, ownerId): Promise<ApplicationListItem[]>
+export function getApplication(db, ownerId, applicationId): Promise<Application | null>
+export function renameApplication(db, ownerId, applicationId, name): Promise<Application>   // throws notFound()
+export function deleteApplication(db, ownerId, applicationId): Promise<void>            // throws notFound()
 
 // src/lib/licenses/expiration.ts
 export const DURATION_OPTIONS: readonly { value, label, days }[]   // "1d".."365d", 6 options
@@ -303,11 +328,11 @@ export function resolveExpiresAt(input: ExpirationInput, now?: Date): Date | nul
 export function isExpired(expiresAt: Date | null, now?: Date): boolean   // deadline instant IS expired
 
 // src/lib/licenses/service.ts (full CRUD + lifecycle — complete as of Task 16)
-export type LicenseView = { id, productId, keyLast4, status, expiresAt, hwidLocked, createdAt,
+export type LicenseView = { id, applicationId, keyLast4, status, expiresAt, hwidLocked, createdAt,
                              updatedAt, revokedAt, activation: { activatedAt, lastSeenAt } | null }
-export type CreateLicenseInput = { productId, expiration: ExpirationInput, hwidLocked, secret }
+export type CreateLicenseInput = { applicationId, expiration: ExpirationInput, hwidLocked, secret }
 export function createLicense(db, ownerId, input): Promise<{ license: LicenseView; plaintextKey: string }>
-export function listLicenses(db, ownerId, productId): Promise<LicenseView[]>
+export function listLicenses(db, ownerId, applicationId): Promise<LicenseView[]>
 export function getLicense(db, ownerId, licenseId): Promise<LicenseView | null>
 export function revokeLicense(db, ownerId, licenseId): Promise<LicenseView>    // throws notFound()
 export function restoreLicense(db, ownerId, licenseId): Promise<LicenseView>   // throws notFound(); idempotent if already active
@@ -315,18 +340,18 @@ export function resetActivation(db, ownerId, licenseId): Promise<void>        //
 export function deleteLicense(db, ownerId, licenseId): Promise<void>          // throws notFound(); permanent, cascades to activation
 export function toLicenseView(row, activation): LicenseView
 
-// src/lib/licenses/verify.ts — the verification engine; the security core of the product
-export type VerifyInput = { productId: string; licenseKey: string; deviceId: string; secret: string; now?: Date }
+// src/lib/licenses/verify.ts — the verification engine; the security core of the application
+export type VerifyInput = { applicationId: string; licenseKey: string; deviceId: string; secret: string; now?: Date }
 export type VerifyResult =
   | { success: true; license: { status: "active"; expiresAt: string | null } }
   | { success: false; error: { code: VerificationErrorCode; message: string } }
 export function verifyLicense(db: Database, input: VerifyInput): Promise<VerifyResult>
 // Order inside verifyLicense is load-bearing and must not be reordered: locate
-// product -> derive key hash -> locate license scoped by productId -> constant-time
+// application -> derive key hash -> locate license scoped by applicationId -> constant-time
 // re-check -> revoked before expired -> expiration against the SERVER clock (input.now
 // is a test-only injection point, never fed from the request) -> device rules ->
 // activation bookkeeping. A license that is absent, deleted, or belongs to a different
-// product all return the byte-identical LICENSE_INVALID failure — enumeration
+// application all return the byte-identical LICENSE_INVALID failure — enumeration
 // resistance is structural (one return line), not two implementations kept in sync.
 
 // src/lib/rate-limit/types.ts
@@ -347,14 +372,14 @@ export class PostgresRateLimiter implements RateLimiter {
 export function clientIpFrom(headers: Headers): string
 // First entry of x-forwarded-for, else x-real-ip, else the literal string "unknown"
 // (one shared bucket for everything unattributable, never an exemption from limiting).
-export type VerifyLimitConfig = { perIpPerMinute: number; perProductPerMinute: number }
+export type VerifyLimitConfig = { perIpPerMinute: number; perApplicationPerMinute: number }
 export function verifyDimensions(
-  request: { ip: string; productId: string },
-  config?: VerifyLimitConfig,          // defaults to { perIpPerMinute: 60, perProductPerMinute: 600 }
-): RateLimitDimension[]                // always exactly two dimensions: "ip" and "product", both 60s windows
+  request: { ip: string; applicationId: string },
+  config?: VerifyLimitConfig,          // defaults to { perIpPerMinute: 60, perApplicationPerMinute: 600 }
+): RateLimitDimension[]                // always exactly two dimensions: "ip" and "application", both 60s windows
 
 // src/lib/validation/verify-request.ts
-export const verifyRequestSchema: ZodObject  // productId /^prod_[0-9A-Za-z]+$/ (1-64), licenseKey (1-128,
+export const verifyRequestSchema: ZodObject  // applicationId /^app_[0-9A-Za-z]+$/ (1-64), licenseKey (1-128,
                                               // format NOT enforced — a bad format must fail as LICENSE_INVALID,
                                               // not a validation error), deviceId (1-1024). Strips unknown keys.
 export type VerifyRequestBody = z.infer<typeof verifyRequestSchema>
@@ -383,14 +408,14 @@ export const TEST_HMAC_SECRET: string
 // tests/helpers/factories.ts
 export const DEVELOPER_A: string   // "user_developer_a"
 export const DEVELOPER_B: string   // "user_developer_b"
-export function makeProduct(db, options?: { ownerId?; name? }): Promise<{ id; ownerId; name }>
-export function makeLicense(db, options: { productId; hwidLocked?; expiresAt?; status? }):
+export function makeApplication(db, options?: { ownerId?; name? }): Promise<{ id; ownerId; name }>
+export function makeLicense(db, options: { applicationId; hwidLocked?; expiresAt?; status? }):
   Promise<{ id; plaintextKey }>
 ```
 
 ### ⚠️ A security invariant you can silently break
 
-`CROCKFORD_ALPHABET` is **exactly 32 symbols** (`0123456789ABCDEFGHJKMNPQRSTVWXYZ` — no I, L, O, U). This is load-bearing, not cosmetic: `256 % 32 === 0`, so reducing a random byte with `% 32` is provably **unbiased**. Changing the alphabet's length silently introduces modulo bias into every license key and product ID.
+`CROCKFORD_ALPHABET` is **exactly 32 symbols** (`0123456789ABCDEFGHJKMNPQRSTVWXYZ` — no I, L, O, U). This is load-bearing, not cosmetic: `256 % 32 === 0`, so reducing a random byte with `% 32` is provably **unbiased**. Changing the alphabet's length silently introduces modulo bias into every license key and application ID.
 
 A test asserts the length so this can't break unnoticed. **Do not "fix" that test.**
 
@@ -422,14 +447,14 @@ The build is running in **batches of roughly 5 tasks** to conserve usage limits.
 | 25 | Server actions (`src/app/dashboard/**/actions.ts`) |
 | 26 | shadcn/ui and the design tokens |
 | 27 | Dashboard shell and navigation |
-| 28 | Products page |
+| 28 | Applications page |
 
 Notes for Task 24 onward, now that the public verify endpoint exists and is fully tested:
 
 - **The public API is genuinely public — no Clerk involvement.** `src/app/api/v1/licenses/verify/route.ts` never calls `auth()` and has zero Clerk imports, exactly per the "two completely separate authentication systems" rule. Task 24's `middleware.ts` must leave `/api/v1/**` outside Clerk's protected-route matcher — protecting it would break every customer integration, not just the dashboard. `/dashboard/**` is what Task 24 actually needs to gate.
 - **The `vi.mock("@/db", ...)` / `vi.mock("@/env", ...)` getter pattern from Task 23 worked on the first try** — no brittleness, no fallback needed (see Batch 5 notes below). The same pattern is very likely reusable for Task 25's server-action tests if they need to swap in the PGlite test database the same way.
 - **Rate limiting and validation are now fully wired**, so `RATE_LIMITED` and `BAD_REQUEST` are no longer dead codes in `VerificationErrorCode` — both are exercised end-to-end by `tests/api/verify-route.test.ts`.
-- `PostgresRateLimiter`, `clientIpFrom()`, and `verifyDimensions()` (`src/lib/rate-limit/`, Tasks 20–21) are specific to the verify endpoint's IP+product policy. Nothing in the dashboard (Tasks 24+) is rate-limited by the spec — Clerk-authenticated routes don't need this limiter. Don't reach for it there without checking the spec first.
+- `PostgresRateLimiter`, `clientIpFrom()`, and `verifyDimensions()` (`src/lib/rate-limit/`, Tasks 20–21) are specific to the verify endpoint's IP+application policy. Nothing in the dashboard (Tasks 24+) is rate-limited by the spec — Clerk-authenticated routes don't need this limiter. Don't reach for it there without checking the spec first.
 - The full license lifecycle (`revokeLicense`, `restoreLicense`, `resetActivation`, `deleteLicense` — `src/lib/licenses/service.ts`, Task 16) still has no caller outside tests. Task 25's `actions.ts` is what finally wires these to the UI.
 - `verifyRequestSchema` (`src/lib/validation/verify-request.ts`, Task 22) is for the public API only. Task 25 needs its own `src/lib/validation/dashboard.ts` (per the plan's File Structure) for server-action inputs — do not reuse or extend the public schema for dashboard forms; they have different trust boundaries (Clerk-authenticated developer vs. anonymous customer software).
 
@@ -457,11 +482,11 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 | 1 | 1–5 | ✅ Complete. 18 tests passing, typecheck clean. Two plan bugs found and corrected (see below). |
 | 2 | 6–10 | ✅ Complete. 48 tests passing (6 files), typecheck clean. Plan's code used verbatim, no bugs found. Task 10's `Database` type fallback was **not** needed — the base-class `PgDatabase<...>` form compiled cleanly. |
 | 3 | 11–15 | ✅ Complete. 92 tests passing (11 files), typecheck clean. Database genuinely exercised for the first time. One plan bug found and corrected (see below); one plan-vs-actual test-count mismatch noted (harmless). |
-| 4 | 16–19 | ✅ Complete. 133 tests passing (15 files), typecheck clean. The verification engine — the security core of the product — shipped with **zero** deviation from the plan's code. Two more harmless plan-prose test-count mismatches found and corrected in the plan (see below); no code impact. |
+| 4 | 16–19 | ✅ Complete. 133 tests passing (15 files), typecheck clean. The verification engine — the security core of the application — shipped with **zero** deviation from the plan's code. Two more harmless plan-prose test-count mismatches found and corrected in the plan (see below); no code impact. |
 | 5 | 20–23 | ✅ Complete. 176 tests passing (19 files), typecheck clean, lint clean. The public HTTP surface — rate limiting, validation, and the verify endpoint — shipped with one genuine (trivial) plan bug and two more harmless plan-prose test-count mismatches, both corrected below. All 17 of the specification's mandatory scenarios are now covered. |
 
-| 6 | 24–28 | ✅ Complete. 191 tests (20 files), typecheck + lint clean, `npm run build` succeeds. Clerk auth, server actions, shadcn/ui, dashboard shell, products page. **Two real plan bugs** found and corrected: middleware path, and a `DurationValue` cast that broke type inference. |
-| 7 | 29–33 | ✅ Complete. 191 tests still passing, build succeeds. Product detail + integration docs, show-once key dialog, licenses table, landing page, README + API reference. **One real bug found in the show-once dialog** (see below) plus four API-drift fixes. |
+| 6 | 24–28 | ✅ Complete. 191 tests (20 files), typecheck + lint clean, `npm run build` succeeds. Clerk auth, server actions, shadcn/ui, dashboard shell, applications page. **Two real plan bugs** found and corrected: middleware path, and a `DurationValue` cast that broke type inference. |
+| 7 | 29–33 | ✅ Complete. 191 tests still passing, build succeeds. Application detail + integration docs, show-once key dialog, licenses table, landing page, README + API reference. **One real bug found in the show-once dialog** (see below) plus four API-drift fixes. |
 
 ### Batch 6-7 notes (Tasks 24-33) — UI
 
@@ -471,7 +496,7 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 - **`@clerk/nextjs@7.7.4` does NOT export `SignedIn` / `SignedOut`.** They were replaced by a single async Server Component: `<Show when="signed-in">` / `<Show when="signed-out">`. The landing page uses `Show`.
 - **Clerk's `appearance.variables` has no `colorText`** in this version — it is `colorForeground`.
 - **shadcn CLI has changed shape.** `--base-color` no longer exists, and the default primitive library is now **Base UI**, not Radix. This project deliberately uses Radix (the plan's component code assumes it): `npx shadcn@4.17.0 init -t next -b radix -p nova -y`. To add components later: `npx --yes shadcn@4.17.0 add <name> --yes` — pin the version, since `@latest` 404s under `min-release-age=3`.
-- **shadcn's init auto-rewrites `layout.tsx`** to wire a Geist font. It was reverted; `globals.css`'s `--font-sans`/`--font-mono` overrides were removed so Tailwind v4's built-in stacks apply (`font-mono` is used on product IDs and license keys).
+- **shadcn's init auto-rewrites `layout.tsx`** to wire a Geist font. It was reverted; `globals.css`'s `--font-sans`/`--font-mono` overrides were removed so Tailwind v4's built-in stacks apply (`font-mono` is used on application IDs and license keys).
 - **Two ESLint rules are newly load-bearing** for any future component work: `react-hooks/set-state-in-effect` (no synchronous `setState` in a `useEffect` — adjust during render instead) and `react-hooks/purity` (no `Date.now()` / `Math.random()` in a component body — the licenses table uses the already-tested `isExpired()` helper instead).
 - **`npm run dev` regenerates root-level `AGENTS.md` / `CLAUDE.md`** (a Next.js 16 feature). They are deleted, not committed.
 - Cosmetic deprecation warnings on every build, deliberately not fixed: Next's "middleware → proxy" rename, and Clerk's `createRouteMatcher` notice.
@@ -488,7 +513,7 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 
 - **Task 1** — the scaffold directory cannot start with a dot (`.keyren-scaffold` is an invalid npm package name). Now scaffolds into `$TMPDIR/keyren-scaffold` and rsyncs in. Also sets `"name": "keyren"` in `package.json`.
 - **Task 3** — create-next-app's blanket `.env*` gitignore rule also matches `.env.example`, which would have silently dropped it from the commit. Now adds `!.env.example` and verifies with `git check-ignore`.
-- **Task 12** — the plan's `slugify()` contradicted the plan's own test: collapsing every non-alphanumeric run turned `"Acme's App (v2)!"` into `acme_s_app_v2`, but the test asserts `acmes_app_v2`. The plan now strips apostrophes with `.replace(/'/g, "")` **before** the general punctuation collapse. The implementation in `src/lib/products/slug.ts` already has this fix.
+- **Task 12** — the plan's `slugify()` contradicted the plan's own test: collapsing every non-alphanumeric run turned `"Acme's App (v2)!"` into `acme_s_app_v2`, but the test asserts `acmes_app_v2`. The plan now strips apostrophes with `.replace(/'/g, "")` **before** the general punctuation collapse. The implementation in `src/lib/applications/slug.ts` already has this fix.
 - **Task 13** — the plan's prose said "Expected: 13 passed"; the plan's own `it()` blocks total 14. Corrected to 14. No code impact.
 - **Task 17** — the plan's prose said "Expected: 7 passed"; the plan's own `tests/verify/lookup.test.ts` (copied verbatim) contains 8 `it()` blocks. Corrected to 8. No code impact.
 - **Task 19** — the plan's prose said "Expected: 11 passed"; the plan's own `tests/verify/hwid.test.ts` (copied verbatim) contains 12 `it()` blocks. Corrected to 12. No code impact.
@@ -502,25 +527,25 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 
 - No plan corrections needed — every file matched the plan's literal source exactly, and every named export exists under its specified name.
 - `npm run db:generate` (Task 9) ran with **no** `.env.local` and **no** live Postgres, confirmed by PROGRESS.md's own prediction: it only reads `src/db/schema/*` and writes SQL. Output: `drizzle/0000_glorious_purple_man.sql` (4 `CREATE TABLE`, 1 `CREATE TYPE` enum, 2 `FOREIGN KEY` constraints, 2 `CREATE UNIQUE INDEX`, 4 `CREATE INDEX`).
-- One thing worth flagging precisely: of the plan's three named indexes on `licenses`, only `licenses_key_hash_unique` and `activations_license_unique` are SQL `UNIQUE` indexes. `licenses_product_key_hash_idx` is a deliberately **non-unique** composite index (the plan uses `index(...)`, not `uniqueIndex(...)`) — it exists purely to make the verification hot path `WHERE product_id = $1 AND key_hash = $2` an index lookup; global uniqueness is already guaranteed by `licenses_key_hash_unique` alone. Don't "fix" this to `uniqueIndex` in a later task.
+- One thing worth flagging precisely: of the plan's three named indexes on `licenses`, only `licenses_key_hash_unique` and `activations_license_unique` are SQL `UNIQUE` indexes. `licenses_application_key_hash_idx` is a deliberately **non-unique** composite index (the plan uses `index(...)`, not `uniqueIndex(...)`) — it exists purely to make the verification hot path `WHERE application_id = $1 AND key_hash = $2` an index lookup; global uniqueness is already guaranteed by `licenses_key_hash_unique` alone. Don't "fix" this to `uniqueIndex` in a later task.
 - `src/db/index.ts` (Task 10) imports `@/env` and constructs a `postgres()` client at module load using `env.DATABASE_URL`. This did **not** break the test suite because (a) `postgres()` from postgres.js is lazy — it does not open a TCP connection until a query actually runs — and (b) nothing in `tests/` currently imports `@/db`. Task 11 will presumably import it directly or provide a PGlite-backed alternative; watch for this if a future test ever imports the real `@/db/index.ts` module against the dummy `DATABASE_URL` in `tests/setup.ts`.
 
 ### Batch 3 notes (Tasks 11–15) — the database ran for the first time
 
-- **Confirmed:** `tests/` still never imports `@/db/index.ts` (the real postgres.js singleton). Every service function takes `Database` as an explicit first parameter and imports only from `@/db/schema` / `@/db/types`, exactly as required. Tasks 12–15's services (`slug.ts`, `products/service.ts`, `licenses/expiration.ts`, `licenses/service.ts`) all follow this.
+- **Confirmed:** `tests/` still never imports `@/db/index.ts` (the real postgres.js singleton). Every service function takes `Database` as an explicit first parameter and imports only from `@/db/schema` / `@/db/types`, exactly as required. Tasks 12–15's services (`slug.ts`, `applications/service.ts`, `licenses/expiration.ts`, `licenses/service.ts`) all follow this.
 - **The two unknowns flagged for this batch are both resolved — see "Environment facts" above for the full detail:**
   1. `db.execute()` under PGlite resolves at runtime to `{ rows, fields, affectedRows }`, confirmed by an empirical log (added, observed, then removed before commit) — not the `[...result]`-iterable shape the plan's test code assumed. **Additionally** (not anticipated by the plan at all): the *type* of that resolved value is `unknown`, not just "iterate differently" — a structural consequence of `Database` being written against the abstract `PgQueryResultHKT` rather than a concrete driver HKT. `tests/helpers/db.test.ts` fixes this with `result.rows` plus a narrow `as { rows: T[] }` assertion on the awaited value (not `any` — see the code for the full reasoning in comments).
   2. `db.query.licenses.findMany()` (Drizzle's relational query API) **works** under the PGlite harness, no changes needed. Task 13's delete-cascade test uses it exactly as written in the plan.
-- **One genuine plan bug found and fixed**, same category as Batch 1's two: in `src/lib/products/slug.ts` (Task 12), the plan's `slugify()` implementation collapses *all* non-alphanumeric runs (including a bare apostrophe) into a single `_`, which turns `"Acme's App (v2)!"` into `"acme_s_app_v2"` — but the plan's own test (`tests/products/slug.test.ts`, "drops punctuation") asserts `"acmes_app_v2"`. Fixed by adding `.replace(/'/g, "")` (drop apostrophes outright, before the general punctuation-to-underscore collapse) as its own step, right after `.toLowerCase()`. All 8 of the plan's slug tests pass with this change; nothing else in the pipeline was touched. If a later task edits `slugify()`, keep this step — removing it silently reintroduces the bug.
-- **One harmless plan-documentation mismatch:** Task 13's plan text says "Expected: 13 passed" for `tests/products/service.test.ts`, but the plan's own test file (copied verbatim) contains 14 `it(...)` blocks (2 in `createProduct`, 3 each in `listProducts`/`getProduct`/`renameProduct`/`deleteProduct`), and all 14 genuinely pass. This is a miscount in the plan's prose, not a code defect — nothing was added, removed, or skipped to reach 14. Don't be alarmed if a future re-read of the plan still says 13.
-- Every other file in this batch (`tests/helpers/db.ts`, `tests/helpers/factories.ts`, `src/lib/products/service.ts`, `src/lib/licenses/expiration.ts`, `src/lib/licenses/service.ts`, and all other test files) was used byte-for-byte as written in the plan, and all plan-stated test counts for those files were exact (Task 11: 2, Task 14: 11, Task 15: 9).
+- **One genuine plan bug found and fixed**, same category as Batch 1's two: in `src/lib/applications/slug.ts` (Task 12), the plan's `slugify()` implementation collapses *all* non-alphanumeric runs (including a bare apostrophe) into a single `_`, which turns `"Acme's App (v2)!"` into `"acme_s_app_v2"` — but the plan's own test (`tests/applications/slug.test.ts`, "drops punctuation") asserts `"acmes_app_v2"`. Fixed by adding `.replace(/'/g, "")` (drop apostrophes outright, before the general punctuation-to-underscore collapse) as its own step, right after `.toLowerCase()`. All 8 of the plan's slug tests pass with this change; nothing else in the pipeline was touched. If a later task edits `slugify()`, keep this step — removing it silently reintroduces the bug.
+- **One harmless plan-documentation mismatch:** Task 13's plan text says "Expected: 13 passed" for `tests/applications/service.test.ts`, but the plan's own test file (copied verbatim) contains 14 `it(...)` blocks (2 in `createApplication`, 3 each in `listApplications`/`getApplication`/`renameApplication`/`deleteApplication`), and all 14 genuinely pass. This is a miscount in the plan's prose, not a code defect — nothing was added, removed, or skipped to reach 14. Don't be alarmed if a future re-read of the plan still says 13.
+- Every other file in this batch (`tests/helpers/db.ts`, `tests/helpers/factories.ts`, `src/lib/applications/service.ts`, `src/lib/licenses/expiration.ts`, `src/lib/licenses/service.ts`, and all other test files) was used byte-for-byte as written in the plan, and all plan-stated test counts for those files were exact (Task 11: 2, Task 14: 11, Task 15: 9).
 - The single most security-critical test in this batch — `tests/licenses/create.test.ts`'s "never persists the plaintext key" (JSON-serializes the full stored row, uppercases it, and asserts the plaintext key appears nowhere in any column) — passed against the plan's implementation with no changes needed. `licenses.keyHash` is the only derivative stored; the plaintext is generated, hashed, and returned, never written anywhere else.
 
 ### Batch 4 notes (Tasks 16–19) — the verification engine
 
-- **Every file in this batch was used byte-for-byte as written in the plan.** `src/lib/licenses/service.ts`'s four appended lifecycle functions (`revokeLicense`, `restoreLicense`, `resetActivation`, `deleteLicense`) plus their shared `findOwnedLicense` helper, and the entirety of `src/lib/licenses/verify.ts` (`verifyLicense` + `bindOrRefreshActivation`), needed zero changes to pass their tests. No new imports were needed in `service.ts` — `and`, `eq`, and the `activations`/`licenses`/`products` tables were already imported from Task 15, exactly as the plan promised.
-- **Tasks 18 and 19 are pure test files** (`tests/verify/state.test.ts`, `tests/verify/hwid.test.ts`) asserting behaviour Task 17's engine already claimed to have. Both suites passed on the very first run, with zero edits to `verify.ts` or `service.ts` required. That means the load-bearing ordering the plan calls out — locate product → derive key hash → locate license scoped by `productId` → constant-time re-check → **revoked before expired** → expiration against the server clock → device rules → activation bookkeeping — is genuinely correct as implemented, not just claimed in a comment. Specifically exercised and passing: a license that is both revoked and expired reports `LICENSE_REVOKED`, not `LICENSE_EXPIRED`; the expiry boundary is inclusive (`isExpired` uses `<=`, so the deadline instant itself already counts as expired, while one second before it still authenticates); the `now` parameter is server-only and nothing in the request path can influence it (`VerifyInput.now` is a test-only injection point that Task 23's route handler must never wire up to client input).
-- **Enumeration resistance holds exactly as specified, structurally rather than by convention.** `tests/verify/lookup.test.ts`'s `JSON.stringify(absent) === JSON.stringify(foreign)` check (an absent key vs. a real key belonging to a different product, both queried against the same wrong product) passed unmodified — both cases fall through the identical `if (!license) return failure("LICENSE_INVALID")` line, so there is only one code path that can produce that response, not two independent implementations that happen to agree today.
+- **Every file in this batch was used byte-for-byte as written in the plan.** `src/lib/licenses/service.ts`'s four appended lifecycle functions (`revokeLicense`, `restoreLicense`, `resetActivation`, `deleteLicense`) plus their shared `findOwnedLicense` helper, and the entirety of `src/lib/licenses/verify.ts` (`verifyLicense` + `bindOrRefreshActivation`), needed zero changes to pass their tests. No new imports were needed in `service.ts` — `and`, `eq`, and the `activations`/`licenses`/`applications` tables were already imported from Task 15, exactly as the plan promised.
+- **Tasks 18 and 19 are pure test files** (`tests/verify/state.test.ts`, `tests/verify/hwid.test.ts`) asserting behaviour Task 17's engine already claimed to have. Both suites passed on the very first run, with zero edits to `verify.ts` or `service.ts` required. That means the load-bearing ordering the plan calls out — locate application → derive key hash → locate license scoped by `applicationId` → constant-time re-check → **revoked before expired** → expiration against the server clock → device rules → activation bookkeeping — is genuinely correct as implemented, not just claimed in a comment. Specifically exercised and passing: a license that is both revoked and expired reports `LICENSE_REVOKED`, not `LICENSE_EXPIRED`; the expiry boundary is inclusive (`isExpired` uses `<=`, so the deadline instant itself already counts as expired, while one second before it still authenticates); the `now` parameter is server-only and nothing in the request path can influence it (`VerifyInput.now` is a test-only injection point that Task 23's route handler must never wire up to client input).
+- **Enumeration resistance holds exactly as specified, structurally rather than by convention.** `tests/verify/lookup.test.ts`'s `JSON.stringify(absent) === JSON.stringify(foreign)` check (an absent key vs. a real key belonging to a different application, both queried against the same wrong application) passed unmodified — both cases fall through the identical `if (!license) return failure("LICENSE_INVALID")` line, so there is only one code path that can produce that response, not two independent implementations that happen to agree today.
 - **Cross-developer isolation (spec test #14)** is enforced by one helper, `findOwnedLicense()`, that every one of the four mutating functions calls before doing anything else — there is no separate ownership check duplicated per function to drift out of sync. `tests/licenses/lifecycle.test.ts`'s "cross-developer isolation" block drives `getLicense` plus all four mutations against a license owned by `DEVELOPER_B` while authenticated as `DEVELOPER_A`, and asserts both the rejection (`/not found/i` — never a distinguishing "forbidden") and that the underlying row is provably untouched afterward (re-read as `DEVELOPER_B`). All 5 pass.
 - **Two more instances of the same harmless plan-prose test-count mismatch Batch 3 first flagged** (Task 13 said "13 passed", the plan's own test file had 14): Task 17's plan prose said "Expected: 7 passed" against its own 8-`it()`-block `tests/verify/lookup.test.ts`; Task 19's said "Expected: 11 passed" against its own 12-`it()`-block `tests/verify/hwid.test.ts`. Both are miscounts in the plan's narration, not the code — nothing was added, removed, or skipped to reach the higher number. Both have now been corrected directly in the plan file (see "Corrections already folded back into the plan" above), matching how Task 13's was handled.
 - **No new environment gotchas.** Tasks 16–19 never call raw `db.execute()` — every query goes through the fluent builder (`.select()/.insert()/.update()/.delete()/.returning()`), which stays fully typed per the Task 11 findings already on record. Nothing new to add to "Environment facts."
@@ -532,9 +557,9 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 - **One genuine (trivial) plan bug**, same low-stakes category as Task 12's: `tests/api/verify-route.test.ts` imported `TEST_HMAC_SECRET` from `tests/helpers/db.ts` but never used it (the mocked `env` hardcodes the same literal string directly). `npm run lint` caught it as an unused-var warning. Fixed by dropping the import; see "Corrections already folded back into the plan" above.
 - **Two more instances of the same harmless plan-prose test-count mismatch** every batch since Batch 3 has found: Task 22 said "Expected: 15 passed" against its own 14-execution test file; Task 23 said "Expected: 14 passed" against its own 13-`it()`-block test file. Both corrected in the plan (see above). At this point the pattern is well-established enough that a future batch should not be surprised by it, and should just recount rather than assume the plan's stated number is right.
 - **Zod 4.4.3's `.strip()` is chainable on `ZodObject`** (`strip(): ZodObject<Shape, core.$strip>` in `node_modules/zod/v4/classic/schemas.d.ts`) — confirmed by reading the shipped `.d.ts` before writing `verify-request.ts`, not just by trying it. The plan's code was used verbatim; the documented fallback (remove `.strip()`, rely on default-strip behavior) was not needed.
-- **Rate limiting demonstrably runs before any license lookup.** `tests/api/verify-route.test.ts`'s "limits before touching the license lookup" test floods the endpoint with a request for a product ID that doesn't exist (`prod_UNKNOWN0000000000000000`) and asserts the 6th request returns 429, not the 404 an unmetered request would produce. This is the literal ordering the route handler's comments claim (`// 2. Rate limit BEFORE any license lookup`) verified by a test that would fail if the two steps were ever swapped.
+- **Rate limiting demonstrably runs before any license lookup.** `tests/api/verify-route.test.ts`'s "limits before touching the license lookup" test floods the endpoint with a request for an application ID that doesn't exist (`app_UNKNOWN0000000000000000`) and asserts the 6th request returns 429, not the 404 an unmetered request would produce. This is the literal ordering the route handler's comments claim (`// 2. Rate limit BEFORE any license lookup`) verified by a test that would fail if the two steps were ever swapped.
 - **Both `RATE_LIMITED` and `BAD_REQUEST` are no longer dead codes.** They existed in `VerificationErrorCode` since Task 8 but nothing produced them until this batch. Every `VerificationErrorCode` value now has at least one passing test that triggers it through the real HTTP surface.
-- **Security assertions specifically checked and passing:** the malformed-request response body never contains `zod`, `expected`, `received`, or `path` (case-insensitive) — confirmed by `JSON.stringify(body)` pattern match against the actual response, not just against what the code is supposed to do; the license key is never echoed in any response, checked via full response `.text()`, not just the parsed JSON fields that happen to be asserted elsewhere; `VerifyInput.now` is never populated in the route handler (grep-verified — the only `now` in `route.ts` is inside prose comments, and the `verifyLicense(db, { productId, licenseKey, deviceId, secret })` call literally has no fifth property).
+- **Security assertions specifically checked and passing:** the malformed-request response body never contains `zod`, `expected`, `received`, or `path` (case-insensitive) — confirmed by `JSON.stringify(body)` pattern match against the actual response, not just against what the code is supposed to do; the license key is never echoed in any response, checked via full response `.text()`, not just the parsed JSON fields that happen to be asserted elsewhere; `VerifyInput.now` is never populated in the route handler (grep-verified — the only `now` in `route.ts` is inside prose comments, and the `verifyLicense(db, { applicationId, licenseKey, deviceId, secret })` call literally has no fifth property).
 - **All 17 of the specification's mandatory scenarios are now covered** — the coverage map's rows 16 (`tests/api/verify-route.test.ts`'s "malformed request" block, 4 tests) and 17 (`tests/rate-limit/postgres.test.ts`'s "denies the request past the limit" plus `tests/api/verify-route.test.ts`'s "rate limiting" block, 4 tests) are the two this batch closes out. Rows 1–15 were already covered by Batches 1–4 and re-verified passing in this batch's full-suite run.
 
 ---
@@ -544,7 +569,7 @@ Update the **Status at a glance** table and the **Next up** table above, then ap
 Alpha_v1 is done when this flow works end to end:
 
 ```
-sign up → create product → immutable prod_ ID issued → generate license
+sign up → create application → immutable app_ ID issued → generate license
 → plaintext key shown once → only derived value in DB → verify from device one: success
 → verify again from device one: success → verify from device two: DEVICE_MISMATCH
 → reset activation → device two: success → revoke: LICENSE_REVOKED

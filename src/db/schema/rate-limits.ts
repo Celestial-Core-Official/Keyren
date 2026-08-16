@@ -3,7 +3,7 @@ import { index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 /**
  * Fixed-window counters for the public verification endpoint.
  *
- * Postgres rather than Redis: Alpha_v1 does not justify another piece of
+ * Postgres rather than Redis: Keyren does not yet justify another piece of
  * infrastructure, and a serverless deployment cannot rely on in-process
  * memory because each instance would keep its own counter. This table is
  * hidden behind the RateLimiter interface so it can be replaced without the

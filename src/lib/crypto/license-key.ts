@@ -79,6 +79,13 @@ export function licenseKeyLast4(licenseKey: string): string {
   return normalizeLicenseKey(licenseKey).slice(-4);
 }
 
+/**
+ * The dashboard's stable, non-secret reference to a key it can never redisplay.
+ *
+ * The suffix occupies the final group rather than trailing a masked one, so
+ * the string reads as four groups like a real key instead of implying there
+ * are four characters beyond a full-width group.
+ */
 export function maskedLicenseKey(last4: string): string {
-  return `${PREFIX}-••••-••••-••••-••••${last4}`;
+  return `${PREFIX}-••••-••••-••••-${last4}`;
 }

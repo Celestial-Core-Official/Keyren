@@ -1,14 +1,16 @@
-# Keyren API Reference — Alpha_v1
+# Keyren API Reference — `v1`
 
 This document describes the public license verification API. It is the **only** endpoint customer software talks to, and the **only** endpoint in Keyren that requires no developer authentication of any kind — no Clerk session, no API key, no bearer token.
 
-The URL path is versioned (`/api/v1/...`) on ordinary semantic-versioning grounds, which is intentionally a separate thing from the `Alpha_v1` product release name. The two can move independently: this API can stay at `v1` while the product itself advances to `Alpha_v2` or beyond.
+The URL path is versioned (`/api/v1/...`) on ordinary semantic-versioning grounds, which is intentionally a separate thing from the application's release name. The two move independently, and this release is the demonstration: the application advanced from `Alpha_v1` to **`Alpha_v2`** (package version `0.1.2`) and **nothing in this document changed** — same request fields, same response envelopes, same error codes, same status codes. Software integrated against `v1` under `Alpha_v1` keeps working untouched.
+
+`Alpha_v2` added per-license labels and notes in the dashboard. Neither is returned here, deliberately: this endpoint is unauthenticated and anyone holding a key can call it, so internal commercial context — a customer name, an order reference, a private remark — must not be readable by the customer. The success envelope remains exactly `{ status, expiresAt }`, and a regression test asserts it.
 
 ---
 
 ## `POST /api/v1/licenses/verify`
 
-Checks whether a license key is valid for a product, on a given device, and reports the outcome.
+Checks whether a license key is valid for an application, on a given device, and reports the outcome.
 
 ```
 POST https://<your-keyren-deployment>/api/v1/licenses/verify
@@ -21,7 +23,7 @@ Any other HTTP method on this path (for example `GET`) returns **`405 Method Not
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `productId` | `string` | yes | 1–64 characters, matching `prod_[0-9A-Za-z]+`. This is the permanent ID shown on the product's dashboard page. |
+| `applicationId` | `string` | yes | 1–64 characters, matching `app_[0-9A-Za-z]+`. This is the permanent ID shown on the application's dashboard page. |
 | `licenseKey` | `string` | yes | 1–128 characters. Format is **not** validated at this layer — a badly formatted key is rejected as `LICENSE_INVALID`, the same as any other invalid key, so a malformed key and a wrong-but-well-formed key are indistinguishable from outside. |
 | `deviceId` | `string` | yes | 1–1024 characters. An opaque, client-computed device fingerprint. Keyren does not parse, validate the shape of, or attempt to interpret this value — it is only ever hashed and compared. |
 
@@ -29,7 +31,7 @@ Any other field in the JSON body is silently stripped, not rejected — sending 
 
 ```json
 {
-  "productId": "prod_01J9X6QK8N3H7V2M4P5R6S7T8U",
+  "applicationId": "app_01J9X6QK8N3H7V2M4P5R6S7T8U",
   "licenseKey": "KEYREN-ABCD1234-EFGH5678-JKMN9012-PQRS3456",
   "deviceId": "6f1c9e2a4b7d3f80b1c2d3e4f5a6b7c8"
 }
@@ -106,12 +108,13 @@ This table is exactly what `src/lib/errors.ts` implements — code, HTTP status,
 | Code | HTTP status | `error.message` | Meaning |
 |---|---|---|---|
 | `BAD_REQUEST` | 400 | "The request body was malformed." | The body was not JSON, or was missing a required field, or a field was outside its length/format bounds. |
-| `PRODUCT_INVALID` | 404 | "The provided product is invalid." | No product with that ID exists. Safe to distinguish from a license failure because product IDs are shipped inside your software and are not secret. |
-| `LICENSE_INVALID` | 403 | "The provided license is invalid." | The key does not resolve to a usable license for this product. See the callout below — this code is deliberately ambiguous. |
+| `APPLICATION_INVALID` | 404 | "The provided application is invalid." | No application with that ID exists. Safe to distinguish from a license failure because application IDs are shipped inside your software and are not secret. |
+| `APPLICATION_DISABLED` | 403 | "This application is not currently accepting license checks." | The developer switched the application off. Every license it owns is rejected while it stays off, regardless of that license's own state. Nothing is destroyed — re-enabling restores every license exactly as it was. |
+| `LICENSE_INVALID` | 403 | "The provided license is invalid." | The key does not resolve to a usable license for this application. See the callout below — this code is deliberately ambiguous. |
 | `LICENSE_REVOKED` | 403 | "This license has been revoked." | The developer revoked this license from the dashboard. Restorable; if restored, the same key works again. |
 | `LICENSE_EXPIRED` | 403 | "This license has expired." | The license's `expiresAt` has passed, compared against Keyren's server clock. |
 | `DEVICE_MISMATCH` | 403 | "This license is already active on another device." | The license is HWID-locked and already bound to a different device fingerprint. Resolved from the dashboard by resetting the activation. |
-| `RATE_LIMITED` | 429 | "Too many requests. Try again shortly." | Too many verification requests, either from this IP or against this product, within the current window. Honor the `Retry-After` header. |
+| `RATE_LIMITED` | 429 | "Too many requests. Try again shortly." | Too many verification requests, either from this IP or against this application, within the current window. Honor the `Retry-After` header. |
 | `INTERNAL_ERROR` | 500 | "An unexpected error occurred." | Keyren failed unexpectedly. Safe to retry with backoff; nothing about the failure is specific to the request. |
 
 #### Why `LICENSE_INVALID` doesn't say more
@@ -119,19 +122,19 @@ This table is exactly what `src/lib/errors.ts` implements — code, HTTP status,
 `LICENSE_INVALID` is returned identically whether the license key:
 
 - never existed,
-- is well-formed but belongs to a **different** product, or
+- is well-formed but belongs to a **different** application, or
 - was **deleted** by the developer.
 
-This is deliberate, not an oversight. If those three cases returned different codes, an attacker could send guesses against the endpoint and use the response to tell "wrong key" apart from "right key, wrong product" apart from "used to be valid" — effectively an oracle for enumerating real license keys or mapping which keys belong to which product. Collapsing all three into one response removes that signal. The verification engine implements this as a single code path, not three implementations that happen to agree today, so it cannot drift apart in a future change.
+This is deliberate, not an oversight. If those three cases returned different codes, an attacker could send guesses against the endpoint and use the response to tell "wrong key" apart from "right key, wrong application" apart from "used to be valid" — effectively an oracle for enumerating real license keys or mapping which keys belong to which application. Collapsing all three into one response removes that signal. The verification engine implements this as a single code path, not three implementations that happen to agree today, so it cannot drift apart in a future change.
 
 ### Rate limiting
 
 Every request is metered on two independent axes before any license lookup happens, so a flood of guesses never reaches the database:
 
 - **Per IP address** — default 60 requests/minute (`RATE_LIMIT_VERIFY_PER_MINUTE`).
-- **Per product** — default 600 requests/minute (`RATE_LIMIT_VERIFY_PER_PRODUCT_PER_MINUTE`).
+- **Per application** — default 600 requests/minute (`RATE_LIMIT_VERIFY_PER_APPLICATION_PER_MINUTE`).
 
-Both use fixed 60-second windows. A per-IP limit alone would punish an office or campus behind one NAT address while doing nothing about a distributed attacker; a per-product limit alone would let one abusive client exhaust a developer's entire budget. Both axes apply together.
+Both use fixed 60-second windows. A per-IP limit alone would punish an office or campus behind one NAT address while doing nothing about a distributed attacker; a per-application limit alone would let one abusive client exhaust a developer's entire budget. Both axes apply together.
 
 When either limit is exceeded, the response is `429 RATE_LIMITED` with a `Retry-After` header giving the number of seconds to wait. No other detail — which axis tripped, what the configured limits are, or how the limiter is implemented — is exposed.
 
@@ -141,9 +144,9 @@ When either limit is exceeded, the response is `429 RATE_LIMITED` with a `Retry-
 
 Read this before you ship an integration.
 
-- **The product ID is not a credential.** It is safe to embed directly in software you distribute — it is an identifier, not a secret, the same way a public API's account ID would be.
-- **Never ship any Keyren dashboard credential, session token, or the HMAC secret inside end-user software.** Assume anything present in a distributed binary or a JavaScript bundle will be read by anyone who has a copy of it. The dashboard's own generated integration snippet only ever includes your product ID for exactly this reason.
+- **The application ID is not a credential.** It is safe to embed directly in software you distribute — it is an identifier, not a secret, the same way a public API's account ID would be.
+- **Never ship any Keyren dashboard credential, session token, or the HMAC secret inside end-user software.** Assume anything present in a distributed binary or a JavaScript bundle will be read by anyone who has a copy of it. The dashboard's own generated integration snippet only ever includes your application ID for exactly this reason.
 - **Send a fingerprint you have already computed and hashed on the client, not raw hardware identifiers.** Keyren never asks for and never interprets raw hardware serials — treat `deviceId` as an opaque value you control the derivation of.
 - **A device fingerprint is an identifier, not tamper-proof hardware identity.** HWID locking raises the cost of casually sharing a license key between machines; it does not make spoofing impossible against a motivated attacker.
-- **Alpha_v1 is online-only.** There is no offline license, no cached grace token, and no bundled fallback. If Keyren is unreachable — network failure, an outage, a timeout — your software cannot obtain a positive verification result from this API. Decide **deliberately**, ahead of time, what your application does in that situation (for example: fail closed and block usage, fail open with a warning, or use a short-lived local cache with a policy you control) — do not let it be whatever your HTTP client happens to do by default.
-- **Handle every error code**, not just the happy path and one generic failure. `LICENSE_REVOKED` and `LICENSE_EXPIRED` are typically worth a specific, actionable message to the end user; `RATE_LIMITED` should back off and retry; `INTERNAL_ERROR` is safe to retry; `LICENSE_INVALID`, `PRODUCT_INVALID`, and `DEVICE_MISMATCH` mean the current key/device combination will not succeed without developer or end-user action and should not be retried in a loop.
+- **Keyren is online-only.** There is no offline license, no cached grace token, and no bundled fallback. If Keyren is unreachable — network failure, an outage, a timeout — your software cannot obtain a positive verification result from this API. Decide **deliberately**, ahead of time, what your application does in that situation (for example: fail closed and block usage, fail open with a warning, or use a short-lived local cache with a policy you control) — do not let it be whatever your HTTP client happens to do by default.
+- **Handle every error code**, not just the happy path and one generic failure. `LICENSE_REVOKED` and `LICENSE_EXPIRED` are typically worth a specific, actionable message to the end user; `RATE_LIMITED` should back off and retry; `INTERNAL_ERROR` is safe to retry; `LICENSE_INVALID`, `APPLICATION_INVALID`, `APPLICATION_DISABLED`, and `DEVICE_MISMATCH` mean the current key/device combination will not succeed without developer or end-user action and should not be retried in a loop.

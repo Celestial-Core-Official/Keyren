@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { activations, licenses, products } from "@/db/schema";
+import { activations, licenses, applications } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { generateActivationId } from "@/lib/crypto/ids";
 import { hashDeviceId } from "@/lib/crypto/device";
@@ -11,7 +11,7 @@ import {
 import { isExpired } from "./expiration";
 
 export type VerifyInput = {
-  productId: string;
+  applicationId: string;
   licenseKey: string;
   deviceId: string;
   secret: string;
@@ -31,7 +31,7 @@ function failure(code: VerificationErrorCode): VerifyResult {
  * Decides whether a running instance of a customer's software is licensed.
  *
  * Order of operations matters and follows the specification exactly:
- * locate product, derive lookup value, locate license, check state, check
+ * locate application, derive lookup value, locate license, check state, check
  * expiration, check device rules, then bind or refresh the activation.
  *
  * Rate limiting happens upstream in the route handler, before this function
@@ -44,31 +44,39 @@ function failure(code: VerificationErrorCode): VerifyResult {
 export async function verifyLicense(db: Database, input: VerifyInput): Promise<VerifyResult> {
   const now = input.now ?? new Date();
 
-  // 1. Locate the product. Product IDs are shipped inside customer software
+  // 1. Locate the application. Application IDs are shipped inside customer software
   //    and are not secret, so distinguishing this case is safe and helps a
   //    developer debug a bad integration.
-  const [product] = await db
-    .select({ id: products.id })
-    .from(products)
-    .where(eq(products.id, input.productId))
+  const [application] = await db
+    .select({ id: applications.id, disabledAt: applications.disabledAt })
+    .from(applications)
+    .where(eq(applications.id, input.applicationId))
     .limit(1);
 
-  if (!product) return failure("PRODUCT_INVALID");
+  if (!application) return failure("APPLICATION_INVALID");
+
+  // 1a. The application-wide kill switch, checked before anything else costs
+  //     anything. A disabled application rejects every license it owns
+  //     regardless of that license's own state — which is the point of having
+  //     it, and why this cannot sit after the per-license checks. Deliberately
+  //     ahead of the key hash: there is no reason to spend an HMAC deciding
+  //     the answer to a question already settled.
+  if (application.disabledAt !== null) return failure("APPLICATION_DISABLED");
 
   // 2. Derive the lookup value. The plaintext key never touches the database
   //    and is never logged.
   const keyHash = hashLicenseKey(input.licenseKey, input.secret);
 
-  // 3. Locate the license *within this product*. Scoping the lookup by
-  //    product_id in the WHERE clause is what makes a key issued for one
-  //    product useless against another. Index: licenses_product_key_hash_idx.
+  // 3. Locate the license *within this application*. Scoping the lookup by
+  //    application_id in the WHERE clause is what makes a key issued for one
+  //    application useless against another. Index: licenses_application_key_hash_idx.
   const [license] = await db
     .select()
     .from(licenses)
-    .where(and(eq(licenses.productId, product.id), eq(licenses.keyHash, keyHash)))
+    .where(and(eq(licenses.applicationId, application.id), eq(licenses.keyHash, keyHash)))
     .limit(1);
 
-  // A missing license and a license belonging to a different product are
+  // A missing license and a license belonging to a different application are
   // indistinguishable from out here, by design.
   if (!license) return failure("LICENSE_INVALID");
 

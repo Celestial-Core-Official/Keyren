@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { verifyRequestSchema } from "@/lib/validation/verify-request";
 
 const valid = {
-  productId: "prod_ABCDEFGHJKMNPQRSTVWXYZ012",
+  applicationId: "app_ABCDEFGHJKMNPQRSTVWXYZ012",
   licenseKey: "KEYREN-ABCDEFGH-ABCDEFGH-ABCDEFGH-ABCDEFGH",
   deviceId: "device-fingerprint",
 };
@@ -12,7 +12,7 @@ describe("verifyRequestSchema", () => {
     expect(verifyRequestSchema.safeParse(valid).success).toBe(true);
   });
 
-  it.each(["productId", "licenseKey", "deviceId"] as const)(
+  it.each(["applicationId", "licenseKey", "deviceId"] as const)(
     "rejects a body missing %s",
     (field) => {
       const body: Record<string, unknown> = { ...valid };
@@ -21,15 +21,15 @@ describe("verifyRequestSchema", () => {
     },
   );
 
-  it.each(["productId", "licenseKey", "deviceId"] as const)(
+  it.each(["applicationId", "licenseKey", "deviceId"] as const)(
     "rejects a non-string %s",
     (field) => {
       expect(verifyRequestSchema.safeParse({ ...valid, [field]: 12345 }).success).toBe(false);
     },
   );
 
-  it("rejects a product id without the prod_ prefix", () => {
-    expect(verifyRequestSchema.safeParse({ ...valid, productId: "abc123" }).success).toBe(false);
+  it("rejects an application id without the app_ prefix", () => {
+    expect(verifyRequestSchema.safeParse({ ...valid, applicationId: "abc123" }).success).toBe(false);
   });
 
   it("rejects an empty device id", () => {

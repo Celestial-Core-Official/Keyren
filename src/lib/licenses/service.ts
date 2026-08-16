@@ -1,5 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
-import { activations, licenses, products } from "@/db/schema";
+import { activations, licenses, applications } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { generateLicenseId } from "@/lib/crypto/ids";
 import {
@@ -19,8 +19,11 @@ import { resolveExpiresAt, type ExpirationInput } from "./expiration";
  */
 export type LicenseView = {
   id: string;
-  productId: string;
+  applicationId: string;
   keyLast4: string;
+  /** Dashboard-only. Never crosses into the public verification response. */
+  label: string | null;
+  notes: string | null;
   status: "active" | "revoked";
   expiresAt: Date | null;
   hwidLocked: boolean;
@@ -31,29 +34,37 @@ export type LicenseView = {
 };
 
 export type CreateLicenseInput = {
-  productId: string;
+  applicationId: string;
   expiration: ExpirationInput;
   hwidLocked: boolean;
   secret: string;
+  label?: string | null;
+  notes?: string | null;
+};
+
+/** The mutable half of a license. Everything else is fixed at creation. */
+export type LicenseDetailsInput = {
+  label: string | null;
+  notes: string | null;
 };
 
 /**
- * Confirms the product exists AND belongs to this developer, in one query.
+ * Confirms the application exists AND belongs to this developer, in one query.
  * Every license operation funnels through this, which is what makes the
- * `Clerk user -> owns product -> product owns license` chain unskippable.
+ * `Clerk user -> owns application -> application owns license` chain unskippable.
  */
-async function assertOwnsProduct(
+async function assertOwnsApplication(
   db: Database,
   ownerId: string,
-  productId: string,
+  applicationId: string,
 ): Promise<void> {
   const [row] = await db
-    .select({ id: products.id })
-    .from(products)
-    .where(and(eq(products.id, productId), eq(products.ownerId, ownerId)))
+    .select({ id: applications.id })
+    .from(applications)
+    .where(and(eq(applications.id, applicationId), eq(applications.ownerId, ownerId)))
     .limit(1);
 
-  if (!row) throw notFound("Product");
+  if (!row) throw notFound("Application");
 }
 
 export async function createLicense(
@@ -61,7 +72,7 @@ export async function createLicense(
   ownerId: string,
   input: CreateLicenseInput,
 ): Promise<{ license: LicenseView; plaintextKey: string }> {
-  await assertOwnsProduct(db, ownerId, input.productId);
+  await assertOwnsApplication(db, ownerId, input.applicationId);
 
   const now = new Date();
   const plaintextKey = generateLicenseKey();
@@ -71,11 +82,13 @@ export async function createLicense(
     .insert(licenses)
     .values({
       id: generateLicenseId(),
-      productId: input.productId,
+      applicationId: input.applicationId,
       // The plaintext is hashed here and then only ever returned to the
       // caller. It is not logged, not cached, and not written anywhere.
       keyHash: hashLicenseKey(plaintextKey, input.secret),
       keyLast4: licenseKeyLast4(plaintextKey),
+      label: input.label ?? null,
+      notes: input.notes ?? null,
       status: "active",
       expiresAt,
       hwidLocked: input.hwidLocked,
@@ -92,15 +105,15 @@ export async function createLicense(
 export async function listLicenses(
   db: Database,
   ownerId: string,
-  productId: string,
+  applicationId: string,
 ): Promise<LicenseView[]> {
-  await assertOwnsProduct(db, ownerId, productId);
+  await assertOwnsApplication(db, ownerId, applicationId);
 
   const rows = await db
     .select({ license: licenses, activation: activations })
     .from(licenses)
     .leftJoin(activations, eq(activations.licenseId, licenses.id))
-    .where(eq(licenses.productId, productId))
+    .where(eq(licenses.applicationId, applicationId))
     .orderBy(desc(licenses.createdAt));
 
   return rows.map((row) => toLicenseView(row.license, row.activation));
@@ -112,8 +125,10 @@ export function toLicenseView(
 ): LicenseView {
   return {
     id: row.id,
-    productId: row.productId,
+    applicationId: row.applicationId,
     keyLast4: row.keyLast4,
+    label: row.label,
+    notes: row.notes,
     status: row.status,
     expiresAt: row.expiresAt,
     hwidLocked: row.hwidLocked,
@@ -128,7 +143,7 @@ export function toLicenseView(
 
 /**
  * Resolves a license ID to its row only if the calling developer owns the
- * product that owns it. This is the `Clerk user -> owns product -> product
+ * application that owns it. This is the `Clerk user -> owns application -> application
  * owns license` chain expressed as a single join, so no caller can perform a
  * mutation without it having been proven.
  */
@@ -140,8 +155,8 @@ async function findOwnedLicense(
   const [row] = await db
     .select({ license: licenses })
     .from(licenses)
-    .innerJoin(products, eq(products.id, licenses.productId))
-    .where(and(eq(licenses.id, licenseId), eq(products.ownerId, ownerId)))
+    .innerJoin(applications, eq(applications.id, licenses.applicationId))
+    .where(and(eq(licenses.id, licenseId), eq(applications.ownerId, ownerId)))
     .limit(1);
 
   return row?.license ?? null;
@@ -155,9 +170,9 @@ export async function getLicense(
   const [row] = await db
     .select({ license: licenses, activation: activations })
     .from(licenses)
-    .innerJoin(products, eq(products.id, licenses.productId))
+    .innerJoin(applications, eq(applications.id, licenses.applicationId))
     .leftJoin(activations, eq(activations.licenseId, licenses.id))
-    .where(and(eq(licenses.id, licenseId), eq(products.ownerId, ownerId)))
+    .where(and(eq(licenses.id, licenseId), eq(applications.ownerId, ownerId)))
     .limit(1);
 
   return row ? toLicenseView(row.license, row.activation) : null;
@@ -203,6 +218,33 @@ export async function restoreLicense(
 }
 
 /**
+ * Edits the two mutable, dashboard-only fields.
+ *
+ * The SET clause names exactly `label`, `notes` and `updatedAt`. Nothing
+ * about the license's identity or its licensing decision — the key hash, the
+ * status, the expiry, the device lock — is reachable from this path, so a
+ * relabel can never become an accidental un-revoke.
+ */
+export async function updateLicenseDetails(
+  db: Database,
+  ownerId: string,
+  licenseId: string,
+  details: LicenseDetailsInput,
+): Promise<LicenseView> {
+  const owned = await findOwnedLicense(db, ownerId, licenseId);
+  if (!owned) throw notFound("License");
+
+  const [row] = await db
+    .update(licenses)
+    .set({ label: details.label, notes: details.notes, updatedAt: new Date() })
+    .where(eq(licenses.id, licenseId))
+    .returning();
+
+  if (!row) throw notFound("License");
+  return toLicenseView(row, null);
+}
+
+/**
  * Clears the device binding so the next valid device can claim the license.
  * Succeeds silently when there is nothing bound — the developer's intent is
  * "this license should be claimable", and it already is.
@@ -211,11 +253,15 @@ export async function resetActivation(
   db: Database,
   ownerId: string,
   licenseId: string,
-): Promise<void> {
+): Promise<LicenseView> {
   const owned = await findOwnedLicense(db, ownerId, licenseId);
   if (!owned) throw notFound("License");
 
   await db.delete(activations).where(eq(activations.licenseId, licenseId));
+
+  // Returned so the caller can name the license in its confirmation without a
+  // second lookup. The activation is gone, hence null.
+  return toLicenseView(owned, null);
 }
 
 /**
@@ -228,9 +274,13 @@ export async function deleteLicense(
   db: Database,
   ownerId: string,
   licenseId: string,
-): Promise<void> {
+): Promise<LicenseView> {
   const owned = await findOwnedLicense(db, ownerId, licenseId);
   if (!owned) throw notFound("License");
 
   await db.delete(licenses).where(eq(licenses.id, licenseId));
+
+  // The row is gone, so its label and masked key are captured here — the
+  // caller could not look them up afterwards to say what it deleted.
+  return toLicenseView(owned, null);
 }

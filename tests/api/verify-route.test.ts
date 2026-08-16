@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestDatabase, truncateAll } from "../helpers/db";
-import { DEVELOPER_A, makeLicense, makeProduct } from "../helpers/factories";
+import { DEVELOPER_A, makeLicense, makeApplication } from "../helpers/factories";
 import type { Database } from "@/db/types";
 
 let db: Database;
@@ -16,7 +16,7 @@ vi.mock("@/env", () => ({
   env: {
     KEYREN_LICENSE_HMAC_SECRET: "test-hmac-secret-value-at-least-32-chars-long",
     RATE_LIMIT_VERIFY_PER_MINUTE: 5,
-    RATE_LIMIT_VERIFY_PER_PRODUCT_PER_MINUTE: 100,
+    RATE_LIMIT_VERIFY_PER_APPLICATION_PER_MINUTE: 100,
   },
 }));
 
@@ -41,12 +41,12 @@ function request(body: unknown, ip = "203.0.113.5"): Request {
 describe("POST /api/v1/licenses/verify", () => {
   it("returns 200 and the documented success envelope", async () => {
     const { POST } = await import("@/app/api/v1/licenses/verify/route");
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const response = await POST(
       request({
-        productId: product.id,
+        applicationId: application.id,
         licenseKey: license.plaintextKey,
         deviceId: "device-one",
       }),
@@ -61,11 +61,11 @@ describe("POST /api/v1/licenses/verify", () => {
 
   it("returns 403 LICENSE_INVALID for an unissued key", async () => {
     const { POST } = await import("@/app/api/v1/licenses/verify/route");
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
 
     const response = await POST(
       request({
-        productId: product.id,
+        applicationId: application.id,
         licenseKey: "KEYREN-ABCDEFGH-ABCDEFGH-ABCDEFGH-ABCDEFGH",
         deviceId: "device-one",
       }),
@@ -77,26 +77,26 @@ describe("POST /api/v1/licenses/verify", () => {
     expect(body.error.code).toBe("LICENSE_INVALID");
   });
 
-  it("returns 404 PRODUCT_INVALID for an unknown product", async () => {
+  it("returns 404 APPLICATION_INVALID for an unknown application", async () => {
     const { POST } = await import("@/app/api/v1/licenses/verify/route");
     const response = await POST(
       request({
-        productId: "prod_UNKNOWN0000000000000000",
+        applicationId: "app_UNKNOWN0000000000000000",
         licenseKey: "KEYREN-ABCDEFGH-ABCDEFGH-ABCDEFGH-ABCDEFGH",
         deviceId: "device-one",
       }),
     );
 
     expect(response.status).toBe(404);
-    expect((await response.json()).error.code).toBe("PRODUCT_INVALID");
+    expect((await response.json()).error.code).toBe("APPLICATION_INVALID");
   });
 
   it("returns 403 DEVICE_MISMATCH for a second device", async () => {
     const { POST } = await import("@/app/api/v1/licenses/verify/route");
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
-    const body = { productId: product.id, licenseKey: license.plaintextKey };
+    const body = { applicationId: application.id, licenseKey: license.plaintextKey };
     await POST(request({ ...body, deviceId: "device-one" }));
     const response = await POST(request({ ...body, deviceId: "device-two" }));
 
@@ -115,7 +115,7 @@ describe("POST /api/v1/licenses/verify", () => {
 
     it("returns 400 for a body missing required fields", async () => {
       const { POST } = await import("@/app/api/v1/licenses/verify/route");
-      const response = await POST(request({ productId: "prod_ABC" }));
+      const response = await POST(request({ applicationId: "app_ABC" }));
       expect(response.status).toBe(400);
       expect((await response.json()).error.code).toBe("BAD_REQUEST");
     });
@@ -141,11 +141,11 @@ describe("POST /api/v1/licenses/verify", () => {
   describe("rate limiting", () => {
     it("returns 429 RATE_LIMITED once the per-IP limit is exceeded", async () => {
       const { POST } = await import("@/app/api/v1/licenses/verify/route");
-      const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-      const license = await makeLicense(db, { productId: product.id, hwidLocked: false });
+      const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+      const license = await makeLicense(db, { applicationId: application.id, hwidLocked: false });
 
       const body = {
-        productId: product.id,
+        applicationId: application.id,
         licenseKey: license.plaintextKey,
         deviceId: "device-one",
       };
@@ -162,10 +162,10 @@ describe("POST /api/v1/licenses/verify", () => {
 
     it("sets a Retry-After header", async () => {
       const { POST } = await import("@/app/api/v1/licenses/verify/route");
-      const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-      const license = await makeLicense(db, { productId: product.id, hwidLocked: false });
+      const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+      const license = await makeLicense(db, { applicationId: application.id, hwidLocked: false });
       const body = {
-        productId: product.id,
+        applicationId: application.id,
         licenseKey: license.plaintextKey,
         deviceId: "device-one",
       };
@@ -179,10 +179,10 @@ describe("POST /api/v1/licenses/verify", () => {
 
     it("does not limit a different IP", async () => {
       const { POST } = await import("@/app/api/v1/licenses/verify/route");
-      const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-      const license = await makeLicense(db, { productId: product.id, hwidLocked: false });
+      const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+      const license = await makeLicense(db, { applicationId: application.id, hwidLocked: false });
       const body = {
-        productId: product.id,
+        applicationId: application.id,
         licenseKey: license.plaintextKey,
         deviceId: "device-one",
       };
@@ -196,7 +196,7 @@ describe("POST /api/v1/licenses/verify", () => {
       // guesses cannot be used to probe the licenses table.
       const { POST } = await import("@/app/api/v1/licenses/verify/route");
       const junk = {
-        productId: "prod_UNKNOWN0000000000000000",
+        applicationId: "app_UNKNOWN0000000000000000",
         licenseKey: "KEYREN-ABCDEFGH-ABCDEFGH-ABCDEFGH-ABCDEFGH",
         deviceId: "device-one",
       };
@@ -211,12 +211,12 @@ describe("POST /api/v1/licenses/verify", () => {
 
   it("never echoes the submitted license key", async () => {
     const { POST } = await import("@/app/api/v1/licenses/verify/route");
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, status: "revoked" });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, status: "revoked" });
 
     const response = await POST(
       request({
-        productId: product.id,
+        applicationId: application.id,
         licenseKey: license.plaintextKey,
         deviceId: "device-one",
       }),

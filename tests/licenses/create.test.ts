@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { licenses } from "@/db/schema";
 import { createTestDatabase, TEST_HMAC_SECRET, truncateAll } from "../helpers/db";
-import { DEVELOPER_A, DEVELOPER_B, makeProduct } from "../helpers/factories";
+import { DEVELOPER_A, DEVELOPER_B, makeApplication } from "../helpers/factories";
 import { createLicense, listLicenses } from "@/lib/licenses/service";
 import { LICENSE_KEY_PATTERN, hashLicenseKey } from "@/lib/crypto/license-key";
 import type { Database } from "@/db/types";
@@ -22,9 +22,9 @@ beforeEach(async () => {
 
 describe("createLicense", () => {
   it("returns the plaintext key exactly once, in the creation response", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const created = await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "permanent" },
       hwidLocked: true,
       secret: TEST_HMAC_SECRET,
@@ -34,9 +34,9 @@ describe("createLicense", () => {
   });
 
   it("never persists the plaintext key", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const created = await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "permanent" },
       hwidLocked: true,
       secret: TEST_HMAC_SECRET,
@@ -52,9 +52,9 @@ describe("createLicense", () => {
   });
 
   it("stores the last four characters for masked display", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const created = await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "permanent" },
       hwidLocked: true,
       secret: TEST_HMAC_SECRET,
@@ -64,9 +64,9 @@ describe("createLicense", () => {
   });
 
   it("defaults to active, HWID-locked, never expiring", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const created = await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "permanent" },
       hwidLocked: true,
       secret: TEST_HMAC_SECRET,
@@ -78,9 +78,9 @@ describe("createLicense", () => {
   });
 
   it("resolves a duration into an absolute expiry", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const created = await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "duration", duration: "30d" },
       hwidLocked: false,
       secret: TEST_HMAC_SECRET,
@@ -91,11 +91,11 @@ describe("createLicense", () => {
     expect(Math.abs(created.license.expiresAt!.getTime() - expected)).toBeLessThan(5000);
   });
 
-  it("refuses to create a license under another developer's product", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_B });
+  it("refuses to create a license under another developer's application", async () => {
+    const application = await makeApplication(db, { ownerId: DEVELOPER_B });
     await expect(
       createLicense(db, DEVELOPER_A, {
-        productId: product.id,
+        applicationId: application.id,
         expiration: { mode: "permanent" },
         hwidLocked: true,
         secret: TEST_HMAC_SECRET,
@@ -108,15 +108,15 @@ describe("createLicense", () => {
 
 describe("listLicenses", () => {
   it("returns masked references and never a key hash", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const created = await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "permanent" },
       hwidLocked: true,
       secret: TEST_HMAC_SECRET,
     });
 
-    const listed = await listLicenses(db, DEVELOPER_A, product.id);
+    const listed = await listLicenses(db, DEVELOPER_A, application.id);
     expect(listed).toHaveLength(1);
 
     const serialized = JSON.stringify(listed);
@@ -128,20 +128,20 @@ describe("listLicenses", () => {
   });
 
   it("reports activation state", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     await createLicense(db, DEVELOPER_A, {
-      productId: product.id,
+      applicationId: application.id,
       expiration: { mode: "permanent" },
       hwidLocked: true,
       secret: TEST_HMAC_SECRET,
     });
 
-    const [listed] = await listLicenses(db, DEVELOPER_A, product.id);
+    const [listed] = await listLicenses(db, DEVELOPER_A, application.id);
     expect(listed?.activation).toBeNull();
   });
 
   it("refuses to list another developer's licenses", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_B });
-    await expect(listLicenses(db, DEVELOPER_A, product.id)).rejects.toThrow(/not found/i);
+    const application = await makeApplication(db, { ownerId: DEVELOPER_B });
+    await expect(listLicenses(db, DEVELOPER_A, application.id)).rejects.toThrow(/not found/i);
   });
 });

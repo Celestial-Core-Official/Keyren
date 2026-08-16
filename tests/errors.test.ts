@@ -8,7 +8,7 @@ import { maskLicenseKey } from "@/lib/log";
 
 const ALL_CODES: VerificationErrorCode[] = [
   "BAD_REQUEST",
-  "PRODUCT_INVALID",
+  "APPLICATION_INVALID",
   "LICENSE_INVALID",
   "LICENSE_REVOKED",
   "LICENSE_EXPIRED",
@@ -26,7 +26,7 @@ describe("verification error taxonomy", () => {
 
   it("uses conventional statuses", () => {
     expect(VERIFICATION_ERROR_STATUS.BAD_REQUEST).toBe(400);
-    expect(VERIFICATION_ERROR_STATUS.PRODUCT_INVALID).toBe(404);
+    expect(VERIFICATION_ERROR_STATUS.APPLICATION_INVALID).toBe(404);
     expect(VERIFICATION_ERROR_STATUS.LICENSE_INVALID).toBe(403);
     expect(VERIFICATION_ERROR_STATUS.LICENSE_REVOKED).toBe(403);
     expect(VERIFICATION_ERROR_STATUS.LICENSE_EXPIRED).toBe(403);

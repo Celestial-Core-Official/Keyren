@@ -1,43 +1,68 @@
 import { PageHeader } from "@/components/dashboard/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AccountActions } from "@/components/settings/account-actions";
+import { AppearanceSetting } from "@/components/settings/appearance-setting";
+import { PreferencesSettings } from "@/components/settings/preferences-settings";
+import { SettingRow, SettingSection } from "@/components/settings/setting-row";
+import { KEYBOARD_SHORTCUTS } from "@/lib/shortcuts";
+import { RELEASE } from "@/lib/release";
 
+/**
+ * Settings, which until now had none.
+ *
+ * Through Alpha_v1 this page was three read-only cards — 189 words of prose
+ * and not one control. The Account card spent sixty of those words explaining
+ * where to click instead of being a button. Everything that only described
+ * something has either become the control it was describing, or moved to
+ * About, where reference material belongs.
+ */
 export default function SettingsPage() {
   return (
-    <div className="space-y-8">
-      <PageHeader
-        title="Settings"
-        description="Account and release information."
-      />
+    <div className="max-w-3xl space-y-10">
+      <PageHeader title="Settings" />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Account</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Your account is managed through the avatar menu in the top-right corner.
-        </CardContent>
-      </Card>
+      <AppearanceSetting />
+      <PreferencesSettings />
+      <AccountActions />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Release: Alpha_v1</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>This is a private testing release. Known limitations:</p>
-          <ul className="list-disc space-y-1.5 pl-5">
-            <li>
-              Validation is online-only. If Keyren is unreachable, your software cannot
-              obtain a positive licensing response. There are no offline licenses and no
-              cached grace periods.
-            </li>
-            <li>HWID-locked licenses bind to exactly one device.</li>
-            <li>
-              Only a developer can reset an activation. End users cannot reset their own,
-              so a reinstall consumes the binding until you reset it.
-            </li>
+      <SettingSection title="Keyboard shortcuts">
+        {KEYBOARD_SHORTCUTS.map((shortcut) => (
+          <SettingRow key={shortcut.description} label={shortcut.description}>
+            <span className="flex gap-1">
+              {shortcut.keys.map((key) => (
+                <kbd
+                  key={key}
+                  className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs"
+                >
+                  {key}
+                </kbd>
+              ))}
+            </span>
+          </SettingRow>
+        ))}
+      </SettingSection>
+
+      <SettingSection title="About">
+        <SettingRow label="Release">
+          <span className="text-sm text-muted-foreground">
+            {RELEASE.name}{" "}
+            <span className="font-mono text-xs">({RELEASE.version})</span>
+          </span>
+        </SettingRow>
+        <SettingRow label="Verification API" hint="Versioned separately from the release.">
+          <code className="font-mono text-xs text-muted-foreground">
+            /api/{RELEASE.apiVersion}/
+          </code>
+        </SettingRow>
+        <div className="space-y-1.5 px-4 py-3">
+          <p className="text-sm">Known limitations</p>
+          <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+            <li>Online-only. No offline licenses, no cached grace periods.</li>
+            <li>A locked license binds to exactly one device.</li>
+            <li>Only you can reset an activation — a reinstall consumes the binding until you do.</li>
+            <li>Keys are shown once at creation. A lost key can be replaced, never recovered.</li>
           </ul>
-        </CardContent>
-      </Card>
+        </div>
+      </SettingSection>
     </div>
   );
 }
