@@ -1,12 +1,26 @@
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
+import { db } from "@/db";
+import { requireDeveloperId } from "@/lib/auth/require-developer";
+import { listApplications } from "@/lib/applications/service";
+import { ApplicationSwitcher } from "@/components/dashboard/application-switcher";
 import { KeyboardShortcuts } from "@/components/dashboard/keyboard-shortcuts";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { RELEASE } from "@/lib/release";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const ownerId = await requireDeveloperId();
+
+  // Owner-scoped, and only the two fields the switcher renders. The list is
+  // small by nature — one developer's own applications — so this costs a
+  // single indexed query on a layout that was already hitting auth.
+  const applications = (await listApplications(db, ownerId)).map((application) => ({
+    id: application.id,
+    name: application.name,
+  }));
+
   return (
     <div className="min-h-screen">
       {/* Skip link: the first tab stop on every page, so a keyboard user is
@@ -23,10 +37,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <MobileNav />
           <Link href="/dashboard" className="flex items-center gap-2 px-2">
             <span className="font-semibold tracking-tight">Keyren</span>
-            <span className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium tracking-wider text-muted-foreground">
+            <span className="hidden rounded border border-border px-1.5 py-0.5 text-[10px] font-medium tracking-wider text-muted-foreground sm:inline">
               {RELEASE.name}
             </span>
           </Link>
+          <span className="text-muted-foreground/40" aria-hidden="true">
+            /
+          </span>
+          <ApplicationSwitcher applications={applications} />
         </div>
         <UserButton />
       </header>
