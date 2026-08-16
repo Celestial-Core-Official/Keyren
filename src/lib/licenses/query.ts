@@ -250,3 +250,157 @@ export async function getApplicationLicenseStats(
     activated: Number(row?.activated ?? 0),
   };
 }
+
+/**
+ * The developer's whole account, in one row.
+ *
+ * Scoped by joining through `applications` on `owner_id` rather than by
+ * collecting application ids first and passing them back in — one query
+ * either way, and no chance of the second one being called with a list the
+ * first did not filter.
+ */
+export type OverviewStats = {
+  applications: number;
+  total: number;
+  active: number;
+  expired: number;
+  revoked: number;
+  expiringSoon: number;
+};
+
+export const EXPIRING_SOON_DAYS = 30;
+
+export async function getOverviewStats(
+  db: Database,
+  ownerId: string,
+  now: Date = new Date(),
+): Promise<OverviewStats> {
+  const soon = new Date(now.getTime() + EXPIRING_SOON_DAYS * 24 * 60 * 60 * 1000);
+
+  const [row] = await db
+    .select({
+      applications: sql<number>`count(DISTINCT ${applications.id})`,
+      total: sql<number>`count(${licenses.id})`,
+      active: sql<number>`count(${licenses.id}) FILTER (
+        WHERE ${licenses.status} = 'active'
+          AND (${licenses.expiresAt} IS NULL OR ${licenses.expiresAt} > ${instant(now)})
+      )`,
+      expired: sql<number>`count(${licenses.id}) FILTER (
+        WHERE ${licenses.status} = 'active'
+          AND ${licenses.expiresAt} IS NOT NULL
+          AND ${licenses.expiresAt} <= ${instant(now)}
+      )`,
+      revoked: sql<number>`count(${licenses.id}) FILTER (WHERE ${licenses.status} = 'revoked')`,
+      // Already-expired licenses are excluded: something that lapsed last week
+      // is not "expiring soon", it is a different problem with its own count.
+      expiringSoon: sql<number>`count(${licenses.id}) FILTER (
+        WHERE ${licenses.status} = 'active'
+          AND ${licenses.expiresAt} IS NOT NULL
+          AND ${licenses.expiresAt} > ${instant(now)}
+          AND ${licenses.expiresAt} <= ${instant(soon)}
+      )`,
+    })
+    .from(applications)
+    .leftJoin(licenses, eq(licenses.applicationId, applications.id))
+    .where(eq(applications.ownerId, ownerId));
+
+  return {
+    applications: Number(row?.applications ?? 0),
+    total: Number(row?.total ?? 0),
+    active: Number(row?.active ?? 0),
+    expired: Number(row?.expired ?? 0),
+    revoked: Number(row?.revoked ?? 0),
+    expiringSoon: Number(row?.expiringSoon ?? 0),
+  };
+}
+
+export type ExpiringLicense = {
+  id: string;
+  label: string | null;
+  keyLast4: string;
+  expiresAt: Date;
+  applicationId: string;
+  applicationName: string;
+};
+
+/**
+ * The licenses about to lapse, soonest first.
+ *
+ * This is the one thing on the dashboard worth acting on before a customer
+ * writes in, which is why it is a list of specific licenses rather than
+ * another number.
+ */
+export async function getExpiringSoon(
+  db: Database,
+  ownerId: string,
+  limit = 5,
+  now: Date = new Date(),
+): Promise<ExpiringLicense[]> {
+  const soon = new Date(now.getTime() + EXPIRING_SOON_DAYS * 24 * 60 * 60 * 1000);
+
+  const rows = await db
+    .select({
+      id: licenses.id,
+      label: licenses.label,
+      keyLast4: licenses.keyLast4,
+      expiresAt: licenses.expiresAt,
+      applicationId: applications.id,
+      applicationName: applications.name,
+    })
+    .from(licenses)
+    .innerJoin(applications, eq(applications.id, licenses.applicationId))
+    .where(
+      and(
+        eq(applications.ownerId, ownerId),
+        eq(licenses.status, "active"),
+        isNotNull(licenses.expiresAt),
+        sql`${licenses.expiresAt} > ${instant(now)}`,
+        sql`${licenses.expiresAt} <= ${instant(soon)}`,
+      ),
+    )
+    .orderBy(asc(licenses.expiresAt))
+    .limit(limit);
+
+  // expiresAt is non-null by the WHERE clause; the column type does not know.
+  return rows.map((row) => ({ ...row, expiresAt: row.expiresAt as Date }));
+}
+
+export type ApplicationBreakdownRow = {
+  id: string;
+  name: string;
+  disabled: boolean;
+  total: number;
+  active: number;
+};
+
+/** Per-application totals, so the overview says which application is which. */
+export async function getApplicationBreakdown(
+  db: Database,
+  ownerId: string,
+  now: Date = new Date(),
+): Promise<ApplicationBreakdownRow[]> {
+  const rows = await db
+    .select({
+      id: applications.id,
+      name: applications.name,
+      disabledAt: applications.disabledAt,
+      total: sql<number>`count(${licenses.id})`,
+      active: sql<number>`count(${licenses.id}) FILTER (
+        WHERE ${licenses.status} = 'active'
+          AND (${licenses.expiresAt} IS NULL OR ${licenses.expiresAt} > ${instant(now)})
+      )`,
+    })
+    .from(applications)
+    .leftJoin(licenses, eq(licenses.applicationId, applications.id))
+    .where(eq(applications.ownerId, ownerId))
+    .groupBy(applications.id)
+    .orderBy(desc(sql`count(${licenses.id})`), asc(applications.name));
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    disabled: row.disabledAt !== null,
+    total: Number(row.total),
+    active: Number(row.active),
+  }));
+}
