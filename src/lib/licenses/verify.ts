@@ -48,12 +48,20 @@ export async function verifyLicense(db: Database, input: VerifyInput): Promise<V
   //    and are not secret, so distinguishing this case is safe and helps a
   //    developer debug a bad integration.
   const [application] = await db
-    .select({ id: applications.id })
+    .select({ id: applications.id, disabledAt: applications.disabledAt })
     .from(applications)
     .where(eq(applications.id, input.applicationId))
     .limit(1);
 
   if (!application) return failure("APPLICATION_INVALID");
+
+  // 1a. The application-wide kill switch, checked before anything else costs
+  //     anything. A disabled application rejects every license it owns
+  //     regardless of that license's own state — which is the point of having
+  //     it, and why this cannot sit after the per-license checks. Deliberately
+  //     ahead of the key hash: there is no reason to spend an HMAC deciding
+  //     the answer to a question already settled.
+  if (application.disabledAt !== null) return failure("APPLICATION_DISABLED");
 
   // 2. Derive the lookup value. The plaintext key never touches the database
   //    and is never logged.

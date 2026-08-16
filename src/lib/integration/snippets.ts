@@ -76,7 +76,8 @@ try {
 
   if (!result.success) {
     // LICENSE_INVALID, LICENSE_REVOKED, LICENSE_EXPIRED, DEVICE_MISMATCH,
-    // APPLICATION_INVALID, RATE_LIMITED, BAD_REQUEST, INTERNAL_ERROR
+    // APPLICATION_INVALID, APPLICATION_DISABLED, RATE_LIMITED, BAD_REQUEST,
+    // INTERNAL_ERROR
     throw new Error(result.error.code);
   }
 
@@ -114,7 +115,8 @@ except ValueError as error:
 
 if not result.get("success"):
     # LICENSE_INVALID, LICENSE_REVOKED, LICENSE_EXPIRED, DEVICE_MISMATCH,
-    # APPLICATION_INVALID, RATE_LIMITED, BAD_REQUEST, INTERNAL_ERROR
+    # APPLICATION_INVALID, APPLICATION_DISABLED, RATE_LIMITED, BAD_REQUEST,
+    # INTERNAL_ERROR
     raise RuntimeError(result["error"]["code"])
 
 # result["license"]["status"]    -> "active"
@@ -148,6 +150,7 @@ curl --max-time ${TIMEOUT_SECONDS} --show-error --silent --fail-with-body \\
 #   403 LICENSE_EXPIRED    past its expiry
 #   403 DEVICE_MISMATCH    already claimed by a different device
 #   404 APPLICATION_INVALID    no such application
+#   403 APPLICATION_DISABLED   the developer switched this application off
 #   429 RATE_LIMITED       slow down; see the retry-after header
 #   500 INTERNAL_ERROR     Keyren failed`;
 }
@@ -194,7 +197,8 @@ using (document)
     if (!root.GetProperty("success").GetBoolean())
     {
         // LICENSE_INVALID, LICENSE_REVOKED, LICENSE_EXPIRED, DEVICE_MISMATCH,
-        // APPLICATION_INVALID, RATE_LIMITED, BAD_REQUEST, INTERNAL_ERROR
+        // APPLICATION_INVALID, APPLICATION_DISABLED, RATE_LIMITED, BAD_REQUEST,
+    // INTERNAL_ERROR
         throw new InvalidOperationException(
             root.GetProperty("error").GetProperty("code").GetString());
     }

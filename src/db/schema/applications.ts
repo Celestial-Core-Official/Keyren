@@ -16,6 +16,17 @@ export const applications = pgTable(
     /** Human readability only. Not unique, not an identifier. */
     slug: text("slug").notNull(),
 
+    /**
+     * When the developer switched this application off. NULL means live.
+     *
+     * A timestamp rather than a boolean: "off since Tuesday" is worth knowing
+     * and costs the same to store. While set, every verification for this
+     * application is rejected regardless of how healthy the individual license
+     * is — it is the kill switch for a whole application, so it is checked
+     * before the key is even hashed.
+     */
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

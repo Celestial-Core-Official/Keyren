@@ -12,8 +12,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 const APPLICATIONS = [
-  { id: "app_alpha", name: "Alpha Tool" },
-  { id: "app_beta", name: "Beta Suite" },
+  { id: "app_alpha", name: "Alpha Tool", disabled: false },
+  { id: "app_beta", name: "Beta Suite", disabled: true },
 ] as const;
 
 function renderSwitcher(at: string) {
@@ -35,6 +35,15 @@ describe("ApplicationSwitcher — which application is current", () => {
   it("reads as All applications outside any one of them", () => {
     renderSwitcher("/dashboard");
     expect(screen.getByRole("button", { name: /Choose an application/ })).toBeTruthy();
+  });
+
+  it("marks a disabled application in the list", async () => {
+    const user = renderSwitcher("/dashboard/applications/app_alpha");
+    await user.click(screen.getByRole("button", { name: /Alpha Tool/ }));
+
+    // Beta is off; the developer should be able to see that without opening it.
+    const beta = screen.getByRole("menuitem", { name: /Beta Suite/ });
+    expect(beta.querySelector('[aria-label="Disabled"]')).toBeTruthy();
   });
 
   it("does not claim an application the developer does not own", () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { Check, ChevronsUpDown, Plus, Layers } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Layers, PowerOff } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 export type SwitchableApplication = {
   id: string;
   name: string;
+  disabled: boolean;
 };
 
 /**
@@ -68,6 +69,9 @@ export function ApplicationSwitcher({
         }
       >
         <span className="truncate">{current?.name ?? "All applications"}</span>
+        {current?.disabled ? (
+          <PowerOff className="size-3.5 shrink-0 text-destructive" aria-label="Disabled" />
+        ) : null}
         <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" />
       </DropdownMenuTrigger>
 
@@ -83,7 +87,12 @@ export function ApplicationSwitcher({
                 onSelect={() => switchTo(application.id)}
                 className="justify-between gap-2"
               >
-                <span className="truncate">{application.name}</span>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate">{application.name}</span>
+                  {application.disabled ? (
+                    <PowerOff className="size-3 shrink-0 text-destructive" aria-label="Disabled" />
+                  ) : null}
+                </span>
                 {application.id === currentId ? (
                   <Check className="size-3.5 shrink-0" />
                 ) : null}

@@ -11,6 +11,8 @@ export type Application = {
   id: string;
   name: string;
   slug: string;
+  /** NULL while live. A timestamp means the developer switched it off. */
+  disabledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -99,6 +101,7 @@ export async function listApplications(
       id: applications.id,
       name: applications.name,
       slug: applications.slug,
+      disabledAt: applications.disabledAt,
       createdAt: applications.createdAt,
       updatedAt: applications.updatedAt,
       licenseCount: count(licenses.id),
@@ -144,6 +147,31 @@ export async function renameApplication(
   return toApplication(row);
 }
 
+/**
+ * Switches an application off, or back on.
+ *
+ * While off, every verification for it fails with `APPLICATION_DISABLED`, no
+ * matter how healthy the individual license is. Nothing is destroyed: no
+ * license is revoked, no activation is released, and switching back on
+ * restores the exact state that was there before. That reversibility is the
+ * reason this exists rather than telling a developer to delete and rebuild.
+ */
+export async function setApplicationDisabled(
+  db: Database,
+  ownerId: string,
+  applicationId: string,
+  disabled: boolean,
+): Promise<Application> {
+  const [row] = await db
+    .update(applications)
+    .set({ disabledAt: disabled ? new Date() : null, updatedAt: new Date() })
+    .where(and(eq(applications.id, applicationId), eq(applications.ownerId, ownerId)))
+    .returning();
+
+  if (!row) throw notFound("Application");
+  return toApplication(row);
+}
+
 export async function deleteApplication(
   db: Database,
   ownerId: string,
@@ -164,6 +192,7 @@ function toApplication(row: typeof applications.$inferSelect): Application {
     id: row.id,
     name: row.name,
     slug: row.slug,
+    disabledAt: row.disabledAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

@@ -105,7 +105,7 @@ A license that never existed, one belonging to a different application, and one 
 
 ### Error messages leak nothing
 
-All eight public messages are fixed strings containing no SQL, schema, identifiers, or exception text. Zod's issue list is referenced **zero** times in the route — verified live, a malformed body returns only `"The request body was malformed."`
+All nine public messages are fixed strings containing no SQL, schema, identifiers, or exception text. Zod's issue list is referenced **zero** times in the route — verified live, a malformed body returns only `"The request body was malformed."`
 
 The catch-all logs `error.message` server-side and returns only `INTERNAL_ERROR`.
 

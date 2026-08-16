@@ -12,7 +12,12 @@ import {
   safeErrorMessage,
   type ActionState,
 } from "@/lib/actions/state";
-import { createApplication, deleteApplication, renameApplication } from "@/lib/applications/service";
+import {
+  createApplication,
+  deleteApplication,
+  renameApplication,
+  setApplicationDisabled,
+} from "@/lib/applications/service";
 import {
   createApplicationSchema,
   applicationIdSchema,
@@ -94,4 +99,46 @@ export async function deleteApplicationAction(
   revalidatePath("/dashboard/applications");
   revalidatePath("/dashboard");
   redirect("/dashboard/applications");
+}
+
+/**
+ * Switches an application off, or back on.
+ *
+ * Nothing is destroyed either way — no license is revoked and no activation is
+ * released — so this is safe to toggle and safe to toggle back. While off, the
+ * verification endpoint rejects every license the application owns with
+ * APPLICATION_DISABLED.
+ */
+export async function setApplicationDisabledAction(
+  _previous: ApplicationActionState,
+  formData: FormData,
+): Promise<ApplicationActionState> {
+  const ownerId = await requireDeveloperId();
+
+  const parsed = applicationIdSchema.safeParse(formData.get("applicationId"));
+  if (!parsed.success) return actionFailure("That application is no longer available.");
+
+  // The form states the intended end state rather than asking the server to
+  // flip whatever it finds. Two tabs open on the same application then agree
+  // on the result instead of racing to opposite answers.
+  const disabled = formData.get("disabled") === "true";
+
+  try {
+    await setApplicationDisabled(db, ownerId, parsed.data, disabled);
+  } catch (error) {
+    return actionFailure(
+      safeErrorMessage(error, "Could not change that application's status."),
+    );
+  }
+
+  revalidatePath("/dashboard/applications");
+  revalidatePath(`/dashboard/applications/${parsed.data}`);
+  revalidatePath("/dashboard");
+
+  return actionSuccess(
+    disabled
+      ? "Application disabled. License checks will now be rejected."
+      : "Application enabled. License checks will succeed again.",
+    null,
+  );
 }

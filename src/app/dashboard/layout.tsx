@@ -13,12 +13,13 @@ import { RELEASE } from "@/lib/release";
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const ownerId = await requireDeveloperId();
 
-  // Owner-scoped, and only the two fields the switcher renders. The list is
+  // Owner-scoped, and only the fields the switcher renders. The list is
   // small by nature — one developer's own applications — so this costs a
   // single indexed query on a layout that was already hitting auth.
   const applications = (await listApplications(db, ownerId)).map((application) => ({
     id: application.id,
     name: application.name,
+    disabled: application.disabledAt !== null,
   }));
 
   return (

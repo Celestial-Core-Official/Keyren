@@ -6,6 +6,8 @@ import { requireDeveloperId } from "@/lib/auth/require-developer";
 import { getCachedApplication } from "@/lib/applications/cached";
 import { CopyButton } from "@/components/dashboard/copy-button";
 import { ApplicationTabs } from "@/components/dashboard/application-tabs";
+import { ApplicationActions } from "@/components/applications/application-actions";
+import { Badge } from "@/components/ui/badge";
 
 export default async function ApplicationLayout({
   children,
@@ -50,7 +52,29 @@ export default async function ApplicationLayout({
             </code>
             <CopyButton value={application.id} label="" />
           </div>
+
+          {application.disabledAt ? (
+            <Badge variant="destructive">Disabled</Badge>
+          ) : null}
+
+          {/* Rename and delete used to exist only on the applications list, so
+              renaming the application you were looking at meant navigating out
+              of it first. */}
+          <div className="ml-auto">
+            <ApplicationActions
+              applicationId={application.id}
+              name={application.name}
+              disabled={application.disabledAt !== null}
+            />
+          </div>
         </div>
+
+        {application.disabledAt ? (
+          <p className="text-sm text-destructive">
+            Every license check for this application is being rejected. Enable it from
+            the actions menu to resume.
+          </p>
+        ) : null}
 
         <ApplicationTabs applicationId={application.id} />
       </div>

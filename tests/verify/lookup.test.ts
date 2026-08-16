@@ -3,6 +3,7 @@ import { createTestDatabase, TEST_HMAC_SECRET, truncateAll } from "../helpers/db
 import { DEVELOPER_A, makeLicense, makeApplication } from "../helpers/factories";
 import { verifyLicense } from "@/lib/licenses/verify";
 import { generateLicenseKey } from "@/lib/crypto/license-key";
+import { setApplicationDisabled } from "@/lib/applications/service";
 import type { Database } from "@/db/types";
 
 let db: Database;
@@ -163,5 +164,105 @@ describe("enumeration resistance", () => {
     expect(serialized).not.toContain(license.id);
     expect(serialized).not.toContain(DEVELOPER_A);
     expect(serialized).not.toContain(license.plaintextKey);
+  });
+});
+
+describe("a disabled application", () => {
+  it("rejects an otherwise perfectly valid license", async () => {
+    // The kill switch has to beat every per-license check, or it is not one.
+    const application = await makeApplication(db, {
+      ownerId: DEVELOPER_A,
+      disabledAt: new Date("2026-08-01T00:00:00.000Z"),
+    });
+    const license = await makeLicense(db, { applicationId: application.id });
+
+    const result = await verifyLicense(db, {
+      applicationId: application.id,
+      licenseKey: license.plaintextKey,
+      deviceId: DEVICE,
+      secret: TEST_HMAC_SECRET,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error("expected failure");
+    expect(result.error.code).toBe("APPLICATION_DISABLED");
+  });
+
+  it("is reported as disabled rather than as an invalid key", async () => {
+    // A developer debugging this must be able to tell "I switched this off"
+    // apart from "my customer's key is wrong".
+    const application = await makeApplication(db, {
+      ownerId: DEVELOPER_A,
+      disabledAt: new Date("2026-08-01T00:00:00.000Z"),
+    });
+
+    const result = await verifyLicense(db, {
+      applicationId: application.id,
+      licenseKey: generateLicenseKey(),
+      deviceId: DEVICE,
+      secret: TEST_HMAC_SECRET,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error("expected failure");
+    expect(result.error.code).toBe("APPLICATION_DISABLED");
+  });
+
+  it("leaves the licenses themselves untouched, so re-enabling restores them", async () => {
+    const application = await makeApplication(db, {
+      ownerId: DEVELOPER_A,
+      disabledAt: new Date("2026-08-01T00:00:00.000Z"),
+    });
+    const license = await makeLicense(db, { applicationId: application.id });
+
+    const disabled = await verifyLicense(db, {
+      applicationId: application.id,
+      licenseKey: license.plaintextKey,
+      deviceId: DEVICE,
+      secret: TEST_HMAC_SECRET,
+    });
+    expect(disabled.success).toBe(false);
+
+    await setApplicationDisabled(db, DEVELOPER_A, application.id, false);
+
+    const reenabled = await verifyLicense(db, {
+      applicationId: application.id,
+      licenseKey: license.plaintextKey,
+      deviceId: DEVICE,
+      secret: TEST_HMAC_SECRET,
+    });
+    expect(reenabled.success).toBe(true);
+  });
+
+  it("still verifies normally for a live application owned by the same developer", async () => {
+    // Disabling one application must not take the others down with it.
+    const off = await makeApplication(db, {
+      ownerId: DEVELOPER_A,
+      disabledAt: new Date("2026-08-01T00:00:00.000Z"),
+    });
+    const live = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: live.id });
+
+    expect(
+      (
+        await verifyLicense(db, {
+          applicationId: off.id,
+          licenseKey: license.plaintextKey,
+          deviceId: DEVICE,
+          secret: TEST_HMAC_SECRET,
+        })
+      ).success,
+    ).toBe(false);
+
+    expect(
+      (
+        await verifyLicense(db, {
+          applicationId: live.id,
+          licenseKey: license.plaintextKey,
+          deviceId: DEVICE,
+          secret: TEST_HMAC_SECRET,
+        })
+      ).success,
+    ).toBe(true);
   });
 });

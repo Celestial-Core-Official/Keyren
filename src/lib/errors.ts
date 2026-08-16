@@ -8,6 +8,7 @@
 export type VerificationErrorCode =
   | "BAD_REQUEST"
   | "APPLICATION_INVALID"
+  | "APPLICATION_DISABLED"
   | "LICENSE_INVALID"
   | "LICENSE_REVOKED"
   | "LICENSE_EXPIRED"
@@ -23,6 +24,10 @@ export type VerificationErrorCode =
 export const VERIFICATION_ERROR_STATUS: Record<VerificationErrorCode, number> = {
   BAD_REQUEST: 400,
   APPLICATION_INVALID: 404,
+  // 403, not 404: the application exists and the request was well-formed. The
+  // developer switched it off, and saying so is what lets them tell "I turned
+  // this off" apart from "my integration is sending the wrong id".
+  APPLICATION_DISABLED: 403,
   LICENSE_INVALID: 403,
   LICENSE_REVOKED: 403,
   LICENSE_EXPIRED: 403,
@@ -38,6 +43,7 @@ export const VERIFICATION_ERROR_STATUS: Record<VerificationErrorCode, number> = 
 export const VERIFICATION_ERROR_MESSAGE: Record<VerificationErrorCode, string> = {
   BAD_REQUEST: "The request body was malformed.",
   APPLICATION_INVALID: "The provided application is invalid.",
+  APPLICATION_DISABLED: "This application is not currently accepting license checks.",
   LICENSE_INVALID: "The provided license is invalid.",
   LICENSE_REVOKED: "This license has been revoked.",
   LICENSE_EXPIRED: "This license has expired.",

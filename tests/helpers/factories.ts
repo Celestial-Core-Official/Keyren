@@ -14,7 +14,12 @@ export const DEVELOPER_B = "user_developer_b";
 
 export async function makeApplication(
   db: Database,
-  options: { ownerId?: string; name?: string; createdAt?: Date } = {},
+  options: {
+    ownerId?: string;
+    name?: string;
+    createdAt?: Date;
+    disabledAt?: Date | null;
+  } = {},
 ): Promise<{ id: string; ownerId: string; name: string }> {
   const id = generateApplicationId();
   const ownerId = options.ownerId ?? DEVELOPER_A;
@@ -25,6 +30,7 @@ export async function makeApplication(
     ownerId,
     name,
     slug: slugify(name),
+    disabledAt: options.disabledAt ?? null,
     ...(options.createdAt
       ? { createdAt: options.createdAt, updatedAt: options.createdAt }
       : {}),

@@ -142,7 +142,7 @@ They are written as code worth shipping. Every one carries a timeout — a
 licensing check that hangs takes your application down with it — reads the
 body as text and parses it defensively, because a 429 from a proxy or a 502
 from a load balancer is frequently HTML, checks `success` rather than only the
-status code, and names all eight error codes.
+status code, and names every error code.
 
 ### The tester
 

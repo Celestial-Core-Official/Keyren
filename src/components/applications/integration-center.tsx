@@ -106,6 +106,7 @@ export function IntegrationCenter({
               <code className="font-mono text-xs">LICENSE_EXPIRED</code>,{" "}
               <code className="font-mono text-xs">DEVICE_MISMATCH</code>,{" "}
               <code className="font-mono text-xs">APPLICATION_INVALID</code>,{" "}
+              <code className="font-mono text-xs">APPLICATION_DISABLED</code>,{" "}
               <code className="font-mono text-xs">RATE_LIMITED</code>,{" "}
               <code className="font-mono text-xs">INTERNAL_ERROR</code>,{" "}
               <code className="font-mono text-xs">BAD_REQUEST</code>.

@@ -107,7 +107,11 @@ export default async function ApplicationsPage({
                     </TableCell>
                     <TableCell>
                       <div className="relative">
-                        <ApplicationActions applicationId={application.id} name={application.name} />
+                        <ApplicationActions
+                          applicationId={application.id}
+                          name={application.name}
+                          disabled={application.disabledAt !== null}
+                        />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -135,7 +139,11 @@ export default async function ApplicationsPage({
                     <p className="truncate text-xs text-muted-foreground">{application.slug}</p>
                   </div>
                   <div className="relative shrink-0">
-                    <ApplicationActions applicationId={application.id} name={application.name} />
+                    <ApplicationActions
+                          applicationId={application.id}
+                          name={application.name}
+                          disabled={application.disabledAt !== null}
+                        />
                   </div>
                 </div>
 

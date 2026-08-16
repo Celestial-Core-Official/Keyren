@@ -1,10 +1,11 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Power, PowerOff, Trash2 } from "lucide-react";
 import {
   deleteApplicationAction,
   renameApplicationAction,
+  setApplicationDisabledAction,
   type ApplicationActionState,
 } from "@/app/dashboard/applications/actions";
 import { FieldError, SubmitButton, useActionFeedback } from "@/components/dashboard/feedback";
@@ -30,16 +31,26 @@ import { idleAction } from "@/lib/actions/state";
 
 const INITIAL: ApplicationActionState = idleAction();
 
-export function ApplicationActions({ applicationId, name }: { applicationId: string; name: string }) {
+export function ApplicationActions({
+  applicationId,
+  name,
+  disabled = false,
+}: {
+  applicationId: string;
+  name: string;
+  disabled?: boolean;
+}) {
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmation, setConfirmation] = useState("");
 
   const [renameState, renameAction] = useActionState(renameApplicationAction, INITIAL);
   const [deleteState, deleteAction] = useActionState(deleteApplicationAction, INITIAL);
+  const [statusState, statusAction] = useActionState(setApplicationDisabledAction, INITIAL);
 
   useActionFeedback(renameState, { onSuccess: () => setRenaming(false) });
   useActionFeedback(deleteState);
+  useActionFeedback(statusState);
 
   // Every dialog opens clean. Carrying a typed confirmation across a close is
   // how a developer ends up one keystroke from deleting something they only
@@ -70,6 +81,21 @@ export function ApplicationActions({ applicationId, name }: { applicationId: str
             <Pencil className="size-4" />
             Rename
           </DropdownMenuItem>
+
+          {/* A form rather than an onSelect handler: the menu item posts the
+              intended end state, so two tabs open on the same application
+              cannot race to opposite answers. */}
+          <form action={statusAction}>
+            <input type="hidden" name="applicationId" value={applicationId} />
+            <input type="hidden" name="disabled" value={disabled ? "false" : "true"} />
+            <DropdownMenuItem asChild>
+              <button type="submit" className="w-full">
+                {disabled ? <Power className="size-4" /> : <PowerOff className="size-4" />}
+                {disabled ? "Enable" : "Disable"}
+              </button>
+            </DropdownMenuItem>
+          </form>
+
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}>
             <Trash2 className="size-4" />
