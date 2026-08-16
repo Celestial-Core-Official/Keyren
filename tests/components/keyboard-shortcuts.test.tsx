@@ -5,7 +5,7 @@ import {
   KeyboardShortcuts,
   isTypingInFormField,
 } from "@/components/dashboard/keyboard-shortcuts";
-import { currentProductId } from "@/components/dashboard/mobile-nav";
+import { currentApplicationId } from "@/components/dashboard/mobile-nav";
 
 function Page({ onCreate = vi.fn() }: { onCreate?: () => void } = {}) {
   return (
@@ -160,27 +160,27 @@ describe("isTypingInFormField", () => {
   });
 });
 
-describe("currentProductId", () => {
-  it("finds the product on an overview path", () => {
-    expect(currentProductId("/dashboard/products/prod_abc123")).toBe("prod_abc123");
+describe("currentApplicationId", () => {
+  it("finds the application on an overview path", () => {
+    expect(currentApplicationId("/dashboard/applications/app_abc123")).toBe("app_abc123");
   });
 
-  it("finds the product on a nested path", () => {
-    expect(currentProductId("/dashboard/products/prod_abc123/licenses")).toBe(
-      "prod_abc123",
+  it("finds the application on a nested path", () => {
+    expect(currentApplicationId("/dashboard/applications/app_abc123/licenses")).toBe(
+      "app_abc123",
     );
   });
 
-  it("returns nothing on the products list itself", () => {
-    expect(currentProductId("/dashboard/products")).toBeNull();
+  it("returns nothing on the applications list itself", () => {
+    expect(currentApplicationId("/dashboard/applications")).toBeNull();
   });
 
   it("returns nothing elsewhere in the dashboard", () => {
-    expect(currentProductId("/dashboard")).toBeNull();
-    expect(currentProductId("/dashboard/settings")).toBeNull();
+    expect(currentApplicationId("/dashboard")).toBeNull();
+    expect(currentApplicationId("/dashboard/settings")).toBeNull();
   });
 
-  it("ignores a path that only looks like a product id", () => {
-    expect(currentProductId("/dashboard/products/not-a-product")).toBeNull();
+  it("ignores a path that only looks like an application id", () => {
+    expect(currentApplicationId("/dashboard/applications/not-a-application")).toBeNull();
   });
 });

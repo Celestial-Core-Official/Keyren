@@ -8,7 +8,7 @@ import {
   restoreLicenseAction,
   revokeLicenseAction,
   type LicenseActionState,
-} from "@/app/dashboard/products/[productId]/licenses/actions";
+} from "@/app/dashboard/applications/[applicationId]/licenses/actions";
 import { EditLicenseDialog } from "@/components/licenses/edit-license-dialog";
 import { SubmitButton, useActionFeedback } from "@/components/dashboard/feedback";
 import { Button } from "@/components/ui/button";
@@ -65,10 +65,10 @@ export function canResetActivation(
 
 export function LicenseRowActions({
   license,
-  productId,
+  applicationId,
 }: {
   license: LicenseListItem;
-  productId: string;
+  applicationId: string;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -103,7 +103,7 @@ export function LicenseRowActions({
     return (
       <>
         <input type="hidden" name="licenseId" value={license.id} />
-        <input type="hidden" name="productId" value={productId} />
+        <input type="hidden" name="applicationId" value={applicationId} />
       </>
     );
   }
@@ -195,7 +195,7 @@ export function LicenseRowActions({
 
       <EditLicenseDialog
         license={license}
-        productId={productId}
+        applicationId={applicationId}
         open={editing}
         onOpenChange={setEditing}
       />

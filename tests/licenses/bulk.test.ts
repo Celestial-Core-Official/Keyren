@@ -7,7 +7,7 @@ import {
   DEVELOPER_B,
   makeActivation,
   makeLicense,
-  makeProduct,
+  makeApplication,
 } from "../helpers/factories";
 import {
   bulkDeleteLicenses,
@@ -42,9 +42,9 @@ async function countRows(): Promise<number> {
 
 describe("bulkRevokeLicenses", () => {
   it("revokes every eligible license and reports the count", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const first = await makeLicense(db, { productId: product.id });
-    const second = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const first = await makeLicense(db, { applicationId: application.id });
+    const second = await makeLicense(db, { applicationId: application.id });
 
     const result = await bulkRevokeLicenses(db, DEVELOPER_A, [first.id, second.id]);
 
@@ -56,9 +56,9 @@ describe("bulkRevokeLicenses", () => {
   it("skips licenses that are already revoked rather than counting them", async () => {
     // "Revoked 5" when three were already revoked is a lie the developer will
     // act on.
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const active = await makeLicense(db, { productId: product.id });
-    const already = await makeLicense(db, { productId: product.id, status: "revoked" });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const active = await makeLicense(db, { applicationId: application.id });
+    const already = await makeLicense(db, { applicationId: application.id, status: "revoked" });
 
     const result = await bulkRevokeLicenses(db, DEVELOPER_A, [active.id, already.id]);
 
@@ -68,8 +68,8 @@ describe("bulkRevokeLicenses", () => {
   });
 
   it("stamps revokedAt on the licenses it changes", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     await bulkRevokeLicenses(db, DEVELOPER_A, [license.id]);
 
@@ -78,8 +78,8 @@ describe("bulkRevokeLicenses", () => {
   });
 
   it("handles an empty selection without touching anything", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    await makeLicense(db, { applicationId: application.id });
 
     expect(await bulkRevokeLicenses(db, DEVELOPER_A, [])).toEqual({
       changed: 0,
@@ -89,8 +89,8 @@ describe("bulkRevokeLicenses", () => {
   });
 
   it("counts a repeated id once", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const result = await bulkRevokeLicenses(db, DEVELOPER_A, [
       license.id,
@@ -103,9 +103,9 @@ describe("bulkRevokeLicenses", () => {
 
 describe("bulkRestoreLicenses", () => {
   it("restores revoked licenses and skips active ones", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const revoked = await makeLicense(db, { productId: product.id, status: "revoked" });
-    const active = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const revoked = await makeLicense(db, { applicationId: application.id, status: "revoked" });
+    const active = await makeLicense(db, { applicationId: application.id });
 
     const result = await bulkRestoreLicenses(db, DEVELOPER_A, [revoked.id, active.id]);
 
@@ -115,8 +115,8 @@ describe("bulkRestoreLicenses", () => {
   });
 
   it("clears revokedAt on restore", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, status: "revoked" });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, status: "revoked" });
 
     await bulkRestoreLicenses(db, DEVELOPER_A, [license.id]);
 
@@ -127,9 +127,9 @@ describe("bulkRestoreLicenses", () => {
 
 describe("bulkResetActivations", () => {
   it("releases bound licenses and skips unbound ones", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const bound = await makeLicense(db, { productId: product.id });
-    const unbound = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const bound = await makeLicense(db, { applicationId: application.id });
+    const unbound = await makeLicense(db, { applicationId: application.id });
     await makeActivation(db, { licenseId: bound.id });
 
     const result = await bulkResetActivations(db, DEVELOPER_A, [bound.id, unbound.id]);
@@ -140,8 +140,8 @@ describe("bulkResetActivations", () => {
   });
 
   it("leaves the licenses themselves untouched", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await makeActivation(db, { licenseId: license.id });
 
     await bulkResetActivations(db, DEVELOPER_A, [license.id]);
@@ -153,10 +153,10 @@ describe("bulkResetActivations", () => {
 
 describe("bulkDeleteLicenses", () => {
   it("erases every selected license", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const first = await makeLicense(db, { productId: product.id });
-    const second = await makeLicense(db, { productId: product.id });
-    await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const first = await makeLicense(db, { applicationId: application.id });
+    const second = await makeLicense(db, { applicationId: application.id });
+    await makeLicense(db, { applicationId: application.id });
 
     const result = await bulkDeleteLicenses(db, DEVELOPER_A, [first.id, second.id]);
 
@@ -165,8 +165,8 @@ describe("bulkDeleteLicenses", () => {
   });
 
   it("cascades to the activation rows", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await makeActivation(db, { licenseId: license.id });
 
     await bulkDeleteLicenses(db, DEVELOPER_A, [license.id]);
@@ -175,9 +175,9 @@ describe("bulkDeleteLicenses", () => {
   });
 
   it("treats every owned license as eligible", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const active = await makeLicense(db, { productId: product.id });
-    const revoked = await makeLicense(db, { productId: product.id, status: "revoked" });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const active = await makeLicense(db, { applicationId: application.id });
+    const revoked = await makeLicense(db, { applicationId: application.id, status: "revoked" });
 
     const result = await bulkDeleteLicenses(db, DEVELOPER_A, [active.id, revoked.id]);
     expect(result.changed).toBe(2);
@@ -187,10 +187,10 @@ describe("bulkDeleteLicenses", () => {
 
 describe("bulk operations — authorization", () => {
   it("refuses to touch another developer's licenses", async () => {
-    const mine = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const theirs = await makeProduct(db, { ownerId: DEVELOPER_B });
-    const ours = await makeLicense(db, { productId: mine.id });
-    const foreign = await makeLicense(db, { productId: theirs.id });
+    const mine = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const theirs = await makeApplication(db, { ownerId: DEVELOPER_B });
+    const ours = await makeLicense(db, { applicationId: mine.id });
+    const foreign = await makeLicense(db, { applicationId: theirs.id });
 
     const result = await bulkRevokeLicenses(db, DEVELOPER_A, [ours.id, foreign.id]);
 
@@ -202,8 +202,8 @@ describe("bulk operations — authorization", () => {
   it("reports a foreign license identically to a missing one", async () => {
     // Otherwise the counts become an oracle for whether a guessed license id
     // belongs to somebody.
-    const theirs = await makeProduct(db, { ownerId: DEVELOPER_B });
-    const foreign = await makeLicense(db, { productId: theirs.id });
+    const theirs = await makeApplication(db, { ownerId: DEVELOPER_B });
+    const foreign = await makeLicense(db, { applicationId: theirs.id });
 
     const withForeign = await bulkRevokeLicenses(db, DEVELOPER_A, [foreign.id]);
     const withMissing = await bulkRevokeLicenses(db, DEVELOPER_A, ["lic_nothing"]);
@@ -212,8 +212,8 @@ describe("bulk operations — authorization", () => {
   });
 
   it("refuses to delete another developer's licenses", async () => {
-    const theirs = await makeProduct(db, { ownerId: DEVELOPER_B });
-    const foreign = await makeLicense(db, { productId: theirs.id });
+    const theirs = await makeApplication(db, { ownerId: DEVELOPER_B });
+    const foreign = await makeLicense(db, { applicationId: theirs.id });
 
     const result = await bulkDeleteLicenses(db, DEVELOPER_A, [foreign.id]);
 
@@ -223,8 +223,8 @@ describe("bulk operations — authorization", () => {
   });
 
   it("refuses to reset another developer's activations", async () => {
-    const theirs = await makeProduct(db, { ownerId: DEVELOPER_B });
-    const foreign = await makeLicense(db, { productId: theirs.id });
+    const theirs = await makeApplication(db, { ownerId: DEVELOPER_B });
+    const foreign = await makeLicense(db, { applicationId: theirs.id });
     await makeActivation(db, { licenseId: foreign.id });
 
     const result = await bulkResetActivations(db, DEVELOPER_A, [foreign.id]);
@@ -234,13 +234,13 @@ describe("bulk operations — authorization", () => {
   });
 
   it("acts on the owned half of a mixed selection", async () => {
-    const mine = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const theirs = await makeProduct(db, { ownerId: DEVELOPER_B });
+    const mine = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const theirs = await makeApplication(db, { ownerId: DEVELOPER_B });
     const ours = [
-      await makeLicense(db, { productId: mine.id }),
-      await makeLicense(db, { productId: mine.id }),
+      await makeLicense(db, { applicationId: mine.id }),
+      await makeLicense(db, { applicationId: mine.id }),
     ];
-    const foreign = await makeLicense(db, { productId: theirs.id });
+    const foreign = await makeLicense(db, { applicationId: theirs.id });
 
     const result = await bulkRevokeLicenses(db, DEVELOPER_A, [
       ours[0]!.id,
@@ -255,9 +255,9 @@ describe("bulk operations — authorization", () => {
 
 describe("licensesForExport", () => {
   it("returns metadata for the selected licenses only", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const chosen = await makeLicense(db, { productId: product.id, label: "Acme Corp" });
-    await makeLicense(db, { productId: product.id, label: "Not chosen" });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const chosen = await makeLicense(db, { applicationId: application.id, label: "Acme Corp" });
+    await makeLicense(db, { applicationId: application.id, label: "Not chosen" });
 
     const rows = await licensesForExport(db, DEVELOPER_A, [chosen.id]);
 
@@ -266,8 +266,8 @@ describe("licensesForExport", () => {
   });
 
   it("carries only the masked key, never a plaintext one", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const [row] = await licensesForExport(db, DEVELOPER_A, [license.id]);
 
@@ -278,9 +278,9 @@ describe("licensesForExport", () => {
   });
 
   it("includes the effective status alongside the stored one", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const license = await makeLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       expiresAt: new Date("2020-01-01T00:00:00.000Z"),
     });
 
@@ -291,8 +291,8 @@ describe("licensesForExport", () => {
   });
 
   it("includes activation timestamps when the license is bound", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
     await makeActivation(db, {
       licenseId: license.id,
       activatedAt: new Date("2026-08-01T00:00:00.000Z"),
@@ -306,8 +306,8 @@ describe("licensesForExport", () => {
   });
 
   it("omits another developer's licenses entirely", async () => {
-    const theirs = await makeProduct(db, { ownerId: DEVELOPER_B });
-    const foreign = await makeLicense(db, { productId: theirs.id, label: "Theirs" });
+    const theirs = await makeApplication(db, { ownerId: DEVELOPER_B });
+    const foreign = await makeLicense(db, { applicationId: theirs.id, label: "Theirs" });
 
     expect(await licensesForExport(db, DEVELOPER_A, [foreign.id])).toEqual([]);
   });

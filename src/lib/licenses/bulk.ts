@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { activations, licenses, products } from "@/db/schema";
+import { activations, licenses, applications } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { maskedLicenseKey } from "@/lib/crypto/license-key";
 import { instant } from "@/lib/db/timestamp";
@@ -11,7 +11,7 @@ import type { EffectiveStatus } from "./types";
  *
  * Two properties matter more than anything else here.
  *
- * First, ownership is expressed in SQL, as a subquery over `products`. There
+ * First, ownership is expressed in SQL, as a subquery over `applications`. There
  * is no "load them, check them in JavaScript, then write" path that a future
  * edit could quietly drop — a license belonging to somebody else simply is
  * not in the set the statement touches.
@@ -33,12 +33,12 @@ export type BulkResult = {
 
 const EMPTY: BulkResult = { changed: 0, skipped: 0, notFound: 0 };
 
-/** The ids of every product this developer owns, as a subquery. */
-function ownedProducts(db: Database, ownerId: string) {
+/** The ids of every application this developer owns, as a subquery. */
+function ownedApplications(db: Database, ownerId: string) {
   return db
-    .select({ id: products.id })
-    .from(products)
-    .where(eq(products.ownerId, ownerId));
+    .select({ id: applications.id })
+    .from(applications)
+    .where(eq(applications.ownerId, ownerId));
 }
 
 /**
@@ -69,7 +69,7 @@ async function applyToEligible(
       .where(
         and(
           inArray(licenses.id, unique),
-          inArray(licenses.productId, ownedProducts(tx as unknown as Database, ownerId)),
+          inArray(licenses.applicationId, ownedApplications(tx as unknown as Database, ownerId)),
         ),
       )) as Record<string, unknown>[];
 
@@ -188,7 +188,7 @@ export async function licensesForExport(
     .select({
       label: licenses.label,
       keyLast4: licenses.keyLast4,
-      productId: licenses.productId,
+      applicationId: licenses.applicationId,
       status: licenses.status,
       effectiveStatus: sql<EffectiveStatus>`CASE
         WHEN ${licenses.status} = 'revoked' THEN 'revoked'
@@ -206,7 +206,7 @@ export async function licensesForExport(
     .where(
       and(
         inArray(licenses.id, unique),
-        inArray(licenses.productId, ownedProducts(db, ownerId)),
+        inArray(licenses.applicationId, ownedApplications(db, ownerId)),
       ),
     )
     .orderBy(licenses.createdAt);

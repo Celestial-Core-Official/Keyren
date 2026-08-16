@@ -43,9 +43,9 @@ const PLACEHOLDER_KEY = "KEYREN-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX";
 const PLACEHOLDER_DEVICE = "your-device-fingerprint";
 const TIMEOUT_SECONDS = 10;
 
-export type SnippetContext = { productId: string; appUrl: string };
+export type SnippetContext = { applicationId: string; appUrl: string };
 
-function javascriptSnippet({ productId, appUrl }: SnippetContext): string {
+function javascriptSnippet({ applicationId, appUrl }: SnippetContext): string {
   return `// Times out rather than hanging: a licensing check that never returns
 // takes your application's startup down with it.
 const controller = new AbortController();
@@ -56,7 +56,7 @@ try {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      productId: "${productId}",
+      applicationId: "${applicationId}",
       licenseKey: "${PLACEHOLDER_KEY}",
       deviceId: "${PLACEHOLDER_DEVICE}",
     }),
@@ -76,7 +76,7 @@ try {
 
   if (!result.success) {
     // LICENSE_INVALID, LICENSE_REVOKED, LICENSE_EXPIRED, DEVICE_MISMATCH,
-    // PRODUCT_INVALID, RATE_LIMITED, BAD_REQUEST, INTERNAL_ERROR
+    // APPLICATION_INVALID, RATE_LIMITED, BAD_REQUEST, INTERNAL_ERROR
     throw new Error(result.error.code);
   }
 
@@ -87,7 +87,7 @@ try {
 }`;
 }
 
-function pythonSnippet({ productId, appUrl }: SnippetContext): string {
+function pythonSnippet({ applicationId, appUrl }: SnippetContext): string {
   return `import requests
 
 # A timeout is not optional: without it requests waits forever by default.
@@ -95,7 +95,7 @@ try:
     response = requests.post(
         "${verifyUrl(appUrl)}",
         json={
-            "productId": "${productId}",
+            "applicationId": "${applicationId}",
             "licenseKey": "${PLACEHOLDER_KEY}",
             "deviceId": "${PLACEHOLDER_DEVICE}",
         },
@@ -114,14 +114,14 @@ except ValueError as error:
 
 if not result.get("success"):
     # LICENSE_INVALID, LICENSE_REVOKED, LICENSE_EXPIRED, DEVICE_MISMATCH,
-    # PRODUCT_INVALID, RATE_LIMITED, BAD_REQUEST, INTERNAL_ERROR
+    # APPLICATION_INVALID, RATE_LIMITED, BAD_REQUEST, INTERNAL_ERROR
     raise RuntimeError(result["error"]["code"])
 
 # result["license"]["status"]    -> "active"
 # result["license"]["expiresAt"] -> ISO string, or None for a permanent license`;
 }
 
-function curlSnippet({ productId, appUrl }: SnippetContext): string {
+function curlSnippet({ applicationId, appUrl }: SnippetContext): string {
   return `# --max-time caps the whole request; --fail-with-body keeps the JSON body
 # on a 4xx or 5xx so the error code is still readable. -w prints the status
 # on its own last line, because a proxy or load balancer can answer with a
@@ -131,7 +131,7 @@ curl --max-time ${TIMEOUT_SECONDS} --show-error --silent --fail-with-body \\
   -X POST "${verifyUrl(appUrl)}" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "productId": "${productId}",
+    "applicationId": "${applicationId}",
     "licenseKey": "${PLACEHOLDER_KEY}",
     "deviceId": "${PLACEHOLDER_DEVICE}"
   }'
@@ -143,16 +143,16 @@ curl --max-time ${TIMEOUT_SECONDS} --show-error --silent --fail-with-body \\
 #   {"success":false,"error":{"code":"LICENSE_EXPIRED","message":"..."}}
 #
 #   400 BAD_REQUEST        the body was malformed
-#   403 LICENSE_INVALID    no such license for this product
+#   403 LICENSE_INVALID    no such license for this application
 #   403 LICENSE_REVOKED    revoked from the dashboard
 #   403 LICENSE_EXPIRED    past its expiry
 #   403 DEVICE_MISMATCH    already claimed by a different device
-#   404 PRODUCT_INVALID    no such product
+#   404 APPLICATION_INVALID    no such application
 #   429 RATE_LIMITED       slow down; see the retry-after header
 #   500 INTERNAL_ERROR     Keyren failed`;
 }
 
-function csharpSnippet({ productId, appUrl }: SnippetContext): string {
+function csharpSnippet({ applicationId, appUrl }: SnippetContext): string {
   return `using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -165,7 +165,7 @@ private static readonly HttpClient Http = new()
 
 var payload = new
 {
-    productId = "${productId}",
+    applicationId = "${applicationId}",
     licenseKey = "${PLACEHOLDER_KEY}",
     deviceId = "${PLACEHOLDER_DEVICE}",
 };
@@ -194,7 +194,7 @@ using (document)
     if (!root.GetProperty("success").GetBoolean())
     {
         // LICENSE_INVALID, LICENSE_REVOKED, LICENSE_EXPIRED, DEVICE_MISMATCH,
-        // PRODUCT_INVALID, RATE_LIMITED, BAD_REQUEST, INTERNAL_ERROR
+        // APPLICATION_INVALID, RATE_LIMITED, BAD_REQUEST, INTERNAL_ERROR
         throw new InvalidOperationException(
             root.GetProperty("error").GetProperty("code").GetString());
     }

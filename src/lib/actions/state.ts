@@ -84,7 +84,7 @@ export function firstIssueMessage(error: ZodError, fallback = "Invalid input"): 
 const DISCLOSABLE_MESSAGES = new Set([
   "Expiration date must be in the future.",
   "License not found.",
-  "Product not found.",
+  "Application not found.",
 ]);
 
 export function safeErrorMessage(error: unknown, fallback: string): string {

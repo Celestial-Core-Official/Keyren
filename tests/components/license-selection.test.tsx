@@ -19,9 +19,9 @@ const bulk = vi.hoisted(() => ({
   bulkLicenseAction: vi.fn(),
   exportSelectionAction: vi.fn(),
 }));
-vi.mock("@/app/dashboard/products/[productId]/licenses/bulk-actions", () => bulk);
+vi.mock("@/app/dashboard/applications/[applicationId]/licenses/bulk-actions", () => bulk);
 
-vi.mock("@/app/dashboard/products/[productId]/licenses/actions", () => ({
+vi.mock("@/app/dashboard/applications/[applicationId]/licenses/actions", () => ({
   revokeLicenseAction: vi.fn(),
   restoreLicenseAction: vi.fn(),
   resetActivationAction: vi.fn(),
@@ -34,7 +34,7 @@ const NOW = new Date("2026-08-15T12:00:00.000Z");
 function license(id: string, overrides: Partial<LicenseListItem> = {}): LicenseListItem {
   return {
     id,
-    productId: "prod_abc",
+    applicationId: "app_abc",
     keyLast4: id.slice(-4).toUpperCase().padStart(4, "A"),
     label: `License ${id}`,
     notes: null,
@@ -66,7 +66,7 @@ beforeEach(() => {
       rows: ROWS.map((row) => ({
         label: row.label,
         maskedKey: `KEYREN-••••-••••-••••-${row.keyLast4}`,
-        productId: row.productId,
+        applicationId: row.applicationId,
         status: "active" as const,
         effectiveStatus: "active" as const,
         expiresAt: null,
@@ -81,7 +81,7 @@ beforeEach(() => {
 
 function renderList(rows: LicenseListItem[] = ROWS) {
   const view = render(
-    <LicenseList licenses={rows} productId="prod_abc" productSlug="seliware-key" />,
+    <LicenseList licenses={rows} applicationId="app_abc" applicationSlug="seliware-key" />,
   );
   return { user: userEvent.setup(), view };
 }
@@ -152,8 +152,8 @@ describe("selection", () => {
     view.rerender(
       <LicenseList
         licenses={[license("lic_zzz9")]}
-        productId="prod_abc"
-        productSlug="seliware-key"
+        applicationId="app_abc"
+        applicationSlug="seliware-key"
       />,
     );
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApiTester, disposableDeviceId } from "@/components/products/api-tester";
+import { ApiTester, disposableDeviceId } from "@/components/applications/api-tester";
 import { VERIFY_PATH } from "@/lib/release";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -28,7 +28,7 @@ afterEach(() => {
 
 async function sendRequest(key = KEY) {
   const user = userEvent.setup();
-  render(<ApiTester productId="prod_abc" />);
+  render(<ApiTester applicationId="app_abc" />);
 
   await user.type(screen.getByLabelText(/license key/i), key);
   await user.click(screen.getByRole("button", { name: /send request/i }));
@@ -60,13 +60,13 @@ describe("ApiTester — the request", () => {
       (fetchMock.mock.calls[0]![1] as RequestInit).body as string,
     ) as Record<string, string>;
 
-    expect(Object.keys(body).sort()).toEqual(["deviceId", "licenseKey", "productId"]);
-    expect(body.productId).toBe("prod_abc");
+    expect(Object.keys(body).sort()).toEqual(["applicationId", "deviceId", "licenseKey"]);
+    expect(body.applicationId).toBe("app_abc");
     expect(body.licenseKey).toBe(KEY);
   });
 
   it("cannot be submitted with an empty key", () => {
-    render(<ApiTester productId="prod_abc" />);
+    render(<ApiTester applicationId="app_abc" />);
     expect(
       screen.getByRole("button", { name: /send request/i }).hasAttribute("disabled"),
     ).toBe(true);
@@ -75,7 +75,7 @@ describe("ApiTester — the request", () => {
 
 describe("ApiTester — device identity", () => {
   it("defaults to an obviously disposable device id", () => {
-    render(<ApiTester productId="prod_abc" />);
+    render(<ApiTester applicationId="app_abc" />);
 
     const device = (screen.getByLabelText("Device ID") as HTMLInputElement).value;
     expect(device).toMatch(/^keyren-dashboard-test-/);
@@ -104,7 +104,7 @@ describe("ApiTester — device identity", () => {
   it("lets the developer pin a specific device id", async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, { success: true }));
     const user = userEvent.setup();
-    render(<ApiTester productId="prod_abc" />);
+    render(<ApiTester applicationId="app_abc" />);
 
     await user.click(screen.getByRole("checkbox"));
     await user.clear(screen.getByLabelText("Device ID"));
@@ -118,7 +118,7 @@ describe("ApiTester — device identity", () => {
   });
 
   it("warns that testing claims a device-locked license", () => {
-    render(<ApiTester productId="prod_abc" />);
+    render(<ApiTester applicationId="app_abc" />);
     expect(document.body.textContent).toMatch(/claims it/i);
     expect(document.body.textContent).toMatch(/DEVICE_MISMATCH/);
   });
@@ -142,7 +142,7 @@ describe("ApiTester — results", () => {
     [403, "LICENSE_REVOKED"],
     [403, "LICENSE_EXPIRED"],
     [403, "DEVICE_MISMATCH"],
-    [404, "PRODUCT_INVALID"],
+    [404, "APPLICATION_INVALID"],
     [400, "BAD_REQUEST"],
     [500, "INTERNAL_ERROR"],
   ])("surfaces a %i %s response verbatim", async (status, code) => {
@@ -240,7 +240,7 @@ describe("ApiTester — the key is never persisted", () => {
   });
 
   it("starts blank rather than remembering the last key", () => {
-    render(<ApiTester productId="prod_abc" />);
+    render(<ApiTester applicationId="app_abc" />);
     expect((screen.getByLabelText(/license key/i) as HTMLInputElement).value).toBe("");
   });
 

@@ -17,7 +17,7 @@ unfinished:
 - **Settings has no settings.** Three read-only cards. Not one control. The
   page's own comment concedes it: *"There are still no developer-configurable
   settings, and this page still refuses to invent any."*
-- **Overview has two numbers.** Products and Licenses, and nothing else. It is
+- **Overview has two numbers.** Applications and Licenses, and nothing else. It is
   the page you land on after signing in and there is no reason to return to it.
 - **The theme system is wired but inert**, and misbehaves visibly on some
   machines.
@@ -37,7 +37,7 @@ to add many.
 2. Make Settings a page of controls.
 3. Make Overview worth opening more than once.
 4. Cut the navigation friction that costs the most time per day.
-5. Fix the product page's inverted layout.
+5. Fix the application page's inverted layout.
 
 ## Non-goals
 
@@ -202,28 +202,28 @@ brochure. What remains on Settings is controls only.
 | Data | Reset remembered settings | destructive, confirmed |
 | Account | Open profile / security | opens Clerk directly |
 
-### How defaults interact with existing per-product memory
+### How defaults interact with existing per-application memory
 
-`src/lib/preferences.ts` already remembers creation settings **per product** in
-`keyren:license-prefs:<productId>`. That behaviour is good and stays.
+`src/lib/preferences.ts` already remembers creation settings **per application** in
+`keyren:license-prefs:<applicationId>`. That behaviour is good and stays.
 
-The global default **seeds a product that has no stored preferences yet**. A
-product that has been used keeps its own memory and is unaffected. Resolution
+The global default **seeds an application that has no stored preferences yet**. A
+application that has been used keeps its own memory and is unaffected. Resolution
 order:
 
 ```
-per-product stored prefs  →  global defaults  →  DEFAULT_LICENSE_PREFERENCES
+per-application stored prefs  →  global defaults  →  DEFAULT_LICENSE_PREFERENCES
 ```
 
-This makes the global setting meaningful for new products without silently
-rewriting what an existing product learned.
+This makes the global setting meaningful for new applications without silently
+rewriting what an existing application learned.
 
 ### Reset
 
 Clears `keyren:license-prefs:*` and `keyren:flag:*`. Today these are written but
 never surfaced and never clearable — a dismissed onboarding checklist cannot be
-brought back, and a product's remembered quantity cannot be forgotten. Behind a
-confirmation, since it discards state across every product.
+brought back, and an application's remembered quantity cannot be forgotten. Behind a
+confirmation, since it discards state across every application.
 
 ### Account
 
@@ -250,31 +250,31 @@ That last rule is the security-relevant one and is non-negotiable.
 
 ## Phase 3 — Overview
 
-`src/app/dashboard/page.tsx` renders Products and Licenses and stops. The
-*product* page correctly shows Expired and Revoked; the global Overview does not.
+`src/app/dashboard/page.tsx` renders Applications and Licenses and stops. The
+*application* page correctly shows Expired and Revoked; the global Overview does not.
 
 ### Additions
 
 - **Expiring soon** — next 30 days, linking into the pre-filtered license list
 - **Recent activity** — most recent activations and creations
-- **Per-product breakdown** — active/total per product, each row a link
+- **Per-application breakdown** — active/total per application, each row a link
 - **Global expired / revoked** — shown only when non-zero
 
 That last convention is copied deliberately from
-`src/app/dashboard/products/[productId]/page.tsx`, whose comment explains it: *a
+`src/app/dashboard/applications/[applicationId]/page.tsx`, whose comment explains it: *a
 column of zeroes teaches the developer to stop reading the row.*
 
 ### Data
 
 New owner-scoped aggregates in `src/lib/licenses/query.ts`, alongside
-`getProductLicenseStats`. **Computed in SQL, never by loading rows and counting
+`getApplicationLicenseStats`. **Computed in SQL, never by loading rows and counting
 in JavaScript** — the existing stats query already sets this precedent and the
 list is expected to grow.
 
 Timestamps are bound as ISO strings, per the fix in commit `3eb73e1` and the
 helper in `src/lib/db/timestamp.ts`.
 
-The empty state stays as it is — a new account with no products should still see
+The empty state stays as it is — a new account with no applications should still see
 one action, not a grid of zeroes.
 
 ---
@@ -285,12 +285,12 @@ one action, not a grid of zeroes.
 
 Searches across:
 
-- **Products** — name, slug, product ID
+- **Applications** — name, slug, application ID
 - **Licenses** — label, and last four characters of the key
-- **Actions** — new product, settings, theme
+- **Actions** — new application, settings, theme
 
 The motivating case: a customer emails a key suffix, and today the developer must
-work out which product it belongs to before they can search for it.
+work out which application it belongs to before they can search for it.
 
 Requirements:
 
@@ -313,35 +313,35 @@ Requirements:
   is open. `Cmd+K` is exempt from the modifier guard by design, being a modifier
   shortcut itself.
 
-### Product actions from inside a product
+### Application actions from inside an application
 
-`ProductActions` — rename and delete — is mounted **only on the products list**
-(`src/app/dashboard/products/page.tsx`). Once inside a product there is no way to
+`ApplicationActions` — rename and delete — is mounted **only on the applications list**
+(`src/app/dashboard/applications/page.tsx`). Once inside an application there is no way to
 rename it without navigating back out.
 
-Mount it in the product layout header next to the product name. Same component,
+Mount it in the application layout header next to the application name. Same component,
 one more usage site.
 
 ---
 
-## Phase 5 — Product page
+## Phase 5 — Application page
 
-`src/app/dashboard/products/[productId]/page.tsx` is a six-section scroll, and
+`src/app/dashboard/applications/[applicationId]/page.tsx` is a six-section scroll, and
 the primary actions are in the middle of it.
 
-1. **Primary actions move up** beside the product title in the layout header.
+1. **Primary actions move up** beside the application title in the layout header.
    *Generate license* and *Manage licenses* currently float mid-page, below the
    stats and endpoint cards and above the integration panel.
-2. **Drop the duplicated product ID** from the Endpoint card. The ID renders
+2. **Drop the duplicated application ID** from the Endpoint card. The ID renders
    twice on one screen with two copy buttons — once in the layout header
    (`layout.tsx`), once in the Endpoint card. The header keeps it; the card keeps
    the endpoint URL only.
-3. **Integration + API tester move to an Integrate tab.** `ProductTabs` already
+3. **Integration + API tester move to an Integrate tab.** `ApplicationTabs` already
    exists and already handles `aria-current`; this adds a third tab. Overview
    becomes short enough to read.
 
 The onboarding checklist stays on Overview. It is derived from real data, already
-disappears when complete, and is the one thing a new product should show first.
+disappears when complete, and is the one thing a new application should show first.
 
 ---
 
@@ -353,7 +353,7 @@ existing patterns in `tests/components/`.
 | Area | Approach |
 |---|---|
 | Preferences schema | Unit. Tampered, stale, out-of-range and absent values all degrade to defaults; write projection drops unknown fields |
-| Defaults resolution | Unit. per-product → global → built-in, and that an existing product is not overwritten |
+| Defaults resolution | Unit. per-application → global → built-in, and that an existing application is not overwritten |
 | Overview aggregates | Unit against `pglite`, matching `tests/licenses/query.test.ts` |
 | Palette search | Unit for escaping and owner scoping; RTL for the component |
 | Shortcuts overlay | RTL, extending `tests/components/keyboard-shortcuts.test.tsx` |

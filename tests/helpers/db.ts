@@ -33,7 +33,7 @@ export async function createTestDatabase(): Promise<{
 /** Wipes all rows between tests without paying to rebuild the schema. */
 export async function truncateAll(db: Database): Promise<void> {
   await db.execute(
-    sql`TRUNCATE TABLE activations, licenses, products, rate_limit_counters RESTART IDENTITY CASCADE`,
+    sql`TRUNCATE TABLE activations, licenses, applications, rate_limit_counters RESTART IDENTITY CASCADE`,
   );
 }
 

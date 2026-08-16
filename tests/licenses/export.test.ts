@@ -18,7 +18,7 @@ function plaintextRow(overrides: Partial<PlaintextLicenseRow> = {}): PlaintextLi
   return {
     label: "Acme Corp",
     licenseKey: "KEYREN-ABCDEFGH-ABCDEFGH-ABCDEFGH-ABCDWXYZ",
-    productId: "prod_abc123",
+    applicationId: "app_abc123",
     expiresAt: EXPIRES,
     hwidLocked: true,
     createdAt: CREATED,
@@ -30,7 +30,7 @@ function metadataRow(overrides: Partial<LicenseMetadataRow> = {}): LicenseMetada
   return {
     label: "Acme Corp",
     maskedKey: "KEYREN-••••-••••-••••-WXYZ",
-    productId: "prod_abc123",
+    applicationId: "app_abc123",
     status: "active",
     effectiveStatus: "active",
     expiresAt: EXPIRES,
@@ -52,19 +52,19 @@ describe("plaintextToCsv — structure", () => {
     expect(PLAINTEXT_CSV_COLUMNS).toEqual([
       "label",
       "licenseKey",
-      "productId",
+      "applicationId",
       "expiresAt",
       "hwidLocked",
       "createdAt",
     ]);
     expect(lines(plaintextToCsv([]))[0]).toBe(
-      "label,licenseKey,productId,expiresAt,hwidLocked,createdAt",
+      "label,licenseKey,applicationId,expiresAt,hwidLocked,createdAt",
     );
   });
 
   it("emits a header even with no rows", () => {
     expect(plaintextToCsv([])).toBe(
-      "label,licenseKey,productId,expiresAt,hwidLocked,createdAt\r\n",
+      "label,licenseKey,applicationId,expiresAt,hwidLocked,createdAt\r\n",
     );
   });
 
@@ -166,7 +166,7 @@ describe("plaintextToCsv — spreadsheet formula hardening", () => {
 
   it("hardens every column, not only the label", () => {
     const csv = plaintextToCsv([
-      plaintextRow({ productId: "=cmd|'/c calc'!A0", label: null }),
+      plaintextRow({ applicationId: "=cmd|'/c calc'!A0", label: null }),
     ]);
     expect(csv).toContain(`'=cmd`);
   });
@@ -178,7 +178,7 @@ describe("plaintextToJson", () => {
     expect(Object.keys(row!)).toEqual([
       "label",
       "licenseKey",
-      "productId",
+      "applicationId",
       "expiresAt",
       "hwidLocked",
       "createdAt",
@@ -212,7 +212,7 @@ describe("metadata export", () => {
     expect(METADATA_CSV_COLUMNS).toEqual([
       "label",
       "maskedKey",
-      "productId",
+      "applicationId",
       "status",
       "effectiveStatus",
       "expiresAt",
@@ -277,12 +277,12 @@ describe("exportFilename", () => {
     );
   });
 
-  it("falls back when a product has no usable slug", () => {
+  it("falls back when an application has no usable slug", () => {
     expect(exportFilename("", "csv", at)).toBe("licenses-2026-08-15-093007.csv");
   });
 
   it("strips characters that are not safe in a filename", () => {
-    // A slug is derived from a developer-supplied product name, so it must not
+    // A slug is derived from a developer-supplied application name, so it must not
     // be able to introduce a path separator or a leading dot.
     expect(exportFilename("../../etc/passwd", "csv", at)).toBe(
       "etc-passwd-licenses-2026-08-15-093007.csv",

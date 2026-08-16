@@ -7,7 +7,7 @@ import {
 } from "@/lib/integration/snippets";
 import { VERIFY_PATH } from "@/lib/release";
 
-const CONTEXT = { productId: "prod_31DFQX8", appUrl: "https://keys.example.com" };
+const CONTEXT = { applicationId: "app_31DFQX8", appUrl: "https://keys.example.com" };
 
 function snippet(language: SnippetLanguage): string {
   return integrationSnippet(language, CONTEXT);
@@ -28,8 +28,8 @@ describe("every language", () => {
     expect(snippet(language)).toContain(`https://keys.example.com${VERIFY_PATH}`);
   });
 
-  it.each(SNIPPET_LANGUAGES)("%s embeds the real product id", (language) => {
-    expect(snippet(language)).toContain("prod_31DFQX8");
+  it.each(SNIPPET_LANGUAGES)("%s embeds the real application id", (language) => {
+    expect(snippet(language)).toContain("app_31DFQX8");
   });
 
   it.each(SNIPPET_LANGUAGES)("%s carries a timeout", (language) => {
@@ -50,7 +50,7 @@ describe("every language", () => {
       "LICENSE_REVOKED",
       "LICENSE_EXPIRED",
       "DEVICE_MISMATCH",
-      "PRODUCT_INVALID",
+      "APPLICATION_INVALID",
       "RATE_LIMITED",
       "BAD_REQUEST",
       "INTERNAL_ERROR",
@@ -72,7 +72,7 @@ describe("every language", () => {
 
   it.each(SNIPPET_LANGUAGES)("%s sends all three required fields", (language) => {
     const text = snippet(language);
-    expect(text).toContain("productId");
+    expect(text).toContain("applicationId");
     expect(text).toContain("licenseKey");
     expect(text).toContain("deviceId");
   });

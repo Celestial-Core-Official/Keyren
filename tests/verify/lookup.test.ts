@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestDatabase, TEST_HMAC_SECRET, truncateAll } from "../helpers/db";
-import { DEVELOPER_A, makeLicense, makeProduct } from "../helpers/factories";
+import { DEVELOPER_A, makeLicense, makeApplication } from "../helpers/factories";
 import { verifyLicense } from "@/lib/licenses/verify";
 import { generateLicenseKey } from "@/lib/crypto/license-key";
 import type { Database } from "@/db/types";
@@ -23,11 +23,11 @@ const DEVICE = "device-fingerprint-one";
 // Spec test #1
 describe("valid active license", () => {
   it("succeeds and reports active status with a null expiry", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, hwidLocked: true });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, hwidLocked: true });
 
     const result = await verifyLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       licenseKey: license.plaintextKey,
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
@@ -40,11 +40,11 @@ describe("valid active license", () => {
   });
 
   it("accepts a lowercase or whitespace-mangled key", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const result = await verifyLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       licenseKey: `  ${license.plaintextKey.toLowerCase()} `,
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
@@ -57,10 +57,10 @@ describe("valid active license", () => {
 // Spec test #2
 describe("invalid license", () => {
   it("rejects a well-formed key that was never issued", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
 
     const result = await verifyLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       licenseKey: generateLicenseKey(),
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
@@ -73,11 +73,11 @@ describe("invalid license", () => {
 
   it("rejects a key hashed under a different server secret", async () => {
     // Simulates a stolen database being replayed against a rotated secret.
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const result = await verifyLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       licenseKey: license.plaintextKey,
       deviceId: DEVICE,
       secret: "a-completely-different-server-secret-value",
@@ -90,14 +90,14 @@ describe("invalid license", () => {
 });
 
 // Spec test #3
-describe("wrong product", () => {
-  it("rejects a real key presented against another product", async () => {
-    const productOne = await makeProduct(db, { ownerId: DEVELOPER_A, name: "One" });
-    const productTwo = await makeProduct(db, { ownerId: DEVELOPER_A, name: "Two" });
-    const license = await makeLicense(db, { productId: productOne.id });
+describe("wrong application", () => {
+  it("rejects a real key presented against another application", async () => {
+    const applicationOne = await makeApplication(db, { ownerId: DEVELOPER_A, name: "One" });
+    const applicationTwo = await makeApplication(db, { ownerId: DEVELOPER_A, name: "Two" });
+    const license = await makeLicense(db, { applicationId: applicationOne.id });
 
     const result = await verifyLicense(db, {
-      productId: productTwo.id,
+      applicationId: applicationTwo.id,
       licenseKey: license.plaintextKey,
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
@@ -105,14 +105,14 @@ describe("wrong product", () => {
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error("expected failure");
-    // Not a distinct "wrong product for this key" code — that would confirm
+    // Not a distinct "wrong application for this key" code — that would confirm
     // the key exists somewhere, which is exactly what an enumerator wants.
     expect(result.error.code).toBe("LICENSE_INVALID");
   });
 
-  it("returns PRODUCT_INVALID for an unknown product id", async () => {
+  it("returns APPLICATION_INVALID for an unknown application id", async () => {
     const result = await verifyLicense(db, {
-      productId: "prod_DOESNOTEXIST0000000000000",
+      applicationId: "app_DOESNOTEXIST0000000000000",
       licenseKey: generateLicenseKey(),
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
@@ -120,27 +120,27 @@ describe("wrong product", () => {
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error("expected failure");
-    // Product IDs ship inside customer software, so distinguishing this case
+    // Application IDs ship inside customer software, so distinguishing this case
     // helps an integrating developer without helping an attacker.
-    expect(result.error.code).toBe("PRODUCT_INVALID");
+    expect(result.error.code).toBe("APPLICATION_INVALID");
   });
 });
 
 describe("enumeration resistance", () => {
   it("returns byte-identical responses for absent and foreign licenses", async () => {
-    const productOne = await makeProduct(db, { ownerId: DEVELOPER_A, name: "One" });
-    const productTwo = await makeProduct(db, { ownerId: DEVELOPER_A, name: "Two" });
-    const realKeyOfAnotherProduct = await makeLicense(db, { productId: productOne.id });
+    const applicationOne = await makeApplication(db, { ownerId: DEVELOPER_A, name: "One" });
+    const applicationTwo = await makeApplication(db, { ownerId: DEVELOPER_A, name: "Two" });
+    const realKeyOfAnotherApplication = await makeLicense(db, { applicationId: applicationOne.id });
 
     const absent = await verifyLicense(db, {
-      productId: productTwo.id,
+      applicationId: applicationTwo.id,
       licenseKey: generateLicenseKey(),
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
     });
     const foreign = await verifyLicense(db, {
-      productId: productTwo.id,
-      licenseKey: realKeyOfAnotherProduct.plaintextKey,
+      applicationId: applicationTwo.id,
+      licenseKey: realKeyOfAnotherApplication.plaintextKey,
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,
     });
@@ -149,11 +149,11 @@ describe("enumeration resistance", () => {
   });
 
   it("never echoes internal identifiers in a failure", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id, status: "revoked" });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id, status: "revoked" });
 
     const result = await verifyLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       licenseKey: license.plaintextKey,
       deviceId: DEVICE,
       secret: TEST_HMAC_SECRET,

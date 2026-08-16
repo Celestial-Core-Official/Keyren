@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { licenses, products } from "@/db/schema";
+import { licenses, applications } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { generateLicenseId } from "@/lib/crypto/ids";
 import {
@@ -26,7 +26,7 @@ import {
  */
 
 export type CreateBatchInput = {
-  productId: string;
+  applicationId: string;
   quantity: number;
   expiration: ExpirationInput;
   hwidLocked: boolean;
@@ -53,7 +53,7 @@ export type CreatedLicense = {
   label: string | null;
   licenseKey: string;
   keyLast4: string;
-  productId: string;
+  applicationId: string;
   expiresAt: Date | null;
   hwidLocked: boolean;
   createdAt: Date;
@@ -103,14 +103,14 @@ export async function createLicenseBatch(
 
   return db.transaction(async (tx) => {
     // Inside the transaction: ownership is verified against the same snapshot
-    // the insert uses, so a product deleted concurrently cannot be written to.
+    // the insert uses, so an application deleted concurrently cannot be written to.
     const [owned] = await tx
-      .select({ id: products.id })
-      .from(products)
-      .where(and(eq(products.id, input.productId), eq(products.ownerId, ownerId)))
+      .select({ id: applications.id })
+      .from(applications)
+      .where(and(eq(applications.id, input.applicationId), eq(applications.ownerId, ownerId)))
       .limit(1);
 
-    if (!owned) throw notFound("Product");
+    if (!owned) throw notFound("Application");
 
     const created: CreatedLicense[] = [];
     const rows: (typeof licenses.$inferInsert)[] = [];
@@ -125,7 +125,7 @@ export async function createLicenseBatch(
         label,
         licenseKey,
         keyLast4: licenseKeyLast4(licenseKey),
-        productId: input.productId,
+        applicationId: input.applicationId,
         expiresAt,
         hwidLocked: input.hwidLocked,
         createdAt: now,
@@ -133,7 +133,7 @@ export async function createLicenseBatch(
 
       rows.push({
         id,
-        productId: input.productId,
+        applicationId: input.applicationId,
         keyHash: hashLicenseKey(licenseKey, input.secret),
         keyLast4: licenseKeyLast4(licenseKey),
         label,

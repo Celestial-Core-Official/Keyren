@@ -47,12 +47,12 @@ const QUANTITY_PRESETS = [1, 5, 10, 25] as const;
  * shape of a license.
  */
 export function LicenseCreateForm({
-  productId,
+  applicationId,
   formAction,
   fieldErrors,
   onCancel,
 }: {
-  productId: string;
+  applicationId: string;
   formAction: (formData: FormData) => void;
   fieldErrors: Record<string, string>;
   onCancel: () => void;
@@ -61,10 +61,10 @@ export function LicenseCreateForm({
   // dialog's content does not exist until it opens), so there is no server
   // render to disagree with.
   //
-  // Resolved, not read directly: a product that has never issued a license
+  // Resolved, not read directly: an application that has never issued a license
   // opens with the account defaults from Settings, and one that has keeps its
   // own memory.
-  const [initial] = useState(() => resolveLicensePreferences(productId));
+  const [initial] = useState(() => resolveLicensePreferences(applicationId));
 
   const [mode, setMode] = useState<ExpirationMode>(initial.mode);
   const [duration, setDuration] = useState<DurationValue>(initial.duration);
@@ -81,13 +81,13 @@ export function LicenseCreateForm({
     // Remembered only on a real submission, so a developer who opens the
     // dialog, changes their mind and cancels does not silently rewrite their
     // own defaults.
-    writeLicensePreferences(productId, { mode, duration, hwidLocked, quantity });
+    writeLicensePreferences(applicationId, { mode, duration, hwidLocked, quantity });
     formAction(formData);
   }
 
   return (
     <form action={submit}>
-      <input type="hidden" name="productId" value={productId} />
+      <input type="hidden" name="applicationId" value={applicationId} />
       <input type="hidden" name="mode" value={mode} />
       <input type="hidden" name="hwidLocked" value={hwidLocked ? "on" : "off"} />
 

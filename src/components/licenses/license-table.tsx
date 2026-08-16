@@ -26,11 +26,11 @@ import { cn } from "@/lib/utils";
  */
 export function LicenseTable({
   licenses,
-  productId,
+  applicationId,
   selection,
 }: {
   licenses: LicenseListItem[];
-  productId: string;
+  applicationId: string;
   selection?: {
     selected: ReadonlySet<string>;
     onToggle: (id: string, selected: boolean) => void;
@@ -143,7 +143,7 @@ export function LicenseTable({
                 </TableCell>
 
                 <TableCell>
-                  <LicenseRowActions license={license} productId={productId} />
+                  <LicenseRowActions license={license} applicationId={applicationId} />
                 </TableCell>
               </TableRow>
             );

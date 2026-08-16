@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { licenses } from "@/db/schema";
 import { createTestDatabase, TEST_HMAC_SECRET, truncateAll } from "../helpers/db";
-import { DEVELOPER_A, DEVELOPER_B, makeLicense, makeProduct } from "../helpers/factories";
+import { DEVELOPER_A, DEVELOPER_B, makeLicense, makeApplication } from "../helpers/factories";
 import { getLicense, updateLicenseDetails } from "@/lib/licenses/service";
 import { verifyLicense } from "@/lib/licenses/verify";
 import type { Database } from "@/db/types";
@@ -22,8 +22,8 @@ beforeEach(async () => {
 
 describe("license metadata columns", () => {
   it("defaults label and notes to null", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const view = await getLicense(db, DEVELOPER_A, license.id);
     expect(view?.label).toBeNull();
@@ -31,9 +31,9 @@ describe("license metadata columns", () => {
   });
 
   it("round-trips a label and notes through the database", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const license = await makeLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       label: "Order #4471",
       notes: "Refund window closes in March.",
     });
@@ -44,9 +44,9 @@ describe("license metadata columns", () => {
   });
 
   it("stores the maximum permitted lengths", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const license = await makeLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       label: "L".repeat(120),
       notes: "N".repeat(1000),
     });
@@ -57,9 +57,9 @@ describe("license metadata columns", () => {
   });
 
   it("stores Unicode without mangling it", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const license = await makeLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       label: "顧客 — Ünïcode 🔑",
     });
 
@@ -70,8 +70,8 @@ describe("license metadata columns", () => {
 
 describe("updateLicenseDetails", () => {
   it("sets both fields and returns the updated view", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const updated = await updateLicenseDetails(db, DEVELOPER_A, license.id, {
       label: "Acme Corp",
@@ -83,9 +83,9 @@ describe("updateLicenseDetails", () => {
   });
 
   it("clears a field when given null", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const license = await makeLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       label: "Temporary",
       notes: "Delete me",
     });
@@ -100,8 +100,8 @@ describe("updateLicenseDetails", () => {
   });
 
   it("bumps updatedAt", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     const [before] = await db
       .select()
@@ -119,10 +119,10 @@ describe("updateLicenseDetails", () => {
   });
 
   it("never changes the key hash, status or expiry", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const expiresAt = new Date(Date.now() + 86_400_000);
     const license = await makeLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       status: "revoked",
       expiresAt,
     });
@@ -151,8 +151,8 @@ describe("updateLicenseDetails", () => {
   });
 
   it("refuses to edit a license owned by another developer", async () => {
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
-    const license = await makeLicense(db, { productId: product.id });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
+    const license = await makeLicense(db, { applicationId: application.id });
 
     await expect(
       updateLicenseDetails(db, DEVELOPER_B, license.id, {
@@ -186,15 +186,15 @@ describe("public verification response", () => {
     // reference, a private remark. The verification endpoint is unauthenticated
     // and anyone holding the key can call it, so the response envelope stays
     // exactly `{ status, expiresAt }`.
-    const product = await makeProduct(db, { ownerId: DEVELOPER_A });
+    const application = await makeApplication(db, { ownerId: DEVELOPER_A });
     const license = await makeLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       label: "Acme Corp — invoice 8891",
       notes: "Chargeback risk, watch this one.",
     });
 
     const result = await verifyLicense(db, {
-      productId: product.id,
+      applicationId: application.id,
       licenseKey: license.plaintextKey,
       deviceId: "device-under-test",
       secret: TEST_HMAC_SECRET,

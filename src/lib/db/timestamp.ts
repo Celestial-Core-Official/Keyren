@@ -14,7 +14,7 @@ import { sql, type SQL } from "drizzle-orm";
  * and then throws on the first production request. It is the same defect the
  * Alpha_v1 security review recorded as SEC-1, where it silently disabled rate
  * limiting; in Alpha_v2 it would have taken out the licenses page and the
- * product overview.
+ * application overview.
  *
  * An ISO string with an explicit `::timestamptz` cast is unambiguous
  * regardless of where in the expression it appears — including inside a

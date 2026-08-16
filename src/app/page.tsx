@@ -9,7 +9,7 @@ function integrationSnippet(appUrl: string): string {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    productId: "prod_...",
+    applicationId: "app_...",
     licenseKey: "KEYREN-...",
     deviceId: "your-device-fingerprint",
   }),

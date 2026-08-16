@@ -1,23 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { OnboardingChecklist } from "@/components/products/onboarding-checklist";
+import { OnboardingChecklist } from "@/components/applications/onboarding-checklist";
 import { writeUiFlag } from "@/lib/preferences";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock("@/app/dashboard/products/[productId]/licenses/actions", () => ({
+vi.mock("@/app/dashboard/applications/[applicationId]/licenses/actions", () => ({
   createLicenseAction: vi.fn(),
 }));
 
-const PRODUCT = "prod_abc";
+const APPLICATION = "app_abc";
 
 function renderChecklist(
   overrides: { hasLicense?: boolean; hasVerification?: boolean } = {},
 ) {
   render(
     <OnboardingChecklist
-      productId={PRODUCT}
-      productSlug="seliware-key"
+      applicationId={APPLICATION}
+      applicationSlug="seliware-key"
       hasLicense={overrides.hasLicense ?? false}
       hasVerification={overrides.hasVerification ?? false}
     />,
@@ -30,7 +30,7 @@ beforeEach(() => {
 });
 
 describe("OnboardingChecklist — progress", () => {
-  it("shows all three steps to a brand new product", () => {
+  it("shows all three steps to a brand new application", () => {
     renderChecklist();
 
     expect(screen.getByText(/1\. Generate a license/)).toBeTruthy();
@@ -52,7 +52,7 @@ describe("OnboardingChecklist — progress", () => {
   });
 
   it("reads the copied-snippet step from the stored flag", () => {
-    writeUiFlag(`copied-snippet:${PRODUCT}`, true);
+    writeUiFlag(`copied-snippet:${APPLICATION}`, true);
     renderChecklist();
 
     expect(screen.getByText(/1 of 3 done/)).toBeTruthy();
@@ -67,8 +67,8 @@ describe("OnboardingChecklist — progress", () => {
     // Three buttons at once is three decisions; one is a next step.
     const { container } = render(
       <OnboardingChecklist
-        productId={PRODUCT}
-        productSlug="seliware-key"
+        applicationId={APPLICATION}
+        applicationSlug="seliware-key"
         hasLicense={false}
         hasVerification={false}
       />,
@@ -81,17 +81,17 @@ describe("OnboardingChecklist — progress", () => {
 
 describe("OnboardingChecklist — disappearing", () => {
   it("is gone once every step is done", () => {
-    writeUiFlag(`copied-snippet:${PRODUCT}`, true);
+    writeUiFlag(`copied-snippet:${APPLICATION}`, true);
     const { container } = render(
       <OnboardingChecklist
-        productId={PRODUCT}
-        productSlug="seliware-key"
+        applicationId={APPLICATION}
+        applicationSlug="seliware-key"
         hasLicense
         hasVerification
       />,
     );
 
-    // A permanent checklist on a product set up months ago is clutter.
+    // A permanent checklist on an application set up months ago is clutter.
     expect(container.textContent).toBe("");
   });
 
@@ -108,8 +108,8 @@ describe("OnboardingChecklist — disappearing", () => {
 
     const { container } = render(
       <OnboardingChecklist
-        productId={PRODUCT}
-        productSlug="seliware-key"
+        applicationId={APPLICATION}
+        applicationSlug="seliware-key"
         hasLicense={false}
         hasVerification={false}
       />,
@@ -117,13 +117,13 @@ describe("OnboardingChecklist — disappearing", () => {
     expect(container.textContent).toBe("");
   });
 
-  it("keeps the dismissal per product", () => {
-    writeUiFlag(`onboarding-dismissed:${PRODUCT}`, true);
+  it("keeps the dismissal per application", () => {
+    writeUiFlag(`onboarding-dismissed:${APPLICATION}`, true);
 
     const { container } = render(
       <OnboardingChecklist
-        productId="prod_other"
-        productSlug="other"
+        applicationId="app_other"
+        applicationSlug="other"
         hasLicense={false}
         hasVerification={false}
       />,
@@ -132,11 +132,11 @@ describe("OnboardingChecklist — disappearing", () => {
     expect(container.textContent).not.toBe("");
   });
 
-  it("stores only a boolean flag, never anything about the product", async () => {
+  it("stores only a boolean flag, never anything about the application", async () => {
     const user = renderChecklist();
     await user.click(screen.getByRole("button", { name: /dismiss getting started/i }));
 
-    expect(localStorage.getItem(`keyren:flag:onboarding-dismissed:${PRODUCT}`)).toBe("1");
+    expect(localStorage.getItem(`keyren:flag:onboarding-dismissed:${APPLICATION}`)).toBe("1");
     expect(JSON.stringify(localStorage)).not.toContain("KEYREN-");
   });
 });
@@ -153,8 +153,8 @@ describe("OnboardingChecklist — accessibility", () => {
   it("is an ordered list, because the steps are in order", () => {
     const { container } = render(
       <OnboardingChecklist
-        productId={PRODUCT}
-        productSlug="seliware-key"
+        applicationId={APPLICATION}
+        applicationSlug="seliware-key"
         hasLicense={false}
         hasVerification={false}
       />,

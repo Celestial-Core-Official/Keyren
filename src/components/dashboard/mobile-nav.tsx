@@ -16,20 +16,20 @@ import { cn } from "@/lib/utils";
 
 const PRIMARY = [
   { href: "/dashboard", label: "Overview", icon: LayoutGrid, exact: true },
-  { href: "/dashboard/products", label: "Products", icon: Package, exact: false },
+  { href: "/dashboard/applications", label: "Applications", icon: Package, exact: false },
   { href: "/dashboard/settings", label: "Settings", icon: Settings, exact: true },
 ] as const;
 
 /**
- * Extracts the product being viewed from the path.
+ * Extracts the application being viewed from the path.
  *
  * Read from the URL rather than threaded down as a prop: this component lives
- * in the dashboard layout, which sits above the product layout that knows the
- * product, and inverting that just to label two links would be a lot of
+ * in the dashboard layout, which sits above the application layout that knows the
+ * application, and inverting that just to label two links would be a lot of
  * plumbing for a string already present in the address bar.
  */
-export function currentProductId(pathname: string): string | null {
-  return /^\/dashboard\/products\/(prod_[0-9A-Za-z]+)(\/|$)/.exec(pathname)?.[1] ?? null;
+export function currentApplicationId(pathname: string): string | null {
+  return /^\/dashboard\/applications\/(app_[0-9A-Za-z]+)(\/|$)/.exec(pathname)?.[1] ?? null;
 }
 
 /**
@@ -56,7 +56,7 @@ export function MobileNav() {
     setOpen(false);
   }
 
-  const productId = currentProductId(pathname);
+  const applicationId = currentApplicationId(pathname);
 
   function isActive(href: string, exact: boolean): boolean {
     return exact ? pathname === href : pathname.startsWith(href);
@@ -104,20 +104,20 @@ export function MobileNav() {
             );
           })}
 
-          {productId ? (
+          {applicationId ? (
             <>
               <p className="mt-4 px-3 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                This product
+                This application
               </p>
 
               <Link
-                href={`/dashboard/products/${productId}`}
+                href={`/dashboard/applications/${applicationId}`}
                 aria-current={
-                  pathname === `/dashboard/products/${productId}` ? "page" : undefined
+                  pathname === `/dashboard/applications/${applicationId}` ? "page" : undefined
                 }
                 className={cn(
                   "flex min-h-11 items-center gap-2.5 rounded-md px-3 text-sm transition-colors",
-                  pathname === `/dashboard/products/${productId}`
+                  pathname === `/dashboard/applications/${applicationId}`
                     ? "bg-accent font-medium text-foreground"
                     : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                 )}
@@ -127,15 +127,15 @@ export function MobileNav() {
               </Link>
 
               <Link
-                href={`/dashboard/products/${productId}/licenses`}
+                href={`/dashboard/applications/${applicationId}/licenses`}
                 aria-current={
-                  pathname.startsWith(`/dashboard/products/${productId}/licenses`)
+                  pathname.startsWith(`/dashboard/applications/${applicationId}/licenses`)
                     ? "page"
                     : undefined
                 }
                 className={cn(
                   "flex min-h-11 items-center gap-2.5 rounded-md px-3 text-sm transition-colors",
-                  pathname.startsWith(`/dashboard/products/${productId}/licenses`)
+                  pathname.startsWith(`/dashboard/applications/${applicationId}/licenses`)
                     ? "bg-accent font-medium text-foreground"
                     : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                 )}

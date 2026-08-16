@@ -58,17 +58,17 @@ export async function POST(request: Request): Promise<NextResponse> {
       return errorResponse("BAD_REQUEST");
     }
 
-    const { productId, licenseKey, deviceId } = parsed.data;
+    const { applicationId, licenseKey, deviceId } = parsed.data;
 
     // 2. Rate limit BEFORE any license lookup, so a flood of guesses never
     //    reaches the database.
     const limiter = new PostgresRateLimiter(db);
     const limit = await limiter.consume(
       verifyDimensions(
-        { ip: clientIpFrom(request.headers), productId },
+        { ip: clientIpFrom(request.headers), applicationId },
         {
           perIpPerMinute: env.RATE_LIMIT_VERIFY_PER_MINUTE,
-          perProductPerMinute: env.RATE_LIMIT_VERIFY_PER_PRODUCT_PER_MINUTE,
+          perApplicationPerMinute: env.RATE_LIMIT_VERIFY_PER_APPLICATION_PER_MINUTE,
         },
       ),
     );
@@ -83,7 +83,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     // 3. Delegate every licensing decision to the engine.
     const result = await verifyLicense(db, {
-      productId,
+      applicationId,
       licenseKey,
       deviceId,
       secret: env.KEYREN_LICENSE_HMAC_SECRET,

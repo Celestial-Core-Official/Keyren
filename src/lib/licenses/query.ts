@@ -1,5 +1,5 @@
 import { and, asc, count, desc, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
-import { activations, licenses, products } from "@/db/schema";
+import { activations, licenses, applications } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { instant } from "@/lib/db/timestamp";
 import { notFound } from "@/lib/errors";
@@ -16,30 +16,30 @@ import type {
  * Reads for the license browser.
  *
  * Everything happens in SQL. The obvious alternative — fetch every license for
- * the product and filter in JavaScript — works fine at ten licenses and falls
+ * the application and filter in JavaScript — works fine at ten licenses and falls
  * over at ten thousand, and the whole point of this release is that the list
  * stays usable when it is long. Filtering, counting, sorting and slicing are
  * therefore all the database's job.
  */
 
 /**
- * Confirms the product exists AND belongs to this developer.
+ * Confirms the application exists AND belongs to this developer.
  *
  * Duplicated from the service rather than exported across module boundaries so
  * neither file can have its ownership check removed by an edit to the other.
  */
-async function assertOwnsProduct(
+async function assertOwnsApplication(
   db: Database,
   ownerId: string,
-  productId: string,
+  applicationId: string,
 ): Promise<void> {
   const [row] = await db
-    .select({ id: products.id })
-    .from(products)
-    .where(and(eq(products.id, productId), eq(products.ownerId, ownerId)))
+    .select({ id: applications.id })
+    .from(applications)
+    .where(and(eq(applications.id, applicationId), eq(applications.ownerId, ownerId)))
     .limit(1);
 
-  if (!row) throw notFound("Product");
+  if (!row) throw notFound("Application");
 }
 
 /**
@@ -58,11 +58,11 @@ function effectiveStatusSql(now: Date): SQL<EffectiveStatus> {
 }
 
 function filterConditions(
-  productId: string,
+  applicationId: string,
   query: LicenseQuery,
   now: Date,
 ): SQL[] {
-  const conditions: SQL[] = [eq(licenses.productId, productId)];
+  const conditions: SQL[] = [eq(licenses.applicationId, applicationId)];
 
   const term = query.q.trim();
   if (term !== "") {
@@ -136,13 +136,13 @@ function orderBy(sort: LicenseSort): SQL[] {
 export async function queryLicenses(
   db: Database,
   ownerId: string,
-  productId: string,
+  applicationId: string,
   query: LicenseQuery,
   now: Date = new Date(),
 ): Promise<LicensePage> {
-  await assertOwnsProduct(db, ownerId, productId);
+  await assertOwnsApplication(db, ownerId, applicationId);
 
-  const conditions = filterConditions(productId, query, now);
+  const conditions = filterConditions(applicationId, query, now);
   const where = and(...conditions);
 
   // The activation join is LEFT and `activations_license_unique` guarantees at
@@ -177,21 +177,21 @@ export async function queryLicenses(
     total,
     page: query.page,
     pageSize: query.pageSize,
-    // At least one, so an empty product reads as "page 1 of 1" rather than
+    // At least one, so an empty application reads as "page 1 of 1" rather than
     // "page 1 of 0".
     pageCount: Math.max(1, Math.ceil(total / query.pageSize)),
   };
 }
 
 /**
- * Per-status counts for one product, in a single round trip.
+ * Per-status counts for one application, in a single round trip.
  *
  * The overview cards need Active, Expired, Revoked and bound-device totals.
  * Four `SELECT count(*)` calls would be four round trips for numbers that all
  * come from the same rows, so they are computed as filtered aggregates over
  * one scan.
  */
-export type ProductLicenseStats = {
+export type ApplicationLicenseStats = {
   total: number;
   active: number;
   expired: number;
@@ -201,20 +201,20 @@ export type ProductLicenseStats = {
    * Licenses with any activation row at all, locked or not.
    *
    * An activation row is only ever written by a successful verification, so a
-   * non-zero count is proof that this product's integration has worked at
+   * non-zero count is proof that this application's integration has worked at
    * least once — which is what the onboarding checklist needs, derived from
    * real data rather than a flag somebody has to remember to set.
    */
   activated: number;
 };
 
-export async function getProductLicenseStats(
+export async function getApplicationLicenseStats(
   db: Database,
   ownerId: string,
-  productId: string,
+  applicationId: string,
   now: Date = new Date(),
-): Promise<ProductLicenseStats> {
-  await assertOwnsProduct(db, ownerId, productId);
+): Promise<ApplicationLicenseStats> {
+  await assertOwnsApplication(db, ownerId, applicationId);
 
   const [row] = await db
     .select({
@@ -239,7 +239,7 @@ export async function getProductLicenseStats(
     })
     .from(licenses)
     .leftJoin(activations, eq(activations.licenseId, licenses.id))
-    .where(eq(licenses.productId, productId));
+    .where(eq(licenses.applicationId, applicationId));
 
   return {
     total: Number(row?.total ?? 0),

@@ -52,8 +52,8 @@ describe("PostgresRateLimiter", () => {
 
   it("keeps separate counters per axis", async () => {
     const limiter = new PostgresRateLimiter(db);
-    const product: RateLimitDimension = {
-      name: "product",
+    const application: RateLimitDimension = {
+      name: "application",
       value: "1.1.1.1",
       limit: 3,
       windowSeconds: 60,
@@ -61,12 +61,12 @@ describe("PostgresRateLimiter", () => {
     for (let i = 0; i < 3; i += 1) await limiter.consume([ip("1.1.1.1")]);
 
     // Same value, different axis — must not share a bucket.
-    expect((await limiter.consume([product])).allowed).toBe(true);
+    expect((await limiter.consume([application])).allowed).toBe(true);
   });
 
   it("denies when any one dimension is exhausted", async () => {
     const limiter = new PostgresRateLimiter(db);
-    const dims = [ip("1.1.1.1", 2), { name: "product", value: "prod_x", limit: 100, windowSeconds: 60 }];
+    const dims = [ip("1.1.1.1", 2), { name: "application", value: "app_x", limit: 100, windowSeconds: 60 }];
 
     expect((await limiter.consume(dims)).allowed).toBe(true);
     expect((await limiter.consume(dims)).allowed).toBe(true);
@@ -165,7 +165,7 @@ describe("driver portability", () => {
 
     await new PostgresRateLimiter(stub).consume([
       { name: "ip", value: "1.1.1.1", limit: 10, windowSeconds: 60 },
-      { name: "product", value: "prod_x", limit: 100, windowSeconds: 60 },
+      { name: "application", value: "app_x", limit: 100, windowSeconds: 60 },
     ]);
 
     expect(calls).toHaveLength(2);

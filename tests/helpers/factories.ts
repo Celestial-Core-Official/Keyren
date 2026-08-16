@@ -1,26 +1,26 @@
-import { generateActivationId, generateLicenseId, generateProductId } from "@/lib/crypto/ids";
+import { generateActivationId, generateLicenseId, generateApplicationId } from "@/lib/crypto/ids";
 import {
   generateLicenseKey,
   hashLicenseKey,
   licenseKeyLast4,
 } from "@/lib/crypto/license-key";
-import { activations, licenses, products } from "@/db/schema";
+import { activations, licenses, applications } from "@/db/schema";
 import type { Database } from "@/db/types";
-import { slugify } from "@/lib/products/slug";
+import { slugify } from "@/lib/applications/slug";
 import { TEST_HMAC_SECRET } from "./db";
 
 export const DEVELOPER_A = "user_developer_a";
 export const DEVELOPER_B = "user_developer_b";
 
-export async function makeProduct(
+export async function makeApplication(
   db: Database,
   options: { ownerId?: string; name?: string; createdAt?: Date } = {},
 ): Promise<{ id: string; ownerId: string; name: string }> {
-  const id = generateProductId();
+  const id = generateApplicationId();
   const ownerId = options.ownerId ?? DEVELOPER_A;
-  const name = options.name ?? "Test Product";
+  const name = options.name ?? "Test Application";
 
-  await db.insert(products).values({
+  await db.insert(applications).values({
     id,
     ownerId,
     name,
@@ -36,7 +36,7 @@ export async function makeProduct(
 export async function makeLicense(
   db: Database,
   options: {
-    productId: string;
+    applicationId: string;
     hwidLocked?: boolean;
     expiresAt?: Date | null;
     status?: "active" | "revoked";
@@ -50,7 +50,7 @@ export async function makeLicense(
 
   await db.insert(licenses).values({
     id,
-    productId: options.productId,
+    applicationId: options.applicationId,
     keyHash: hashLicenseKey(plaintextKey, TEST_HMAC_SECRET),
     keyLast4: licenseKeyLast4(plaintextKey),
     hwidLocked: options.hwidLocked ?? true,

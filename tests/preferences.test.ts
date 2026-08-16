@@ -14,7 +14,7 @@ import {
   writeUiFlag,
 } from "@/lib/preferences";
 
-const PRODUCT = "prod_abc123";
+const APPLICATION = "app_abc123";
 
 class MemoryStorage {
   private data = new Map<string, string>();
@@ -55,18 +55,18 @@ beforeEach(() => {
 
 describe("license creation preferences", () => {
   it("returns defaults when nothing has been stored", () => {
-    expect(readLicensePreferences(PRODUCT)).toEqual(DEFAULT_LICENSE_PREFERENCES);
+    expect(readLicensePreferences(APPLICATION)).toEqual(DEFAULT_LICENSE_PREFERENCES);
   });
 
   it("round-trips the settings a developer chose", () => {
-    writeLicensePreferences(PRODUCT, {
+    writeLicensePreferences(APPLICATION, {
       mode: "duration",
       duration: "365d",
       hwidLocked: false,
       quantity: 25,
     });
 
-    expect(readLicensePreferences(PRODUCT)).toEqual({
+    expect(readLicensePreferences(APPLICATION)).toEqual({
       mode: "duration",
       duration: "365d",
       hwidLocked: false,
@@ -74,17 +74,17 @@ describe("license creation preferences", () => {
     });
   });
 
-  it("keeps preferences separate per product", () => {
-    // Different products often have genuinely different licensing shapes, so
-    // one product's 90-day default must not leak into another's.
-    writeLicensePreferences(PRODUCT, { ...DEFAULT_LICENSE_PREFERENCES, quantity: 50 });
-    expect(readLicensePreferences("prod_other").quantity).toBe(1);
+  it("keeps preferences separate per application", () => {
+    // Different applications often have genuinely different licensing shapes, so
+    // one application's 90-day default must not leak into another's.
+    writeLicensePreferences(APPLICATION, { ...DEFAULT_LICENSE_PREFERENCES, quantity: 50 });
+    expect(readLicensePreferences("app_other").quantity).toBe(1);
   });
 });
 
 describe("license creation preferences — what is never stored", () => {
   it("stores only the four approved keys", () => {
-    writeLicensePreferences(PRODUCT, {
+    writeLicensePreferences(APPLICATION, {
       mode: "date",
       duration: "30d",
       hwidLocked: true,
@@ -104,7 +104,7 @@ describe("license creation preferences — what is never stored", () => {
     // The type forbids it, but localStorage is also where a plaintext key
     // would do the most damage, so the writer projects explicitly rather than
     // spreading whatever it was handed.
-    writeLicensePreferences(PRODUCT, {
+    writeLicensePreferences(APPLICATION, {
       ...DEFAULT_LICENSE_PREFERENCES,
       // @ts-expect-error deliberately passing fields the type forbids
       label: "Acme Corp",
@@ -121,50 +121,50 @@ describe("license creation preferences — what is never stored", () => {
 
 describe("license creation preferences — untrusted storage", () => {
   it("falls back to defaults for malformed JSON", () => {
-    storage.setItem(`keyren:license-prefs:${PRODUCT}`, "{not json");
-    expect(readLicensePreferences(PRODUCT)).toEqual(DEFAULT_LICENSE_PREFERENCES);
+    storage.setItem(`keyren:license-prefs:${APPLICATION}`, "{not json");
+    expect(readLicensePreferences(APPLICATION)).toEqual(DEFAULT_LICENSE_PREFERENCES);
   });
 
   it("rejects an unknown expiration mode", () => {
     storage.setItem(
-      `keyren:license-prefs:${PRODUCT}`,
+      `keyren:license-prefs:${APPLICATION}`,
       JSON.stringify({ mode: "forever", duration: "30d", hwidLocked: true, quantity: 1 }),
     );
-    expect(readLicensePreferences(PRODUCT).mode).toBe("permanent");
+    expect(readLicensePreferences(APPLICATION).mode).toBe("permanent");
   });
 
   it("rejects an unknown duration", () => {
     storage.setItem(
-      `keyren:license-prefs:${PRODUCT}`,
+      `keyren:license-prefs:${APPLICATION}`,
       JSON.stringify({ mode: "duration", duration: "999y", hwidLocked: true, quantity: 1 }),
     );
-    expect(readLicensePreferences(PRODUCT).duration).toBe("30d");
+    expect(readLicensePreferences(APPLICATION).duration).toBe("30d");
   });
 
   it("caps a tampered quantity at the batch maximum", () => {
     // Hand-edited storage must not become a way to issue 10,000 licenses in
     // one click.
     storage.setItem(
-      `keyren:license-prefs:${PRODUCT}`,
+      `keyren:license-prefs:${APPLICATION}`,
       JSON.stringify({ mode: "permanent", duration: "30d", hwidLocked: true, quantity: 10000 }),
     );
-    expect(readLicensePreferences(PRODUCT).quantity).toBe(100);
+    expect(readLicensePreferences(APPLICATION).quantity).toBe(100);
   });
 
   it("floors a tampered quantity at one", () => {
     storage.setItem(
-      `keyren:license-prefs:${PRODUCT}`,
+      `keyren:license-prefs:${APPLICATION}`,
       JSON.stringify({ mode: "permanent", duration: "30d", hwidLocked: true, quantity: -5 }),
     );
-    expect(readLicensePreferences(PRODUCT).quantity).toBe(1);
+    expect(readLicensePreferences(APPLICATION).quantity).toBe(1);
   });
 
   it("ignores extra keys someone added by hand", () => {
     storage.setItem(
-      `keyren:license-prefs:${PRODUCT}`,
+      `keyren:license-prefs:${APPLICATION}`,
       JSON.stringify({ ...DEFAULT_LICENSE_PREFERENCES, licenseKey: "KEYREN-X" }),
     );
-    expect(readLicensePreferences(PRODUCT)).toEqual(DEFAULT_LICENSE_PREFERENCES);
+    expect(readLicensePreferences(APPLICATION)).toEqual(DEFAULT_LICENSE_PREFERENCES);
   });
 });
 
@@ -173,7 +173,7 @@ describe("license creation preferences — unavailable storage", () => {
     // Private browsing and some enterprise policies make localStorage throw on
     // access. That must not stop a developer generating a license.
     vi.stubGlobal("localStorage", undefined);
-    expect(readLicensePreferences(PRODUCT)).toEqual(DEFAULT_LICENSE_PREFERENCES);
+    expect(readLicensePreferences(APPLICATION)).toEqual(DEFAULT_LICENSE_PREFERENCES);
   });
 
   it("swallows a write failure silently", () => {
@@ -185,7 +185,7 @@ describe("license creation preferences — unavailable storage", () => {
     });
 
     expect(() =>
-      writeLicensePreferences(PRODUCT, DEFAULT_LICENSE_PREFERENCES),
+      writeLicensePreferences(APPLICATION, DEFAULT_LICENSE_PREFERENCES),
     ).not.toThrow();
   });
 
@@ -197,7 +197,7 @@ describe("license creation preferences — unavailable storage", () => {
       setItem: () => undefined,
     });
 
-    expect(readLicensePreferences(PRODUCT)).toEqual(DEFAULT_LICENSE_PREFERENCES);
+    expect(readLicensePreferences(APPLICATION)).toEqual(DEFAULT_LICENSE_PREFERENCES);
   });
 });
 
@@ -253,23 +253,23 @@ describe("account-wide defaults", () => {
 });
 
 describe("resolving what a creation form opens with", () => {
-  it("prefers a product's own memory over the account default", () => {
+  it("prefers an application's own memory over the account default", () => {
     writeGlobalDefaults({ mode: "duration", duration: "7d", hwidLocked: false, quantity: 5 });
-    writeLicensePreferences(PRODUCT, {
+    writeLicensePreferences(APPLICATION, {
       mode: "permanent",
       duration: "30d",
       hwidLocked: true,
       quantity: 1,
     });
 
-    expect(resolveLicensePreferences(PRODUCT).mode).toBe("permanent");
-    expect(resolveLicensePreferences(PRODUCT).quantity).toBe(1);
+    expect(resolveLicensePreferences(APPLICATION).mode).toBe("permanent");
+    expect(resolveLicensePreferences(APPLICATION).quantity).toBe(1);
   });
 
-  it("seeds a product that has never issued a license with the account default", () => {
+  it("seeds an application that has never issued a license with the account default", () => {
     writeGlobalDefaults({ mode: "duration", duration: "7d", hwidLocked: false, quantity: 5 });
 
-    expect(resolveLicensePreferences("prod_never_used")).toEqual({
+    expect(resolveLicensePreferences("app_never_used")).toEqual({
       mode: "duration",
       duration: "7d",
       hwidLocked: false,
@@ -277,17 +277,17 @@ describe("resolving what a creation form opens with", () => {
     });
   });
 
-  it("does not treat a product stored as the defaults as untouched", () => {
-    // A product deliberately set to match the account default must still count
+  it("does not treat an application stored as the defaults as untouched", () => {
+    // An application deliberately set to match the account default must still count
     // as having its own memory, or changing the default would silently rewrite it.
-    writeLicensePreferences(PRODUCT, DEFAULT_LICENSE_PREFERENCES);
+    writeLicensePreferences(APPLICATION, DEFAULT_LICENSE_PREFERENCES);
     writeGlobalDefaults({ mode: "duration", duration: "365d", hwidLocked: false, quantity: 50 });
 
-    expect(resolveLicensePreferences(PRODUCT)).toEqual(DEFAULT_LICENSE_PREFERENCES);
+    expect(resolveLicensePreferences(APPLICATION)).toEqual(DEFAULT_LICENSE_PREFERENCES);
   });
 
   it("falls back to the built-in defaults when neither is stored", () => {
-    expect(resolveLicensePreferences("prod_nothing")).toEqual(DEFAULT_LICENSE_PREFERENCES);
+    expect(resolveLicensePreferences("app_nothing")).toEqual(DEFAULT_LICENSE_PREFERENCES);
   });
 });
 
@@ -319,7 +319,7 @@ describe("resetting remembered settings", () => {
   it("clears every keyren key", () => {
     writeGlobalDefaults({ mode: "duration", duration: "7d", hwidLocked: false, quantity: 5 });
     writeDisplayPreferences({ pageSize: 100, showLocalTime: true });
-    writeLicensePreferences(PRODUCT, DEFAULT_LICENSE_PREFERENCES);
+    writeLicensePreferences(APPLICATION, DEFAULT_LICENSE_PREFERENCES);
     writeUiFlag("onboarding-dismissed", true);
 
     clearStoredPreferences();

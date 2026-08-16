@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import {
   createLicenseAction,
   type CreateLicenseState,
-} from "@/app/dashboard/products/[productId]/licenses/actions";
+} from "@/app/dashboard/applications/[applicationId]/licenses/actions";
 import { useActionFeedback } from "@/components/dashboard/feedback";
 import { BatchResultDialog } from "@/components/licenses/batch-result-dialog";
 import { LicenseCreateForm } from "@/components/licenses/license-create-form";
@@ -25,15 +25,15 @@ const INITIAL: CreateLicenseState = idleAction();
  * the plaintext sitting in the component for the life of the page.
  */
 function LicenseCreateFlow({
-  productId,
-  productSlug,
+  applicationId,
+  applicationSlug,
   open,
   onOpenChange,
   onAcknowledge,
   onGenerateAnother,
 }: {
-  productId: string;
-  productSlug: string;
+  applicationId: string;
+  applicationSlug: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAcknowledge: () => void;
@@ -51,8 +51,8 @@ function LicenseCreateFlow({
     return (
       <BatchResultDialog
         licenses={created}
-        productId={productId}
-        productSlug={productSlug}
+        applicationId={applicationId}
+        applicationSlug={applicationSlug}
         onAcknowledge={onAcknowledge}
         onGenerateAnother={onGenerateAnother}
       />
@@ -63,7 +63,7 @@ function LicenseCreateFlow({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <LicenseCreateForm
-          productId={productId}
+          applicationId={applicationId}
           formAction={formAction}
           fieldErrors={state.status === "error" ? state.fieldErrors : {}}
           onCancel={() => onOpenChange(false)}
@@ -74,14 +74,14 @@ function LicenseCreateFlow({
 }
 
 export function CreateLicenseDialog({
-  productId,
-  productSlug,
+  applicationId,
+  applicationSlug,
   variant = "default",
   size = "sm",
   children,
 }: {
-  productId: string;
-  productSlug: string;
+  applicationId: string;
+  applicationSlug: string;
   variant?: React.ComponentProps<typeof Button>["variant"];
   size?: React.ComponentProps<typeof Button>["size"];
   children?: React.ReactNode;
@@ -109,8 +109,8 @@ export function CreateLicenseDialog({
 
       <LicenseCreateFlow
         key={session}
-        productId={productId}
-        productSlug={productSlug}
+        applicationId={applicationId}
+        applicationSlug={applicationSlug}
         open={open}
         onOpenChange={setOpen}
         // Acknowledging bumps the key, which unmounts the component holding

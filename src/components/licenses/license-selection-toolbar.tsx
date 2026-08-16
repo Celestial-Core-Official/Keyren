@@ -7,7 +7,7 @@ import {
   exportSelectionAction,
   type BulkActionState,
   type ExportSelectionState,
-} from "@/app/dashboard/products/[productId]/licenses/bulk-actions";
+} from "@/app/dashboard/applications/[applicationId]/licenses/bulk-actions";
 import { SubmitButton, useActionFeedback } from "@/components/dashboard/feedback";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,14 +92,14 @@ const COPY: Record<
 };
 
 export function LicenseSelectionToolbar({
-  productId,
-  productSlug,
+  applicationId,
+  applicationSlug,
   selectedIds,
   selectedLicenses,
   onClear,
 }: {
-  productId: string;
-  productSlug: string;
+  applicationId: string;
+  applicationSlug: string;
   selectedIds: string[];
   selectedLicenses: LicenseListItem[];
   onClear: () => void;
@@ -123,7 +123,7 @@ export function LicenseSelectionToolbar({
     setExportFormat(format);
 
     const formData = new FormData();
-    formData.set("productId", productId);
+    formData.set("applicationId", applicationId);
     for (const id of selectedIds) formData.append("licenseIds", id);
 
     startTransition(() => runExport(formData));
@@ -141,7 +141,7 @@ export function LicenseSelectionToolbar({
   useActionFeedback(exportState, {
     onSuccess: (data) => {
       if (!data) return;
-      writeExport(data.rows, exportFormat, productSlug);
+      writeExport(data.rows, exportFormat, applicationSlug);
       onClear();
     },
   });
@@ -160,7 +160,7 @@ export function LicenseSelectionToolbar({
   function identity() {
     return (
       <>
-        <input type="hidden" name="productId" value={productId} />
+        <input type="hidden" name="applicationId" value={applicationId} />
         {selectedIds.map((id) => (
           <input key={id} type="hidden" name="licenseIds" value={id} />
         ))}
@@ -339,11 +339,11 @@ export function LicenseSelectionToolbar({
 function writeExport(
   rows: MetadataJsonRow[],
   format: "csv" | "json",
-  productSlug: string,
+  applicationSlug: string,
 ): void {
   if (format === "json") {
     downloadTextFile(
-      exportFilename(productSlug, "json"),
+      exportFilename(applicationSlug, "json"),
       `${JSON.stringify(rows, null, 2)}\n`,
       JSON_MIME,
     );
@@ -360,5 +360,5 @@ function writeExport(
     createdAt: new Date(row.createdAt),
   }));
 
-  downloadTextFile(exportFilename(productSlug, "csv"), metadataToCsv(revived), CSV_MIME);
+  downloadTextFile(exportFilename(applicationSlug, "csv"), metadataToCsv(revived), CSV_MIME);
 }

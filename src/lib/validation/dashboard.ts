@@ -19,10 +19,10 @@ import {
   type LicenseQuery,
 } from "@/lib/licenses/types";
 import {
-  DEFAULT_PRODUCT_QUERY,
-  PRODUCT_SORTS,
-  type ProductQuery,
-} from "@/lib/products/types";
+  DEFAULT_APPLICATION_QUERY,
+  APPLICATION_SORTS,
+  type ApplicationQuery,
+} from "@/lib/applications/types";
 
 /**
  * Input schemas for dashboard server actions.
@@ -32,10 +32,10 @@ import {
  * a crafted form submission to declare one.
  */
 
-export const productIdSchema = z.string().regex(/^prod_[0-9A-Za-z]+$/, "Invalid product id");
+export const applicationIdSchema = z.string().regex(/^app_[0-9A-Za-z]+$/, "Invalid application id");
 export const licenseIdSchema = z.string().regex(/^lic_[0-9A-Za-z]+$/, "Invalid license id");
 
-const productName = z.string().trim().min(1, "Name is required").max(200, "Name is too long");
+const applicationName = z.string().trim().min(1, "Name is required").max(200, "Name is too long");
 
 /**
  * An optional free-text field that normalizes to `string | null`.
@@ -80,11 +80,11 @@ export const editLicenseDetailsSchema = z.object({
 
 export type EditLicenseDetailsInput = z.infer<typeof editLicenseDetailsSchema>;
 
-export const createProductSchema = z.object({ name: productName });
+export const createApplicationSchema = z.object({ name: applicationName });
 
-export const renameProductSchema = z.object({
-  productId: productIdSchema,
-  name: productName,
+export const renameApplicationSchema = z.object({
+  applicationId: applicationIdSchema,
+  name: applicationName,
 });
 
 // Cast to a literal tuple, not a widened `[string, ...string[]]`: z.enum()'s
@@ -137,7 +137,7 @@ const expiresAtSchema = z.union([
  * field cannot be added to one branch and forgotten in the others.
  */
 const licenseCoreShape = {
-  productId: productIdSchema,
+  applicationId: applicationIdSchema,
   hwidLocked: z.boolean().default(true),
   quantity: batchQuantitySchema,
   label: licenseLabelSchema,
@@ -171,7 +171,7 @@ export type BulkAction = (typeof BULK_ACTIONS)[number];
  * unbounded `IN (...)` is a cheap way to make one request do a lot of work.
  */
 export const bulkLicenseActionSchema = z.object({
-  productId: productIdSchema,
+  applicationId: applicationIdSchema,
   action: z.enum(BULK_ACTIONS),
   licenseIds: z
     .array(licenseIdSchema)
@@ -230,9 +230,9 @@ export function parseLicenseQuery(params: RawSearchParams): LicenseQuery {
   };
 }
 
-export function parseProductQuery(params: RawSearchParams): ProductQuery {
+export function parseApplicationQuery(params: RawSearchParams): ApplicationQuery {
   return {
     q: (firstValue(params.q) ?? "").trim().slice(0, SEARCH_MAX_LENGTH),
-    sort: oneOf(params.sort, PRODUCT_SORTS, DEFAULT_PRODUCT_QUERY.sort),
+    sort: oneOf(params.sort, APPLICATION_SORTS, DEFAULT_APPLICATION_QUERY.sort),
   };
 }

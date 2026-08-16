@@ -7,7 +7,7 @@
  */
 export type VerificationErrorCode =
   | "BAD_REQUEST"
-  | "PRODUCT_INVALID"
+  | "APPLICATION_INVALID"
   | "LICENSE_INVALID"
   | "LICENSE_REVOKED"
   | "LICENSE_EXPIRED"
@@ -16,13 +16,13 @@ export type VerificationErrorCode =
   | "INTERNAL_ERROR";
 
 /**
- * 400 the request was malformed, 404 the product does not exist, 403 the
+ * 400 the request was malformed, 404 the application does not exist, 403 the
  * request was well-formed but the license was rejected, 429 throttled,
  * 500 Keyren failed.
  */
 export const VERIFICATION_ERROR_STATUS: Record<VerificationErrorCode, number> = {
   BAD_REQUEST: 400,
-  PRODUCT_INVALID: 404,
+  APPLICATION_INVALID: 404,
   LICENSE_INVALID: 403,
   LICENSE_REVOKED: 403,
   LICENSE_EXPIRED: 403,
@@ -37,7 +37,7 @@ export const VERIFICATION_ERROR_STATUS: Record<VerificationErrorCode, number> = 
  */
 export const VERIFICATION_ERROR_MESSAGE: Record<VerificationErrorCode, string> = {
   BAD_REQUEST: "The request body was malformed.",
-  PRODUCT_INVALID: "The provided product is invalid.",
+  APPLICATION_INVALID: "The provided application is invalid.",
   LICENSE_INVALID: "The provided license is invalid.",
   LICENSE_REVOKED: "This license has been revoked.",
   LICENSE_EXPIRED: "This license has expired.",

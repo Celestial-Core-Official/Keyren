@@ -19,7 +19,7 @@ function created(count: number): CreatedLicense[] {
     label: count > 1 ? `Acme Corp ${index + 1}` : "Acme Corp",
     licenseKey: `KEYREN-AAAAAAAA-BBBBBBBB-CCCCCCCC-DDDDDD${String(index).padStart(2, "0")}`,
     keyLast4: `DD${String(index).padStart(2, "0")}`,
-    productId: "prod_abc",
+    applicationId: "app_abc",
     expiresAt: null,
     hwidLocked: true,
     createdAt: new Date("2026-08-15T09:30:00.000Z"),
@@ -33,8 +33,8 @@ function renderDialog(count = 3, handlers: Partial<{ onAcknowledge: () => void; 
   render(
     <BatchResultDialog
       licenses={created(count)}
-      productId="prod_abc"
-      productSlug="seliware-key"
+      applicationId="app_abc"
+      applicationSlug="seliware-key"
       onAcknowledge={handlers.onAcknowledge ?? onAcknowledge}
       onGenerateAnother={handlers.onGenerateAnother ?? onGenerateAnother}
     />,
@@ -156,7 +156,7 @@ describe("BatchResultDialog — the acknowledgement gate", () => {
 });
 
 describe("BatchResultDialog — exports", () => {
-  it("downloads a CSV named for the product and the moment", async () => {
+  it("downloads a CSV named for the application and the moment", async () => {
     const user = userEvent.setup();
     renderDialog(2);
 
@@ -165,7 +165,7 @@ describe("BatchResultDialog — exports", () => {
     const [filename, contents, mime] = download.downloadTextFile.mock.calls[0]!;
     expect(filename).toMatch(/^seliware-key-licenses-\d{4}-\d{2}-\d{2}-\d{6}\.csv$/);
     expect(mime).toContain("text/csv");
-    expect(contents).toContain("label,licenseKey,productId,expiresAt,hwidLocked,createdAt");
+    expect(contents).toContain("label,licenseKey,applicationId,expiresAt,hwidLocked,createdAt");
     expect(contents).toContain(created(2)[0]!.licenseKey);
   });
 

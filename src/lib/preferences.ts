@@ -8,7 +8,7 @@ import {
 } from "@/lib/licenses/types";
 
 /**
- * The developer's last license-creation settings, per product.
+ * The developer's last license-creation settings, per application.
  *
  * A developer who issues 30-day locked licenses issues another one the same
  * way, and re-choosing the same three things every time is the sort of
@@ -69,17 +69,17 @@ const storedSchema = z.object({
     .catch(DEFAULT_LICENSE_PREFERENCES.quantity),
 });
 
-function storageKey(productId: string): string {
-  return `keyren:license-prefs:${productId}`;
+function storageKey(applicationId: string): string {
+  return `keyren:license-prefs:${applicationId}`;
 }
 
-export function readLicensePreferences(productId: string): LicensePreferences {
+export function readLicensePreferences(applicationId: string): LicensePreferences {
   try {
     // Private browsing and some enterprise policies make even touching
     // localStorage throw. Falling back to defaults is the whole handling — a
     // developer should never see an error because their browser declined to
     // remember a dropdown.
-    const raw = globalThis.localStorage?.getItem(storageKey(productId));
+    const raw = globalThis.localStorage?.getItem(storageKey(applicationId));
     if (!raw) return DEFAULT_LICENSE_PREFERENCES;
 
     const parsed = storedSchema.safeParse(JSON.parse(raw));
@@ -90,12 +90,12 @@ export function readLicensePreferences(productId: string): LicensePreferences {
 }
 
 export function writeLicensePreferences(
-  productId: string,
+  applicationId: string,
   preferences: LicensePreferences,
 ): void {
   try {
     globalThis.localStorage?.setItem(
-      storageKey(productId),
+      storageKey(applicationId),
       // Explicit projection, not a spread: this is the boundary that keeps
       // labels, notes and keys out of storage.
       JSON.stringify({
@@ -116,12 +116,12 @@ export function writeLicensePreferences(
 
 /**
  * The same four fields, but as the developer's account-wide default rather
- * than one product's memory.
+ * than one application's memory.
  *
- * These seed a product that has never been used. A product that already has
+ * These seed an application that has never been used. An application that already has
  * its own stored preferences keeps them — changing a default must not silently
- * rewrite what an established product learned, because the whole point of the
- * per-product memory is that a product which issues 30-day locked licenses
+ * rewrite what an established application learned, because the whole point of the
+ * per-application memory is that an application which issues 30-day locked licenses
  * keeps issuing them.
  */
 const GLOBAL_DEFAULTS_KEY = "keyren:defaults";
@@ -142,7 +142,7 @@ export function writeGlobalDefaults(preferences: LicensePreferences): void {
   try {
     globalThis.localStorage?.setItem(
       GLOBAL_DEFAULTS_KEY,
-      // Same explicit projection as the per-product writer, for the same
+      // Same explicit projection as the per-application writer, for the same
       // reason: this is the boundary that keeps labels, notes and keys out.
       JSON.stringify({
         mode: preferences.mode,
@@ -163,15 +163,15 @@ export function writeGlobalDefaults(preferences: LicensePreferences): void {
 /**
  * What a creation form should open with.
  *
- * Resolution order is per-product, then account default, then built-in. The
- * absence of a stored product entry is the signal — not a comparison against
- * the defaults, which would make a product that deliberately matches the
+ * Resolution order is per-application, then account default, then built-in. The
+ * absence of a stored application entry is the signal — not a comparison against
+ * the defaults, which would make an application that deliberately matches the
  * default indistinguishable from one that has never been touched.
  */
-export function resolveLicensePreferences(productId: string): LicensePreferences {
+export function resolveLicensePreferences(applicationId: string): LicensePreferences {
   try {
-    const stored = globalThis.localStorage?.getItem(storageKey(productId));
-    if (stored) return readLicensePreferences(productId);
+    const stored = globalThis.localStorage?.getItem(storageKey(applicationId));
+    if (stored) return readLicensePreferences(applicationId);
   } catch {
     // Fall through to the account default.
   }
@@ -246,7 +246,7 @@ export function writeDisplayPreferences(preferences: DisplayPreferences): void {
  * Forgets every remembered preference and dismissed card.
  *
  * Until now these were written and never surfaced: a dismissed onboarding
- * checklist could not be brought back, and a product's remembered quantity
+ * checklist could not be brought back, and an application's remembered quantity
  * could not be forgotten. Scoped to the `keyren:` prefix so it cannot clear
  * anything else sharing the origin — including Clerk's session.
  */

@@ -54,7 +54,7 @@ describe("formatExpiryPreview", () => {
 
 describe("createLicenseSchema — date normalization", () => {
   const base = {
-    productId: "prod_abc",
+    applicationId: "app_abc",
     mode: "date" as const,
     hwidLocked: true,
     quantity: 1,

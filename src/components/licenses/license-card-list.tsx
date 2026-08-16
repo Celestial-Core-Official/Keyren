@@ -20,11 +20,11 @@ import { cn } from "@/lib/utils";
  */
 export function LicenseCardList({
   licenses,
-  productId,
+  applicationId,
   selection,
 }: {
   licenses: LicenseListItem[];
-  productId: string;
+  applicationId: string;
   selection?: {
     selected: ReadonlySet<string>;
     onToggle: (id: string, selected: boolean) => void;
@@ -104,7 +104,7 @@ export function LicenseCardList({
             {/* Actions stay in the card's own flow, so nothing important sits
                 past the right edge of a phone screen. */}
             <div className="mt-3 border-t border-border/60 pt-3">
-              <LicenseRowActions license={license} productId={productId} />
+              <LicenseRowActions license={license} applicationId={applicationId} />
             </div>
           </li>
         );

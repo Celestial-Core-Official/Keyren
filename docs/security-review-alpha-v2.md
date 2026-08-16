@@ -58,7 +58,7 @@ value straight to the driver, and **postgres.js rejects a `Date` parameter
 outright**. **PGlite, which the entire test suite uses, accepts it.**
 
 **Impact had it shipped.** Every path that computes effective status: the
-licenses page, all four filters, the product overview's stat cards, and the
+licenses page, all four filters, the application overview's stat cards, and the
 metadata export. In practice the whole dashboard, failing on the first
 request, in production only.
 
@@ -109,16 +109,16 @@ cell is a formula, so `\t=1+1` reaches the same evaluator.
 
 Hardening runs **before** quoting, so a neutralized cell that also contains a
 comma still gets its RFC 4180 quotes. It is applied to every column, not only
-the label — the product ID passes through the same function.
+the label — the application ID passes through the same function.
 
 Covered by `tests/licenses/export.test.ts`.
 
-## SEC-A2-2 — Filename injection via product slug (addressed by design)
+## SEC-A2-2 — Filename injection via application slug (addressed by design)
 
 **Severity:** Low.
 
-Export filenames embed the product slug, which derives from a
-developer-supplied product name. A name could otherwise put a path separator
+Export filenames embed the application slug, which derives from a
+developer-supplied application name. A name could otherwise put a path separator
 or a leading dot into a filename the browser is about to write to disk.
 
 **Mitigation.** `exportFilename` reduces the slug to `[a-z0-9-]`, collapsing
@@ -172,7 +172,7 @@ serialisation does not contain the plaintext of the license it describes.
 Bulk mutations accept a list of IDs from the browser, which is exactly the
 shape of request that invites an IDOR.
 
-- **Ownership is in the SQL**, as a subquery over `products` scoped to the
+- **Ownership is in the SQL**, as a subquery over `applications` scoped to the
   Clerk-derived owner. There is no load-then-check-in-JavaScript path a later
   edit could drop.
 - **Counts are not an oracle.** The result distinguishes "changed" from

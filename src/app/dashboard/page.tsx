@@ -2,19 +2,19 @@ import Link from "next/link";
 import { Package } from "lucide-react";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
-import { listProducts } from "@/lib/products/service";
+import { listApplications } from "@/lib/applications/service";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { CreateProductDialog } from "@/components/products/create-product-dialog";
+import { CreateApplicationDialog } from "@/components/applications/create-application-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function OverviewPage() {
   const ownerId = await requireDeveloperId();
-  const products = await listProducts(db, ownerId);
+  const applications = await listApplications(db, ownerId);
 
-  const totalLicenses = products.reduce((sum, product) => sum + product.licenseCount, 0);
-  const empty = products.length === 0;
+  const totalLicenses = applications.reduce((sum, application) => sum + application.licenseCount, 0);
+  const empty = applications.length === 0;
 
   return (
     <div className="space-y-8">
@@ -24,7 +24,7 @@ export default async function OverviewPage() {
         action={
           empty ? null : (
             <Button asChild size="sm">
-              <Link href="/dashboard/products">Manage products</Link>
+              <Link href="/dashboard/applications">Manage applications</Link>
             </Button>
           )
         }
@@ -32,13 +32,13 @@ export default async function OverviewPage() {
 
       {empty ? (
         // The first thing a new account sees. One action, and it opens the
-        // creation dialog directly — Alpha_v1 linked to the products page and
+        // creation dialog directly — Alpha_v1 linked to the applications page and
         // left the developer to find the button again once they arrived.
         <EmptyState
           icon={<Package className="size-5" />}
-          title="Create your first product"
-          description="A product gives you a permanent product ID. Your software sends that ID with every license check, and it never changes — not even if you rename the product."
-          action={<CreateProductDialog />}
+          title="Create your first application"
+          description="An application gives you a permanent application ID. Your software sends that ID with every license check, and it never changes — not even if you rename the application."
+          action={<CreateApplicationDialog />}
         />
       ) : (
         <>
@@ -46,11 +46,11 @@ export default async function OverviewPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Products
+                  Applications
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-semibold tabular-nums">{products.length}</p>
+                <p className="text-3xl font-semibold tabular-nums">{applications.length}</p>
               </CardContent>
             </Card>
 
@@ -69,11 +69,11 @@ export default async function OverviewPage() {
           {totalLicenses === 0 ? (
             <EmptyState
               title="No licenses issued yet"
-              description="Open a product to generate your first license and copy an integration example."
+              description="Open an application to generate your first license and copy an integration example."
               action={
                 <Button asChild size="sm">
-                  <Link href={`/dashboard/products/${products[0]!.id}`}>
-                    Open {products[0]!.name}
+                  <Link href={`/dashboard/applications/${applications[0]!.id}`}>
+                    Open {applications[0]!.name}
                   </Link>
                 </Button>
               }

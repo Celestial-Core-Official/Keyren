@@ -2,7 +2,7 @@
 
 Keyren is a developer SaaS for software licensing and license-key authentication. It exists so a developer can **add secure license authentication in 5 minutes** instead of building and maintaining their own licensing backend.
 
-Sign in, create a product, generate a license key, ship the key to a customer, and your software verifies it with a single HTTP request. Keyren handles key generation, secure storage, device (HWID) binding, expiration, revocation, and rate limiting.
+Sign in, create an application, generate a license key, ship the key to a customer, and your software verifies it with a single HTTP request. Keyren handles key generation, secure storage, device (HWID) binding, expiration, revocation, and rate limiting.
 
 This repository is currently in **`Alpha_v2`** (package version `0.1.2`) — a private, testing release. Do not refer to it as "v2" anywhere user-facing; the public API path (`/api/v1/...`) is a normal semantic-versioned URL and is intentionally decoupled from the marketing name. `Alpha_v2` changed a great deal about the dashboard and **nothing** about that endpoint's request or response contract, which is exactly what the separation is for.
 
@@ -14,7 +14,7 @@ Both names come from `src/lib/release.ts`, which is the only place either is wri
 
 Keyren has two authentication paths that are never conflated:
 
-- **Developer authentication** — you, the developer, sign in to the Keyren dashboard via [Clerk](https://clerk.com) to manage products and licenses.
+- **Developer authentication** — you, the developer, sign in to the Keyren dashboard via [Clerk](https://clerk.com) to manage applications and licenses.
 - **License authentication** — your customer's software calls the public, unauthenticated `POST /api/v1/licenses/verify` endpoint to check a license key. Clerk is never involved in this path.
 
 ---
@@ -24,13 +24,13 @@ Keyren has two authentication paths that are never conflated:
 **Included:**
 
 - Clerk-authenticated dashboard (sign up, sign in, session management)
-- Products with a permanent, immutable ID (`prod_...`) that customer software embeds
+- Applications with a permanent, immutable ID (`app_...`) that customer software embeds
 - License generation with a **show-once** plaintext key reveal
 - Three expiration modes: permanent, a fixed duration, or a specific date
 - Optional device (HWID) locking — the first device to authenticate claims the license
 - Full license lifecycle: revoke, restore, reset activation, permanently delete
 - A public, rate-limited verification API: `POST /api/v1/licenses/verify`
-- Postgres-backed rate limiting (per-IP and per-product, fixed 60-second windows)
+- Postgres-backed rate limiting (per-IP and per-application, fixed 60-second windows)
 - Optional per-license **labels and notes**, dashboard-only and never returned by the API
 - **Batch generation** of up to 100 licenses in one atomic transaction
 - A one-time **CSV/JSON export** of newly generated plaintext keys
@@ -71,7 +71,7 @@ route / action         src/app/api/**/route.ts, src/app/dashboard/**/actions.ts
                        it is never trusted from the caller.
         |
         v
-service                src/lib/products/service.ts, src/lib/licenses/*.ts
+service                src/lib/applications/service.ts, src/lib/licenses/*.ts
                        (service, batch, bulk, query, export), verify.ts
                        All business rules live here as plain functions that take
                        an explicit ownerId (or, for verification, no identity at
@@ -151,7 +151,7 @@ These are the properties the codebase is built around. Treat any change that wea
 - **Rotating the HMAC secret invalidates every existing license.** Verification recomputes `HMAC-SHA256(secret, ...)` from the key the customer's software sends and compares it against the stored hash. Change the secret and every previously issued key hashes to a different value than what is stored — every license stops authenticating at once. Only rotate deliberately, as part of a full reissue.
 - **Device fingerprints are spoofable identifiers, not hardware security primitives.** HWID locking raises the cost of casually sharing a license key between machines; it does not, and cannot, make fingerprint spoofing impossible. Keyren never asks for and never interprets raw hardware serials — it only stores and compares a hash of whatever opaque string the client sends.
 - **Validation is online-only.** There is no offline grant, no cached token, and no grace period. If Keyren is unreachable, integrating software cannot obtain a positive verification result — see [`docs/api.md`](docs/api.md#integrating-safely) for how to plan around that.
-- **Ownership is enforced in SQL, not in application code.** Every dashboard read or mutation is a single query scoped by `products.owner_id = $ownerId`, where `ownerId` comes only from Clerk's server-side session. A resource that does not exist and a resource owned by a different developer return the identical "not found" — never "forbidden" — so IDs cannot be probed for existence.
+- **Ownership is enforced in SQL, not in application code.** Every dashboard read or mutation is a single query scoped by `applications.owner_id = $ownerId`, where `ownerId` comes only from Clerk's server-side session. A resource that does not exist and a resource owned by a different developer return the identical "not found" — never "forbidden" — so IDs cannot be probed for existence.
 
 - **Spreadsheet exports are hardened against formula injection.** A label is free text and frequently carries a customer-supplied order reference. Excel, Sheets and LibreOffice evaluate a cell beginning `=`, `+`, `-` or `@`, so every exported cell starting with one of those (or a tab or carriage return, which parsers strip before deciding) is prefixed with an apostrophe. See `src/lib/licenses/export.ts`.
 - **Dashboard errors never carry driver, SQL, schema or credential detail.** `safeErrorMessage` allow-lists the handful of messages a developer can act on, matched exactly rather than by substring, and replaces everything else with a fixed fallback.

@@ -29,16 +29,16 @@ describe("PGlite harness", () => {
       sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`,
     )) as { rows: { table_name: string }[] };
     const names = result.rows.map((row) => row.table_name);
-    for (const table of ["products", "licenses", "activations", "rate_limit_counters"]) {
+    for (const table of ["applications", "licenses", "activations", "rate_limit_counters"]) {
       expect(names).toContain(table);
     }
   });
 
-  it("enforces the foreign key from licenses to products", async () => {
+  it("enforces the foreign key from licenses to applications", async () => {
     await expect(
       db.execute(
-        sql`INSERT INTO licenses (id, product_id, key_hash, key_last4)
-            VALUES ('lic_x', 'prod_does_not_exist', 'hash', 'WXYZ')`,
+        sql`INSERT INTO licenses (id, application_id, key_hash, key_last4)
+            VALUES ('lic_x', 'app_does_not_exist', 'hash', 'WXYZ')`,
       ),
     ).rejects.toThrow();
   });

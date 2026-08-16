@@ -19,7 +19,7 @@ import type { EffectiveStatus } from "./types";
 export const PLAINTEXT_CSV_COLUMNS = [
   "label",
   "licenseKey",
-  "productId",
+  "applicationId",
   "expiresAt",
   "hwidLocked",
   "createdAt",
@@ -28,7 +28,7 @@ export const PLAINTEXT_CSV_COLUMNS = [
 export const METADATA_CSV_COLUMNS = [
   "label",
   "maskedKey",
-  "productId",
+  "applicationId",
   "status",
   "effectiveStatus",
   "expiresAt",
@@ -41,7 +41,7 @@ export const METADATA_CSV_COLUMNS = [
 export type PlaintextLicenseRow = {
   label: string | null;
   licenseKey: string;
-  productId: string;
+  applicationId: string;
   expiresAt: Date | null;
   hwidLocked: boolean;
   createdAt: Date;
@@ -50,7 +50,7 @@ export type PlaintextLicenseRow = {
 export type LicenseMetadataRow = {
   label: string | null;
   maskedKey: string;
-  productId: string;
+  applicationId: string;
   status: "active" | "revoked";
   effectiveStatus: EffectiveStatus;
   expiresAt: Date | null;
@@ -63,7 +63,7 @@ export type LicenseMetadataRow = {
 export type PlaintextJsonRow = {
   label: string | null;
   licenseKey: string;
-  productId: string;
+  applicationId: string;
   expiresAt: string | null;
   hwidLocked: boolean;
   createdAt: string;
@@ -72,7 +72,7 @@ export type PlaintextJsonRow = {
 export type MetadataJsonRow = {
   label: string | null;
   maskedKey: string;
-  productId: string;
+  applicationId: string;
   status: "active" | "revoked";
   effectiveStatus: EffectiveStatus;
   expiresAt: string | null;
@@ -150,7 +150,7 @@ export function plaintextToCsv(rows: readonly PlaintextLicenseRow[]): string {
     rows.map((row) => [
       row.label,
       row.licenseKey,
-      row.productId,
+      row.applicationId,
       row.expiresAt,
       row.hwidLocked,
       row.createdAt,
@@ -164,7 +164,7 @@ export function metadataToCsv(rows: readonly LicenseMetadataRow[]): string {
     rows.map((row) => [
       row.label,
       row.maskedKey,
-      row.productId,
+      row.applicationId,
       row.status,
       row.effectiveStatus,
       row.expiresAt,
@@ -184,7 +184,7 @@ export function plaintextToJson(
   return rows.map((row) => ({
     label: row.label,
     licenseKey: row.licenseKey,
-    productId: row.productId,
+    applicationId: row.applicationId,
     expiresAt: iso(row.expiresAt),
     hwidLocked: row.hwidLocked,
     createdAt: row.createdAt.toISOString(),
@@ -195,7 +195,7 @@ export function metadataToJson(rows: readonly LicenseMetadataRow[]): MetadataJso
   return rows.map((row) => ({
     label: row.label,
     maskedKey: row.maskedKey,
-    productId: row.productId,
+    applicationId: row.applicationId,
     status: row.status,
     effectiveStatus: row.effectiveStatus,
     expiresAt: iso(row.expiresAt),
@@ -209,23 +209,23 @@ export function metadataToJson(rows: readonly LicenseMetadataRow[]): MetadataJso
 const pad = (value: number, width = 2): string => String(value).padStart(width, "0");
 
 /**
- * `<product-slug>-licenses-YYYY-MM-DD-HHmmss.<ext>`, in UTC.
+ * `<application-slug>-licenses-YYYY-MM-DD-HHmmss.<ext>`, in UTC.
  *
  * UTC rather than the viewer's locale so two developers in different
  * timezones exporting the same batch get the same filename, and so the name
  * agrees with the ISO timestamps inside the file.
  *
- * The slug is derived from a developer-supplied product name, so it is
+ * The slug is derived from a developer-supplied application name, so it is
  * reduced to a conservative character set here as well — a name is not
  * allowed to introduce a path separator or a leading dot into a filename the
  * browser is about to write to disk.
  */
 export function exportFilename(
-  productSlug: string,
+  applicationSlug: string,
   extension: "csv" | "json",
   at: Date = new Date(),
 ): string {
-  const safeSlug = productSlug
+  const safeSlug = applicationSlug
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");

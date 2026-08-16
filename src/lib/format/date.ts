@@ -2,7 +2,7 @@
  * One place that decides how Keyren writes a date.
  *
  * Alpha_v1 had three: `toISOString().slice(0, 10)` in the licenses table, the
- * same expression again in the products table, and a third variant in the
+ * same expression again in the applications table, and a third variant in the
  * activation column. They agreed by coincidence rather than by construction.
  *
  * Two forms are used throughout: a relative label for scanning ("3 days ago"),

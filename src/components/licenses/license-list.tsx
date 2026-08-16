@@ -18,12 +18,12 @@ import type { LicenseListItem } from "@/lib/licenses/types";
  */
 export function LicenseList({
   licenses,
-  productId,
-  productSlug,
+  applicationId,
+  applicationSlug,
 }: {
   licenses: LicenseListItem[];
-  productId: string;
-  productSlug: string;
+  applicationId: string;
+  applicationSlug: string;
 }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
@@ -61,12 +61,12 @@ export function LicenseList({
 
   return (
     <div className="space-y-4">
-      <LicenseTable licenses={licenses} productId={productId} selection={selection} />
-      <LicenseCardList licenses={licenses} productId={productId} selection={selection} />
+      <LicenseTable licenses={licenses} applicationId={applicationId} selection={selection} />
+      <LicenseCardList licenses={licenses} applicationId={applicationId} selection={selection} />
 
       <LicenseSelectionToolbar
-        productId={productId}
-        productSlug={productSlug}
+        applicationId={applicationId}
+        applicationSlug={applicationSlug}
         selectedIds={selectedIds}
         selectedLicenses={selectedLicenses}
         onClear={() => setSelected(new Set())}

@@ -8,17 +8,17 @@ import { z } from "zod";
  * the HMAC. Unknown keys are stripped rather than passed through, so a client
  * cannot smuggle a field that some later refactor starts reading.
  *
- * Note what is NOT accepted: no owner ID, no product secret, no status
+ * Note what is NOT accepted: no owner ID, no application secret, no status
  * override, no expiry. The client supplies identifiers only; every decision
  * is made from server-held state.
  */
 export const verifyRequestSchema = z
   .object({
-    productId: z
+    applicationId: z
       .string()
       .min(1)
       .max(64)
-      .regex(/^prod_[0-9A-Za-z]+$/, "Invalid product id"),
+      .regex(/^app_[0-9A-Za-z]+$/, "Invalid application id"),
 
     // Format is not enforced strictly here — normalization happens in the
     // crypto layer, and a wrong-format key must fail as LICENSE_INVALID

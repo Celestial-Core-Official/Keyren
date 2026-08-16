@@ -80,7 +80,7 @@ export function PreferencesSettings() {
     <>
       <SettingSection
         title="New license defaults"
-        description="Applied to a product that has not issued a license yet. A product keeps whatever it was last used with."
+        description="Applied to an application that has not issued a license yet. An application keeps whatever it was last used with."
       >
         <SettingRow label="Expiration" htmlFor="default-mode">
           <Select
@@ -189,7 +189,7 @@ export function PreferencesSettings() {
       <SettingSection title="Stored data">
         <SettingRow
           label="Remembered settings"
-          hint="Per-product creation settings and dismissed cards, kept in this browser."
+          hint="Per-application creation settings and dismissed cards, kept in this browser."
         >
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -201,8 +201,8 @@ export function PreferencesSettings() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Reset remembered settings?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Clears creation settings for every product, these defaults, and any
-                  dismissed onboarding card. No license or product is affected.
+                  Clears creation settings for every application, these defaults, and any
+                  dismissed onboarding card. No license or application is affected.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

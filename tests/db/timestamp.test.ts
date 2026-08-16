@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { activations, licenses, products } from "@/db/schema";
+import { activations, licenses, applications } from "@/db/schema";
 import { instant } from "@/lib/db/timestamp";
 import { createTestDatabase } from "../helpers/db";
 import type { Database } from "@/db/types";
@@ -27,7 +27,7 @@ const NOW = new Date("2026-08-15T12:00:00.000Z");
  *
  * That is not hypothetical: it is the Alpha_v1 security review's SEC-1, where
  * it silently disabled rate limiting, and it recurred in Alpha_v2's status
- * queries, where it would have taken out the licenses page and the product
+ * queries, where it would have taken out the licenses page and the application
  * overview entirely.
  *
  * These tests inspect the generated SQL rather than executing it, so they
@@ -140,8 +140,8 @@ describe("no query binds a raw Date", () => {
         and(
           inArray(licenses.id, ["lic_a"]),
           inArray(
-            licenses.productId,
-            db.select({ id: products.id }).from(products).where(eq(products.ownerId, "user_a")),
+            licenses.applicationId,
+            db.select({ id: applications.id }).from(applications).where(eq(applications.ownerId, "user_a")),
           ),
         ),
       );

@@ -37,14 +37,14 @@ import { CSV_MIME, JSON_MIME, downloadTextFile } from "@/lib/download";
  */
 export function BatchResultDialog({
   licenses,
-  productId,
-  productSlug,
+  applicationId,
+  applicationSlug,
   onAcknowledge,
   onGenerateAnother,
 }: {
   licenses: CreatedLicense[];
-  productId: string;
-  productSlug: string;
+  applicationId: string;
+  applicationSlug: string;
   onAcknowledge: () => void;
   onGenerateAnother: () => void;
 }) {
@@ -53,7 +53,7 @@ export function BatchResultDialog({
   const rows: PlaintextLicenseRow[] = licenses.map((license) => ({
     label: license.label,
     licenseKey: license.licenseKey,
-    productId: license.productId,
+    applicationId: license.applicationId,
     expiresAt: license.expiresAt,
     hwidLocked: license.hwidLocked,
     createdAt: license.createdAt,
@@ -63,12 +63,12 @@ export function BatchResultDialog({
   const single = licenses.length === 1;
 
   function downloadCsv() {
-    downloadTextFile(exportFilename(productSlug, "csv"), plaintextToCsv(rows), CSV_MIME);
+    downloadTextFile(exportFilename(applicationSlug, "csv"), plaintextToCsv(rows), CSV_MIME);
   }
 
   function downloadJson() {
     downloadTextFile(
-      exportFilename(productSlug, "json"),
+      exportFilename(applicationSlug, "json"),
       `${JSON.stringify(plaintextToJson(rows), null, 2)}\n`,
       JSON_MIME,
     );
@@ -200,7 +200,7 @@ export function BatchResultDialog({
               className="gap-1.5"
             >
               <Link
-                href={`/dashboard/products/${productId}#api-tester`}
+                href={`/dashboard/applications/${applicationId}#api-tester`}
                 onClick={(event) => {
                   if (!acknowledged) event.preventDefault();
                   else onAcknowledge();

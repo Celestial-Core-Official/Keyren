@@ -6,7 +6,7 @@ import { primaryActionFor, canResetActivation } from "@/components/licenses/lice
 import type { LicenseListItem } from "@/lib/licenses/types";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock("@/app/dashboard/products/[productId]/licenses/actions", () => ({
+vi.mock("@/app/dashboard/applications/[applicationId]/licenses/actions", () => ({
   revokeLicenseAction: vi.fn(),
   restoreLicenseAction: vi.fn(),
   resetActivationAction: vi.fn(),
@@ -19,7 +19,7 @@ const NOW = new Date("2026-08-15T12:00:00.000Z");
 function license(overrides: Partial<LicenseListItem> = {}): LicenseListItem {
   return {
     id: "lic_1",
-    productId: "prod_abc",
+    applicationId: "app_abc",
     keyLast4: "WXYZ",
     label: "Acme Corp",
     notes: null,
@@ -37,20 +37,20 @@ function license(overrides: Partial<LicenseListItem> = {}): LicenseListItem {
 
 describe("LicenseTable — identity", () => {
   it("shows the label as the primary line and the masked key beneath", () => {
-    render(<LicenseTable licenses={[license()]} productId="prod_abc" />);
+    render(<LicenseTable licenses={[license()]} applicationId="app_abc" />);
 
     expect(screen.getByText("Acme Corp")).toBeTruthy();
     expect(screen.getByText("KEYREN-••••-••••-••••-WXYZ")).toBeTruthy();
   });
 
   it("falls back to 'Unlabeled license' rather than a blank cell", () => {
-    render(<LicenseTable licenses={[license({ label: null })]} productId="prod_abc" />);
+    render(<LicenseTable licenses={[license({ label: null })]} applicationId="app_abc" />);
 
     expect(screen.getByText("Unlabeled license")).toBeTruthy();
   });
 
   it("never renders anything resembling a full key", () => {
-    render(<LicenseTable licenses={[license()]} productId="prod_abc" />);
+    render(<LicenseTable licenses={[license()]} applicationId="app_abc" />);
 
     // Four characters is all that was ever stored; a run of eight would mean
     // a key had leaked into the list.
@@ -59,7 +59,7 @@ describe("LicenseTable — identity", () => {
 
   it("shows notes when present", () => {
     render(
-      <LicenseTable licenses={[license({ notes: "Chargeback risk" })]} productId="prod_abc" />,
+      <LicenseTable licenses={[license({ notes: "Chargeback risk" })]} applicationId="app_abc" />,
     );
 
     expect(screen.getByText("Chargeback risk")).toBeTruthy();
@@ -76,7 +76,7 @@ describe("LicenseTable — status", () => {
             expiresAt: new Date(NOW.getTime() - 86_400_000),
           }),
         ]}
-        productId="prod_abc"
+        applicationId="app_abc"
       />,
     );
 
@@ -94,7 +94,7 @@ describe("LicenseTable — status", () => {
             expiresAt: new Date(NOW.getTime() - 86_400_000),
           }),
         ]}
-        productId="prod_abc"
+        applicationId="app_abc"
       />,
     );
 
@@ -102,14 +102,14 @@ describe("LicenseTable — status", () => {
   });
 
   it("says Never rather than an empty cell for a permanent license", () => {
-    render(<LicenseTable licenses={[license()]} productId="prod_abc" />);
+    render(<LicenseTable licenses={[license()]} applicationId="app_abc" />);
     expect(screen.getByText("Never")).toBeTruthy();
   });
 });
 
 describe("LicenseTable — dates", () => {
   it("renders a relative label with the exact UTC instant behind it", () => {
-    render(<LicenseTable licenses={[license()]} productId="prod_abc" />);
+    render(<LicenseTable licenses={[license()]} applicationId="app_abc" />);
 
     const created = screen.getByText("1 day ago");
     expect(created.tagName).toBe("TIME");
@@ -121,7 +121,7 @@ describe("LicenseTable — dates", () => {
     render(
       <LicenseTable
         licenses={[license({ expiresAt: new Date("2026-12-31T23:59:59.999Z") })]}
-        productId="prod_abc"
+        applicationId="app_abc"
       />,
     );
 
@@ -175,7 +175,7 @@ describe("row action eligibility", () => {
     render(
       <LicenseTable
         licenses={[license({ hwidLocked: false, activation: { activatedAt: NOW, lastSeenAt: NOW } })]}
-        productId="prod_abc"
+        applicationId="app_abc"
       />,
     );
 
@@ -188,7 +188,7 @@ describe("LicenseCardList", () => {
     // On a phone the table's action column sits off the right edge, reachable
     // only by horizontal scrolling that fights the page's own scroll.
     const { container } = render(
-      <LicenseCardList licenses={[license()]} productId="prod_abc" />,
+      <LicenseCardList licenses={[license()]} applicationId="app_abc" />,
     );
 
     const card = container.querySelector("li")!;
@@ -199,7 +199,7 @@ describe("LicenseCardList", () => {
     render(
       <LicenseCardList
         licenses={[license({ expiresAt: new Date("2026-12-31T23:59:59.999Z") })]}
-        productId="prod_abc"
+        applicationId="app_abc"
       />,
     );
 
@@ -210,7 +210,7 @@ describe("LicenseCardList", () => {
 
   it("is hidden at desktop widths, where the table takes over", () => {
     const { container } = render(
-      <LicenseCardList licenses={[license()]} productId="prod_abc" />,
+      <LicenseCardList licenses={[license()]} applicationId="app_abc" />,
     );
 
     expect(container.querySelector("ul")?.className).toContain("md:hidden");

@@ -134,16 +134,16 @@ describe("CopyButton — clipboard denial", () => {
 describe("CopyButton — accessibility", () => {
   it("has an accessible name even when rendered icon-only", () => {
     setupWithClipboard(resolves);
-    render(<CopyButton value="prod_abc" label="" />);
+    render(<CopyButton value="app_abc" label="" />);
 
     expect(screen.getByRole("button", { name: /copy/i })).toBeTruthy();
   });
 
   it("is a real button, so it is keyboard reachable", () => {
     setupWithClipboard(resolves);
-    render(<CopyButton value="prod_abc" label="Copy product ID" />);
+    render(<CopyButton value="app_abc" label="Copy application ID" />);
 
-    const button = screen.getByRole("button", { name: "Copy product ID" });
+    const button = screen.getByRole("button", { name: "Copy application ID" });
     expect(button.tagName).toBe("BUTTON");
     expect(button.getAttribute("type")).toBe("button");
   });

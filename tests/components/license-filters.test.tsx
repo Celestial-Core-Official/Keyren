@@ -11,7 +11,7 @@ const nav = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: nav.replace, push: vi.fn() }),
-  usePathname: () => "/dashboard/products/prod_abc/licenses",
+  usePathname: () => "/dashboard/applications/app_abc/licenses",
   useSearchParams: () => new URLSearchParams(nav.search),
 }));
 

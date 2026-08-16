@@ -23,7 +23,7 @@ const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
 
   RATE_LIMIT_VERIFY_PER_MINUTE: z.coerce.number().int().positive().default(60),
-  RATE_LIMIT_VERIFY_PER_PRODUCT_PER_MINUTE: z.coerce
+  RATE_LIMIT_VERIFY_PER_APPLICATION_PER_MINUTE: z.coerce
     .number()
     .int()
     .positive()

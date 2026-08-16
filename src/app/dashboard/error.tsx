@@ -4,7 +4,7 @@ import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-/** The dashboard-wide boundary. See the product boundary for why the raw
+/** The dashboard-wide boundary. See the application boundary for why the raw
  *  message is never rendered. */
 export default function DashboardError({
   error,

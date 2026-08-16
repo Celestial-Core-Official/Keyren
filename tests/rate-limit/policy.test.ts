@@ -24,31 +24,31 @@ describe("clientIpFrom", () => {
 });
 
 describe("verifyDimensions", () => {
-  it("limits on both IP and product", () => {
-    const dims = verifyDimensions({ ip: "203.0.113.5", productId: "prod_abc" });
-    expect(dims.map((d) => d.name).sort()).toEqual(["ip", "product"]);
+  it("limits on both IP and application", () => {
+    const dims = verifyDimensions({ ip: "203.0.113.5", applicationId: "app_abc" });
+    expect(dims.map((d) => d.name).sort()).toEqual(["application", "ip"]);
   });
 
-  it("gives the product axis a higher ceiling than a single IP", () => {
-    // One product legitimately serves many customers; one IP does not.
-    const dims = verifyDimensions({ ip: "203.0.113.5", productId: "prod_abc" });
+  it("gives the application axis a higher ceiling than a single IP", () => {
+    // One application legitimately serves many customers; one IP does not.
+    const dims = verifyDimensions({ ip: "203.0.113.5", applicationId: "app_abc" });
     const ip = dims.find((d) => d.name === "ip");
-    const product = dims.find((d) => d.name === "product");
-    expect(product!.limit).toBeGreaterThan(ip!.limit);
+    const application = dims.find((d) => d.name === "application");
+    expect(application!.limit).toBeGreaterThan(ip!.limit);
   });
 
   it("uses one-minute windows", () => {
-    for (const dimension of verifyDimensions({ ip: "1.1.1.1", productId: "prod_abc" })) {
+    for (const dimension of verifyDimensions({ ip: "1.1.1.1", applicationId: "app_abc" })) {
       expect(dimension.windowSeconds).toBe(60);
     }
   });
 
   it("honours configured overrides", () => {
     const dims = verifyDimensions(
-      { ip: "1.1.1.1", productId: "prod_abc" },
-      { perIpPerMinute: 5, perProductPerMinute: 50 },
+      { ip: "1.1.1.1", applicationId: "app_abc" },
+      { perIpPerMinute: 5, perApplicationPerMinute: 50 },
     );
     expect(dims.find((d) => d.name === "ip")?.limit).toBe(5);
-    expect(dims.find((d) => d.name === "product")?.limit).toBe(50);
+    expect(dims.find((d) => d.name === "application")?.limit).toBe(50);
   });
 });

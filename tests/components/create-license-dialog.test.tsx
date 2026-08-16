@@ -11,7 +11,7 @@ vi.mock("sonner", () => ({ toast }));
 const SECRET_KEY = "KEYREN-SECRET11-SECRET22-SECRET33-ZZZZ";
 
 const action = vi.hoisted(() => ({ createLicenseAction: vi.fn() }));
-vi.mock("@/app/dashboard/products/[productId]/licenses/actions", () => ({
+vi.mock("@/app/dashboard/applications/[applicationId]/licenses/actions", () => ({
   createLicenseAction: action.createLicenseAction,
 }));
 
@@ -21,7 +21,7 @@ function madeLicense(): CreatedLicense {
     label: "Acme Corp",
     licenseKey: SECRET_KEY,
     keyLast4: "ZZZZ",
-    productId: "prod_abc",
+    applicationId: "app_abc",
     expiresAt: null,
     hwidLocked: true,
     createdAt: new Date("2026-08-15T09:30:00.000Z"),
@@ -41,7 +41,7 @@ beforeEach(() => {
 });
 
 function renderDialog() {
-  render(<CreateLicenseDialog productId="prod_abc" productSlug="seliware-key" />);
+  render(<CreateLicenseDialog applicationId="app_abc" applicationSlug="seliware-key" />);
   return userEvent.setup();
 }
 
@@ -67,12 +67,12 @@ describe("CreateLicenseDialog — generating", () => {
     expect(screen.getByText(SECRET_KEY)).toBeTruthy();
   });
 
-  it("sends the product id with the submission", async () => {
+  it("sends the application id with the submission", async () => {
     const user = renderDialog();
     await generate(user);
 
     const formData = action.createLicenseAction.mock.calls[0]![1] as FormData;
-    expect(formData.get("productId")).toBe("prod_abc");
+    expect(formData.get("applicationId")).toBe("app_abc");
     expect(formData.get("mode")).toBe("permanent");
   });
 });
@@ -143,7 +143,7 @@ describe("CreateLicenseDialog — remembered preferences", () => {
     await screen.findByText(SECRET_KEY);
 
     const stored = JSON.parse(
-      localStorage.getItem("keyren:license-prefs:prod_abc")!,
+      localStorage.getItem("keyren:license-prefs:app_abc")!,
     ) as Record<string, unknown>;
 
     expect(stored.quantity).toBe(5);

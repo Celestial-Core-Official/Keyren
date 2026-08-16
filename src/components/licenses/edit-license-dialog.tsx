@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import {
   updateLicenseDetailsAction,
   type LicenseActionState,
-} from "@/app/dashboard/products/[productId]/licenses/actions";
+} from "@/app/dashboard/applications/[applicationId]/licenses/actions";
 import { FieldError, SubmitButton, useActionFeedback } from "@/components/dashboard/feedback";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,11 +33,11 @@ const INITIAL: LicenseActionState = idleAction();
  */
 function EditLicenseForm({
   license,
-  productId,
+  applicationId,
   onDone,
 }: {
   license: LicenseListItem;
-  productId: string;
+  applicationId: string;
   onDone: () => void;
 }) {
   const [state, formAction] = useActionState(updateLicenseDetailsAction, INITIAL);
@@ -50,7 +50,7 @@ function EditLicenseForm({
   return (
         <form action={formAction}>
           <input type="hidden" name="licenseId" value={license.id} />
-          <input type="hidden" name="productId" value={productId} />
+          <input type="hidden" name="applicationId" value={applicationId} />
 
           <DialogHeader>
             <DialogTitle>Edit license details</DialogTitle>
@@ -108,12 +108,12 @@ function EditLicenseForm({
 
 export function EditLicenseDialog({
   license,
-  productId,
+  applicationId,
   open,
   onOpenChange,
 }: {
   license: LicenseListItem;
-  productId: string;
+  applicationId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -133,7 +133,7 @@ export function EditLicenseDialog({
         <EditLicenseForm
           key={session}
           license={license}
-          productId={productId}
+          applicationId={applicationId}
           onDone={() => setOpen(false)}
         />
       </DialogContent>

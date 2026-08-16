@@ -17,14 +17,14 @@ const actions = vi.hoisted(() => ({
   updateLicenseDetailsAction: vi.fn(),
 }));
 
-vi.mock("@/app/dashboard/products/[productId]/licenses/actions", () => actions);
+vi.mock("@/app/dashboard/applications/[applicationId]/licenses/actions", () => actions);
 
 const NOW = new Date("2026-08-15T12:00:00.000Z");
 
 function license(overrides: Partial<LicenseListItem> = {}): LicenseListItem {
   return {
     id: "lic_1",
-    productId: "prod_abc",
+    applicationId: "app_abc",
     keyLast4: "WXYZ",
     label: "Acme Corp",
     notes: null,
@@ -51,7 +51,7 @@ beforeEach(() => {
 
 describe("LicenseRowActions — the contextual action", () => {
   it("offers Revoke in the row for an active, unbound license", () => {
-    render(<LicenseRowActions license={license()} productId="prod_abc" />);
+    render(<LicenseRowActions license={license()} applicationId="app_abc" />);
     expect(screen.getByRole("button", { name: "Revoke" })).toBeTruthy();
   });
 
@@ -59,7 +59,7 @@ describe("LicenseRowActions — the contextual action", () => {
     render(
       <LicenseRowActions
         license={license({ activation: { activatedAt: NOW, lastSeenAt: NOW } })}
-        productId="prod_abc"
+        applicationId="app_abc"
       />,
     );
     expect(screen.getByRole("button", { name: "Reset" })).toBeTruthy();
@@ -69,22 +69,22 @@ describe("LicenseRowActions — the contextual action", () => {
     render(
       <LicenseRowActions
         license={license({ status: "revoked", effectiveStatus: "revoked" })}
-        productId="prod_abc"
+        applicationId="app_abc"
       />,
     );
     expect(screen.getByRole("button", { name: "Restore" })).toBeTruthy();
   });
 
-  it("submits the license and product ids, and never an owner", async () => {
+  it("submits the license and application ids, and never an owner", async () => {
     const user = userEvent.setup();
-    render(<LicenseRowActions license={license()} productId="prod_abc" />);
+    render(<LicenseRowActions license={license()} applicationId="app_abc" />);
 
     await user.click(screen.getByRole("button", { name: "Revoke" }));
 
     await waitFor(() => expect(actions.revokeLicenseAction).toHaveBeenCalled());
     const formData = actions.revokeLicenseAction.mock.calls[0]![1] as FormData;
     expect(formData.get("licenseId")).toBe("lic_1");
-    expect(formData.get("productId")).toBe("prod_abc");
+    expect(formData.get("applicationId")).toBe("app_abc");
     expect(formData.get("ownerId")).toBeNull();
   });
 
@@ -93,7 +93,7 @@ describe("LicenseRowActions — the contextual action", () => {
       actionSuccess("Revoked Acme Corp.", null),
     );
     const user = userEvent.setup();
-    render(<LicenseRowActions license={license()} productId="prod_abc" />);
+    render(<LicenseRowActions license={license()} applicationId="app_abc" />);
 
     await user.click(screen.getByRole("button", { name: "Revoke" }));
 
@@ -103,7 +103,7 @@ describe("LicenseRowActions — the contextual action", () => {
   it("surfaces a failure rather than swallowing it", async () => {
     actions.revokeLicenseAction.mockResolvedValue(actionFailure("License not found."));
     const user = userEvent.setup();
-    render(<LicenseRowActions license={license()} productId="prod_abc" />);
+    render(<LicenseRowActions license={license()} applicationId="app_abc" />);
 
     await user.click(screen.getByRole("button", { name: "Revoke" }));
 
@@ -119,7 +119,7 @@ describe("LicenseRowActions — permanent deletion", () => {
 
   it("keeps the delete button disabled until DELETE is typed exactly", async () => {
     const user = userEvent.setup();
-    render(<LicenseRowActions license={license()} productId="prod_abc" />);
+    render(<LicenseRowActions license={license()} applicationId="app_abc" />);
     await openDeleteDialog(user);
 
     const confirm = screen.getByRole("button", { name: "Delete permanently" });
@@ -135,7 +135,7 @@ describe("LicenseRowActions — permanent deletion", () => {
 
   it("names the license it is about to erase", async () => {
     const user = userEvent.setup();
-    render(<LicenseRowActions license={license()} productId="prod_abc" />);
+    render(<LicenseRowActions license={license()} applicationId="app_abc" />);
     await openDeleteDialog(user);
 
     expect(screen.getByText("KEYREN-••••-••••-••••-WXYZ")).toBeTruthy();
@@ -144,7 +144,7 @@ describe("LicenseRowActions — permanent deletion", () => {
 
   it("offers revoking as the reversible alternative", async () => {
     const user = userEvent.setup();
-    render(<LicenseRowActions license={license()} productId="prod_abc" />);
+    render(<LicenseRowActions license={license()} applicationId="app_abc" />);
     await openDeleteDialog(user);
 
     expect(screen.getByText(/revoke it instead/i)).toBeTruthy();
@@ -154,7 +154,7 @@ describe("LicenseRowActions — permanent deletion", () => {
     // Otherwise reopening the dialog starts one click away from a permanent
     // deletion the developer only opened it to look at.
     const user = userEvent.setup();
-    render(<LicenseRowActions license={license()} productId="prod_abc" />);
+    render(<LicenseRowActions license={license()} applicationId="app_abc" />);
 
     await openDeleteDialog(user);
     await user.type(screen.getByLabelText(/type/i), "DELETE");
@@ -174,7 +174,7 @@ describe("EditLicenseDialog", () => {
     const view = render(
       <EditLicenseDialog
         license={license(overrides)}
-        productId="prod_abc"
+        applicationId="app_abc"
         open
         onOpenChange={onOpenChange}
       />,

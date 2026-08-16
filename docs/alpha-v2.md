@@ -4,7 +4,7 @@
 **Public API:** unchanged, still `/api/v1/...`
 
 `Alpha_v2` is a quality-of-life release. It changes how the dashboard feels to
-use and changes nothing about what Keyren is: the same products, the same
+use and changes nothing about what Keyren is: the same applications, the same
 show-once keys, the same single verification endpoint. Software integrated
 against `Alpha_v1` keeps working with no change at all — the request fields,
 the response envelopes, the error codes and the status codes are all
@@ -48,7 +48,7 @@ a view can be bookmarked, shared, and survives a refresh or a back navigation.
 All of it happens in SQL, so the page stays fast as the list grows. Active
 filters are summarised as chips with a single **Clear filters** action, and a
 search that returns nothing offers to clear itself rather than looking like an
-empty product.
+empty application.
 
 Searching for `50%` finds the license labelled "50% off" rather than matching
 everything — search terms are escaped, so the pattern language never leaks
@@ -69,12 +69,12 @@ never saw and no way to tell which ones exist.
 The result view lists every key, with:
 
 - **Copy all** — all keys, newline separated
-- **Download CSV** — `label,licenseKey,productId,expiresAt,hwidLocked,createdAt`
+- **Download CSV** — `label,licenseKey,applicationId,expiresAt,hwidLocked,createdAt`
 - **Download JSON** — the same fields as an array of objects
 - a per-row copy button, and selectable text for a browser that blocks the
   clipboard
 
-Files are named `<product-slug>-licenses-YYYY-MM-DD-HHmmss.csv` (or `.json`),
+Files are named `<application-slug>-licenses-YYYY-MM-DD-HHmmss.csv` (or `.json`),
 stamped in UTC so the name agrees with the timestamps inside.
 
 **The dialog cannot be dismissed** by Escape, by clicking outside, or by a
@@ -101,7 +101,7 @@ Bulk deletion asks you to type **`DELETE <count>`**. Typing `DELETE` is muscle
 memory by the third time; typing the number forces a look at how many you are
 about to erase.
 
-The metadata export covers label, masked key, product ID, stored and effective
+The metadata export covers label, masked key, application ID, stored and effective
 status, expiry, lock state, activation timestamps and creation time. **It
 cannot contain a plaintext key** — no such column exists in it.
 
@@ -135,7 +135,7 @@ activity reads as *3 days ago*, with the exact UTC timestamp on hover.
 ## Integrating
 
 The integration panel now offers **JavaScript, Python, cURL and C#**, each
-with your product ID and deployment URL already filled in, and each with its
+with your application ID and deployment URL already filled in, and each with its
 own copy button.
 
 They are written as code worth shipping. Every one carries a timeout — a
@@ -161,10 +161,10 @@ Nothing you type there is saved anywhere.
 
 ## Getting started
 
-A new account now opens the product-creation dialog directly instead of
+A new account now opens the application-creation dialog directly instead of
 linking to a page where the button has to be found again.
 
-Each product shows a three-step checklist: generate a license, copy an
+Each application shows a three-step checklist: generate a license, copy an
 integration example, run one successful verification. Two of the three are
 derived from real data — a license exists or it does not, and an activation
 row is only ever written by a verification that succeeded — so it cannot claim
@@ -175,29 +175,29 @@ disappears when complete, and can be dismissed.
 
 - **Mobile navigation.** `Alpha_v1` hid the sidebar below the `md` breakpoint
   and replaced it with nothing, so on a phone the only way between sections
-  was the back button. There is now a menu, including the current product's
+  was the back button. There is now a menu, including the current application's
   Overview and Licenses.
 - **Mobile license cards** instead of a seven-column table whose actions sat
   off the right edge.
-- **Product tabs show which one you are on**, with `aria-current`.
+- **Application tabs show which one you are on**, with `aria-current`.
 - **Keyboard:** `/` focuses the current page's search box, `N` opens its
   create dialog. Both stand down while you are typing in a field, when a
   modifier is held, during IME composition, and whenever a dialog is open.
 - A **skip link** is the first tab stop on every page.
 
-## Products
+## Applications
 
-- Search by **name, slug or product ID** — the ID is usually what you have in
+- Search by **name, slug or application ID** — the ID is usually what you have in
   front of you, pasted from a stack trace or a support ticket.
 - Sort by newest, oldest, name, or license count.
 - Rows are clickable in full, while the copy button and actions menu keep
   working.
-- One-click copy for both the **product ID** and the **verification endpoint**.
+- One-click copy for both the **application ID** and the **verification endpoint**.
 
 ## Corrected numbers
 
 - **Active** now excludes expired licenses. It counted `status = 'active'`
-  before, so a product whose licenses had all lapsed still reported them as
+  before, so an application whose licenses had all lapsed still reported them as
   active — the figure most likely to be trusted at a glance, disagreeing with
   what the API told customers.
 - **Expired** and **Revoked** counts appear when they are non-zero.
@@ -211,7 +211,7 @@ disappears when complete, and can be dismissed.
   suffix to a full-width masked group, implying four characters that do not
   exist.
 - Creation settings — expiration mode, duration, device lock, quantity — are
-  remembered per product. Labels, notes and keys never are.
+  remembered per application. Labels, notes and keys never are.
 - Loading skeletons shaped like the content they stand in for.
 - Route-level error and not-found pages that do not print exception text.
 - Spinners and pulses only under `motion-safe`.

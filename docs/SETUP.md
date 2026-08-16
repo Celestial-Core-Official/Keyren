@@ -12,7 +12,7 @@ Everything Keyren needs to actually **run**. The backend is already built and te
 |---|---|
 | `KEYREN_LICENSE_HMAC_SECRET` | ✅ **Generated** — a real 256-bit random secret |
 | `NEXT_PUBLIC_APP_URL` | ✅ Set to `http://localhost:3000` |
-| `RATE_LIMIT_*` | ✅ Set to defaults (60/min per IP, 600/min per product) |
+| `RATE_LIMIT_*` | ✅ Set to defaults (60/min per IP, 600/min per application) |
 | `DATABASE_URL` | ❌ **You need to provide this** |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | ❌ **You need to provide this** |
 | `CLERK_SECRET_KEY` | ❌ **You need to provide this** |
@@ -139,7 +139,7 @@ I'll be able to:
 3. Run the complete end-to-end walkthrough in Task 34:
 
 ```
-sign up → create product → immutable prod_ ID issued → generate license
+sign up → create application → immutable app_ ID issued → generate license
 → plaintext key shown once → confirm the DB holds no plaintext
 → verify from device one: success → same device again: success
 → device two: DEVICE_MISMATCH → reset activation → device two: success
@@ -150,7 +150,7 @@ sign up → create product → immutable prod_ ID issued → generate license
 `Alpha_v2` extends that walkthrough without changing any of it:
 
 ```
-follow the getting-started checklist on the product page
+follow the getting-started checklist on the application page
 → batch-generate three labelled licenses → Copy all → Download CSV
 → Download JSON → tick the acknowledgement → Done
 → reload: the keys are gone and unrecoverable, as intended
@@ -160,7 +160,7 @@ follow the getting-started checklist on the product page
 ```
 
 Both flows together are the definition of `Alpha_v2` being finished. The
-in-dashboard tester on the product page runs the verification half against
+in-dashboard tester on the application page runs the verification half against
 the real endpoint, so you do not need a second machine to try DEVICE_MISMATCH
 — untick "use a new disposable device ID" and send the same one twice.
 

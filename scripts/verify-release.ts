@@ -15,7 +15,7 @@
  */
 import { eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { activations, licenses, products } from "@/db/schema";
+import { activations, licenses, applications } from "@/db/schema";
 import { env } from "@/env";
 import { createLicenseBatch } from "@/lib/licenses/batch";
 import {
@@ -32,7 +32,7 @@ import {
   plaintextToJson,
   exportFilename,
 } from "@/lib/licenses/export";
-import { getProductLicenseStats, queryLicenses } from "@/lib/licenses/query";
+import { getApplicationLicenseStats, queryLicenses } from "@/lib/licenses/query";
 import {
   deleteLicense,
   resetActivation,
@@ -41,7 +41,7 @@ import {
   updateLicenseDetails,
 } from "@/lib/licenses/service";
 import { DEFAULT_LICENSE_QUERY } from "@/lib/licenses/types";
-import { createProduct, deleteProduct, listProducts } from "@/lib/products/service";
+import { createApplication, deleteApplication, listApplications } from "@/lib/applications/service";
 import { VERIFY_PATH } from "@/lib/release";
 
 const BASE_URL = process.argv[2] ?? "http://localhost:3000";
@@ -106,16 +106,16 @@ function codeOf(outcome: VerifyOutcome): string | null {
 
 async function main() {
   section("Setup");
-  const product = await createProduct(db, OWNER, { name: "E2E Verify Product" });
-  check("product created with a prod_ id", /^prod_[0-9A-Za-z]+$/.test(product.id));
-  check("slug derived from the name", product.slug.length > 0);
+  const application = await createApplication(db, OWNER, { name: "E2E Verify Application" });
+  check("application created with a app_ id", /^app_[0-9A-Za-z]+$/.test(application.id));
+  check("slug derived from the name", application.slug.length > 0);
 
-  const intruderProduct = await createProduct(db, INTRUDER, { name: "Someone Else" });
+  const intruderApplication = await createApplication(db, INTRUDER, { name: "Someone Else" });
 
   // ---------------------------------------------------------------- batch
   section("Batch generation (3 labelled licenses, atomic)");
   const created = await createLicenseBatch(db, OWNER, {
-    productId: product.id,
+    applicationId: application.id,
     quantity: 3,
     expiration: { mode: "permanent" },
     hwidLocked: true,
@@ -145,7 +145,7 @@ async function main() {
   const storedRows = await db
     .select()
     .from(licenses)
-    .where(eq(licenses.productId, product.id));
+    .where(eq(licenses.applicationId, application.id));
 
   const storedBlob = JSON.stringify(storedRows);
   check("3 rows persisted", storedRows.length === 3);
@@ -180,7 +180,7 @@ async function main() {
   const exportRows = created.map((l) => ({
     label: l.label,
     licenseKey: l.licenseKey,
-    productId: l.productId,
+    applicationId: l.applicationId,
     expiresAt: l.expiresAt,
     hwidLocked: l.hwidLocked,
     createdAt: l.createdAt,
@@ -190,16 +190,16 @@ async function main() {
   const json = plaintextToJson(exportRows);
   check(
     "CSV header matches the documented columns",
-    csv.split("\r\n")[0] === "label,licenseKey,productId,expiresAt,hwidLocked,createdAt",
+    csv.split("\r\n")[0] === "label,licenseKey,applicationId,expiresAt,hwidLocked,createdAt",
   );
   check("CSV contains every key", created.every((l) => csv.includes(l.licenseKey)));
   check("JSON contains every key", json.every((r, i) => r.licenseKey === created[i]!.licenseKey));
   check(
     "filename shape is <slug>-licenses-YYYY-MM-DD-HHmmss.csv",
     /^[a-z0-9-]+-licenses-\d{4}-\d{2}-\d{2}-\d{6}\.csv$/.test(
-      exportFilename(product.slug, "csv"),
+      exportFilename(application.slug, "csv"),
     ),
-    exportFilename(product.slug, "csv"),
+    exportFilename(application.slug, "csv"),
   );
 
   // CSV injection, end to end through a real stored label.
@@ -237,7 +237,7 @@ async function main() {
   const deviceTwo = "e2e-device-two";
 
   const ok = await verify({
-    productId: product.id,
+    applicationId: application.id,
     licenseKey: target.licenseKey,
     deviceId: deviceOne,
   });
@@ -258,7 +258,7 @@ async function main() {
   );
 
   const again = await verify({
-    productId: product.id,
+    applicationId: application.id,
     licenseKey: target.licenseKey,
     deviceId: deviceOne,
   });
@@ -266,7 +266,7 @@ async function main() {
 
   section("Public API — device binding");
   const mismatch = await verify({
-    productId: product.id,
+    applicationId: application.id,
     licenseKey: target.licenseKey,
     deviceId: deviceTwo,
   });
@@ -275,7 +275,7 @@ async function main() {
 
   await resetActivation(db, OWNER, target.id);
   const afterReset = await verify({
-    productId: product.id,
+    applicationId: application.id,
     licenseKey: target.licenseKey,
     deviceId: deviceTwo,
   });
@@ -284,7 +284,7 @@ async function main() {
   section("Public API — lifecycle states");
   await revokeLicense(db, OWNER, target.id);
   const revoked = await verify({
-    productId: product.id,
+    applicationId: application.id,
     licenseKey: target.licenseKey,
     deviceId: deviceTwo,
   });
@@ -293,7 +293,7 @@ async function main() {
 
   await restoreLicense(db, OWNER, target.id);
   const restored = await verify({
-    productId: product.id,
+    applicationId: application.id,
     licenseKey: target.licenseKey,
     deviceId: deviceTwo,
   });
@@ -301,22 +301,22 @@ async function main() {
 
   section("Public API — error codes");
   const badKey = await verify({
-    productId: product.id,
+    applicationId: application.id,
     licenseKey: "KEYREN-ZZZZZZZZ-ZZZZZZZZ-ZZZZZZZZ-ZZZZZZZZ",
     deviceId: deviceOne,
   });
   check("unknown key -> 403 LICENSE_INVALID",
     badKey.status === 403 && codeOf(badKey) === "LICENSE_INVALID");
 
-  const badProduct = await verify({
-    productId: "prod_doesnotexist",
+  const badApplication = await verify({
+    applicationId: "app_doesnotexist",
     licenseKey: target.licenseKey,
     deviceId: deviceOne,
   });
-  check("unknown product -> 404 PRODUCT_INVALID",
-    badProduct.status === 404 && codeOf(badProduct) === "PRODUCT_INVALID");
+  check("unknown application -> 404 APPLICATION_INVALID",
+    badApplication.status === 404 && codeOf(badApplication) === "APPLICATION_INVALID");
 
-  const malformed = await verify({ productId: product.id });
+  const malformed = await verify({ applicationId: application.id });
   check("missing fields -> 400 BAD_REQUEST",
     malformed.status === 400 && codeOf(malformed) === "BAD_REQUEST");
 
@@ -326,7 +326,7 @@ async function main() {
 
   // Expired license.
   const expiredBatch = await createLicenseBatch(db, OWNER, {
-    productId: product.id,
+    applicationId: application.id,
     quantity: 1,
     expiration: { mode: "permanent" },
     hwidLocked: false,
@@ -340,7 +340,7 @@ async function main() {
     .where(eq(licenses.id, expiredBatch[0]!.id));
 
   const expired = await verify({
-    productId: product.id,
+    applicationId: application.id,
     licenseKey: expiredBatch[0]!.licenseKey,
     deviceId: deviceOne,
   });
@@ -350,48 +350,48 @@ async function main() {
 
   // ------------------------------------------------------------- queries
   section("Discovery — search, filters, sorting, stats");
-  const all = await queryLicenses(db, OWNER, product.id, DEFAULT_LICENSE_QUERY);
+  const all = await queryLicenses(db, OWNER, application.id, DEFAULT_LICENSE_QUERY);
   check("all licenses listed", all.total === 4, `total=${all.total}`);
   check("effective status computed", all.rows.some((r) => r.effectiveStatus === "expired"));
 
-  const searched = await queryLicenses(db, OWNER, product.id, {
+  const searched = await queryLicenses(db, OWNER, application.id, {
     ...DEFAULT_LICENSE_QUERY,
     q: "acme",
   });
   check("case-insensitive label search", searched.total === 3, `total=${searched.total}`);
 
-  const byLast4 = await queryLicenses(db, OWNER, product.id, {
+  const byLast4 = await queryLicenses(db, OWNER, application.id, {
     ...DEFAULT_LICENSE_QUERY,
     q: created[0]!.keyLast4.toLowerCase(),
   });
   check("search by last four characters", byLast4.total >= 1);
 
-  const expiredOnly = await queryLicenses(db, OWNER, product.id, {
+  const expiredOnly = await queryLicenses(db, OWNER, application.id, {
     ...DEFAULT_LICENSE_QUERY,
     status: "expired",
   });
   check("expired filter", expiredOnly.total === 1, `total=${expiredOnly.total}`);
 
-  const unlocked = await queryLicenses(db, OWNER, product.id, {
+  const unlocked = await queryLicenses(db, OWNER, application.id, {
     ...DEFAULT_LICENSE_QUERY,
     lock: "unlocked",
   });
   check("lock filter", unlocked.total === 1, `total=${unlocked.total}`);
 
-  const activated = await queryLicenses(db, OWNER, product.id, {
+  const activated = await queryLicenses(db, OWNER, application.id, {
     ...DEFAULT_LICENSE_QUERY,
     activation: "activated",
   });
   check("activation filter", activated.total === 1, `total=${activated.total}`);
 
-  const percentProbe = await queryLicenses(db, OWNER, product.id, {
+  const percentProbe = await queryLicenses(db, OWNER, application.id, {
     ...DEFAULT_LICENSE_QUERY,
     q: "%",
   });
   check("a literal % does not match everything", percentProbe.total === 0,
     `total=${percentProbe.total}`);
 
-  const stats = await getProductLicenseStats(db, OWNER, product.id);
+  const stats = await getApplicationLicenseStats(db, OWNER, application.id);
   check("stats: total", stats.total === 4, `${stats.total}`);
   check("stats: active excludes expired", stats.active === 3, `${stats.active}`);
   check("stats: expired counted", stats.expired === 1, `${stats.expired}`);
@@ -400,10 +400,10 @@ async function main() {
   check("stats: activated derives verification success", stats.activated === 1,
     `${stats.activated}`);
 
-  const productList = await listProducts(db, OWNER, { q: product.id, sort: "newest" });
-  check("products searchable by id", productList.length === 1);
-  check("license count is right", productList[0]?.licenseCount === 4,
-    `${productList[0]?.licenseCount}`);
+  const applicationList = await listApplications(db, OWNER, { q: application.id, sort: "newest" });
+  check("applications searchable by id", applicationList.length === 1);
+  check("license count is right", applicationList[0]?.licenseCount === 4,
+    `${applicationList[0]?.licenseCount}`);
 
   // ---------------------------------------------------------- edit details
   section("Editing details");
@@ -415,7 +415,7 @@ async function main() {
   check("notes saved", edited.notes === "Unicode round-trip probe");
 
   const stillValid = await verify({
-    productId: product.id,
+    applicationId: application.id,
     licenseKey: created[2]!.licenseKey,
     deviceId: "e2e-device-three",
   });
@@ -423,13 +423,13 @@ async function main() {
 
   // -------------------------------------------------------- authorization
   section("Authorization — foreign resources are indistinguishable from missing");
-  const foreignQuery = await queryLicenses(db, INTRUDER, product.id, DEFAULT_LICENSE_QUERY)
+  const foreignQuery = await queryLicenses(db, INTRUDER, application.id, DEFAULT_LICENSE_QUERY)
     .then(() => "resolved")
     .catch((error: Error) => error.message);
-  const missingQuery = await queryLicenses(db, INTRUDER, "prod_nothing", DEFAULT_LICENSE_QUERY)
+  const missingQuery = await queryLicenses(db, INTRUDER, "app_nothing", DEFAULT_LICENSE_QUERY)
     .then(() => "resolved")
     .catch((error: Error) => error.message);
-  check("foreign product errors identically to a missing one",
+  check("foreign application errors identically to a missing one",
     foreignQuery === missingQuery && foreignQuery.includes("not found"),
     `${foreignQuery} vs ${missingQuery}`);
 
@@ -506,11 +506,11 @@ async function main() {
   check("bulk delete removes exactly the selection", bulkDelete.changed === 2,
     JSON.stringify(bulkDelete));
 
-  const remaining = await queryLicenses(db, OWNER, product.id, DEFAULT_LICENSE_QUERY);
+  const remaining = await queryLicenses(db, OWNER, application.id, DEFAULT_LICENSE_QUERY);
   check("two licenses left", remaining.total === 2, `${remaining.total}`);
 
   const deletedKeyCheck = await verify({
-    productId: product.id,
+    applicationId: application.id,
     licenseKey: created[0]!.licenseKey,
     deviceId: deviceOne,
   });
@@ -528,20 +528,20 @@ async function main() {
 
   // -------------------------------------------------------------- cleanup
   section("Cleanup");
-  await deleteProduct(db, OWNER, product.id);
-  await deleteProduct(db, INTRUDER, intruderProduct.id);
+  await deleteApplication(db, OWNER, application.id);
+  await deleteApplication(db, INTRUDER, intruderApplication.id);
 
   const leftovers = await db
     .select()
-    .from(products)
-    .where(or(eq(products.ownerId, OWNER), eq(products.ownerId, INTRUDER)));
+    .from(applications)
+    .where(or(eq(applications.ownerId, OWNER), eq(applications.ownerId, INTRUDER)));
   check("test data removed", leftovers.length === 0);
 
   const orphanLicenses = await db
     .select()
     .from(licenses)
     .where(inArray(licenses.id, [...ids, expiredBatch[0]!.id]));
-  check("licenses cascaded with the product", orphanLicenses.length === 0);
+  check("licenses cascaded with the application", orphanLicenses.length === 0);
 
   console.log(`\n${"=".repeat(60)}`);
   console.log(`${passed} passed, ${failures.length} failed`);
