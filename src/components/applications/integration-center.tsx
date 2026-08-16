@@ -77,27 +77,20 @@ export function IntegrationCenter({
           <p className="font-medium text-foreground">Before you ship this</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
-              The application ID above is not a secret and is safe to embed in software you
-              distribute. It is an identifier, not a credential.
+              The application ID is an identifier, not a credential — safe to embed.
             </li>
             <li>
-              Never ship any Keyren dashboard credential, session token, or the license
-              HMAC secret inside end-user software. Anything in a distributed binary or a
-              JavaScript bundle should be assumed readable by anyone who has it.
+              Never ship a dashboard credential, session token or the HMAC secret. Assume
+              anything in a binary or a JS bundle is readable.
             </li>
+            <li>Send a fingerprint you hashed on the client, not a raw hardware serial.</li>
             <li>
-              Send a fingerprint you have already computed and hashed on the client. Do not
-              send raw hardware serials.
-            </li>
-            <li>
-              Treat a device fingerprint as an identifier, not as tamper-proof hardware
-              identity. It raises the cost of casual key sharing; it does not make spoofing
+              A fingerprint raises the cost of key sharing. It does not make spoofing
               impossible.
             </li>
             <li>
-              Verification is online-only in this release. If Keyren is unreachable your
-              software cannot obtain a positive response — decide deliberately how your
-              application should behave in that case.
+              Verification is online-only. Decide what your software does when Keyren is
+              unreachable.
             </li>
             <li>
               Handle every error code:{" "}

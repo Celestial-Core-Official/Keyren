@@ -141,7 +141,7 @@ export function ApiTester({ applicationId }: { applicationId: string }) {
               required
             />
             <p className="text-xs text-muted-foreground">
-              Paste a key you saved. Keyren cannot look one up for you.
+              Paste a key you saved — Keyren cannot look one up.
             </p>
           </div>
 
@@ -175,10 +175,9 @@ export function ApiTester({ applicationId }: { applicationId: string }) {
               className="mt-0.5 size-4 shrink-0 text-amber-500"
             />
             <p className="text-muted-foreground">
-              Testing a device-locked license <strong>claims it</strong> for whichever
-              device ID you send. A key that has never been activated will be bound to this
-              test, and the customer will get DEVICE_MISMATCH until you reset its
-              activation from the licenses table.
+              Testing a device-locked license <strong>claims it</strong>. An unactivated
+              key binds to this test, and the customer gets DEVICE_MISMATCH until you
+              reset it.
             </p>
           </div>
 

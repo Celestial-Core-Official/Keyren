@@ -14,17 +14,20 @@ import { cn } from "@/lib/utils";
 export function ApplicationTabs({ applicationId }: { applicationId: string }) {
   const pathname = usePathname();
 
+  const base = `/dashboard/applications/${applicationId}`;
+
   const tabs = [
-    { href: `/dashboard/applications/${applicationId}`, label: "Overview", exact: true },
-    {
-      href: `/dashboard/applications/${applicationId}/licenses`,
-      label: "Licenses",
-      exact: false,
-    },
+    { href: base, label: "Overview", exact: true },
+    { href: `${base}/licenses`, label: "Licenses", exact: false },
+    { href: `${base}/integrate`, label: "Integrate", exact: false },
+    { href: `${base}/settings`, label: "Settings", exact: false },
   ];
 
   return (
-    <nav className="-mb-px flex gap-1" aria-label="Application sections">
+    <nav
+      className="-mb-px flex gap-1 overflow-x-auto"
+      aria-label="Application sections"
+    >
       {tabs.map((tab) => {
         const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
 

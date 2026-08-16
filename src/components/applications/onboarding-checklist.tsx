@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Check, Circle, X } from "lucide-react";
 import { CreateLicenseDialog } from "@/components/licenses/create-license-dialog";
@@ -63,18 +64,22 @@ export function OnboardingChecklist({
       done: copiedSnippet,
       action: (
         <Button asChild size="sm" variant="outline">
-          <a href="#integration">Go to examples</a>
+          <Link href={`/dashboard/applications/${applicationId}/integrate`}>
+            Go to examples
+          </Link>
         </Button>
       ),
     },
     {
       title: "Run one successful verification",
       description:
-        "Paste a key into the tester below and send a real request. Once one succeeds, your integration works.",
+        "Send a real request from the tester in this application's settings. Once one succeeds, your integration works.",
       done: hasVerification,
       action: (
         <Button asChild size="sm" variant="outline">
-          <a href="#api-tester">Go to the tester</a>
+          <Link href={`/dashboard/applications/${applicationId}/settings`}>
+            Go to the tester
+          </Link>
         </Button>
       ),
     },
