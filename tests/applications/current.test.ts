@@ -51,6 +51,10 @@ describe("resolveCurrentApplication", () => {
     expect(resolveCurrentApplication(undefined, OWNED)).toBe(NEWEST);
   });
 
+  it("falls back to the newest when the cookie is an empty string", () => {
+    expect(resolveCurrentApplication("", OWNED)).toBe(NEWEST);
+  });
+
   it("falls back to the newest when the cookie names a deleted application", () => {
     expect(resolveCurrentApplication("app_DELETED", OWNED)).toBe(NEWEST);
   });
@@ -70,7 +74,10 @@ describe("resolveCurrentApplication", () => {
   it("breaks a createdAt tie on id, the way the list query does", () => {
     const a = application("app_AAA", "2026-08-17T00:00:00.000Z");
     const b = application("app_BBB", "2026-08-17T00:00:00.000Z");
+    // Both orderings, so the win goes to the lower id and not to whichever
+    // element the caller happened to list last.
     expect(resolveCurrentApplication(undefined, [b, a])).toBe(a);
+    expect(resolveCurrentApplication(undefined, [a, b])).toBe(a);
   });
 
   it("returns null only when there is nothing to pick", () => {

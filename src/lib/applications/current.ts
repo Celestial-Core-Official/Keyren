@@ -61,7 +61,9 @@ export function resolveCurrentApplication<T extends { id: string; createdAt: Dat
   cookieValue: string | undefined,
   applications: readonly T[],
 ): T | null {
-  if (cookieValue !== undefined) {
+  // A present-but-empty cookie cannot name anything either, so it is treated
+  // as no cookie at all rather than sent into a lookup that could only fail.
+  if (cookieValue) {
     const remembered = applications.find((application) => application.id === cookieValue);
     if (remembered) return remembered;
   }
