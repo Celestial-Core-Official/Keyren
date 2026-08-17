@@ -1,0 +1,300 @@
+# Keyren `Alpha_v3` — Application Scope Specification
+
+**Date:** 2026-08-17
+**Release:** `Alpha_v3` (package `0.1.3`)
+**Theme:** the dashboard always has one application in scope. Behavioural, not visual.
+
+`Alpha_v3` was a visual redesign that changed nothing about how the dashboard is navigated. This
+document is the behavioural half: the header chooser becomes the only way to pick an application,
+and it is never empty. One confirmed defect in the application kill switch is fixed on the way
+through, because the redesign would otherwise entrench it.
+
+---
+
+## 0. What this changes, and what it does not
+
+**Changes:** how an application is chosen, what the Overview and Applications pages are for, and
+the markup of the kill switch.
+
+**Does not change:** `POST /api/v1/licenses/verify` — request shape, response envelope, error codes
+and HTTP statuses are untouched, and no migration is required. The database schema does not move;
+`applications.disabled_at` already exists and keeps its meaning. Nothing in `README.md` under
+"Explicitly out of scope" gets built.
+
+The release name and version stay in `src/lib/release.ts`. This is not a new release; it is
+`Alpha_v3` continuing.
+
+### Non-negotiable rules this work could plausibly violate
+
+Every rule in `PROGRESS.md` § "Non-negotiable rules" binds. Three are close enough to this work to
+be checked against every diff:
+
+- **Rule 1 — assume every client is compromised.** This spec introduces a cookie that names an
+  application. It is a *hint about the UI*, never an authorization input. See §1.3.
+- **Rule 4 — ownership is enforced in SQL.** The cookie is resolved against the developer's own
+  application list, which is already owner-scoped. There is no new query, and no new place an id
+  reaches the database without `owner_id` beside it.
+- **Rule 5 — `ownerId` comes only from Clerk's server-side `auth()`.** Unchanged. The cookie carries
+  an application id and nothing else. It never carries, implies, or influences an owner.
+
+---
+
+## 1. The current application
+
+### 1.1 Why this is needed at all
+
+Today the current application *is* the URL: `ApplicationSwitcher` parses
+`/dashboard/applications/<id>` out of `usePathname()` and shows "All applications" when the pattern
+does not match. That is exactly right for a chooser that is allowed to be empty, and impossible for
+one that is not — `/dashboard`, `/dashboard/applications` and `/dashboard/settings` have no id in
+the path and never will.
+
+So the current application becomes a resolved value rather than a parsed one, and the URL stays the
+strongest input to that resolution.
+
+### 1.2 The resolution order
+
+A new module, `src/lib/applications/current.ts`, owns this and nothing else:
+
+```
+resolveCurrentApplication(pathname, cookieValue, applications) -> Application | null
+```
+
+1. **The URL**, when `pathname` is under `/dashboard/applications/<id>` and `<id>` is in
+   `applications`. A URL you are looking at outranks a cookie from last week.
+2. **The cookie**, when it names an application in `applications`.
+3. **The newest application** — `applications[0]` under the default sort, which is already `newest`.
+4. **`null`**, and only when the developer owns no applications at all.
+
+Step 3 is what makes "always has a picked application" true on a fresh browser, and step 4 is the
+one honest exception: there is no application to pick because none exist.
+
+A pure function of three arguments, tested in the `node` project. It performs no I/O, reads no
+cookie itself and does not know what Next.js is, so the interesting behaviour — precedence, a stale
+cookie, a deleted application, an application belonging to someone else — is testable without a
+DOM, a database or a request.
+
+### 1.3 Where the cookie is written
+
+`src/middleware.ts` writes it, because middleware sees every route into an application at once: the
+chooser, the command palette, a bookmark, a pasted link, and the redirect that follows creating one.
+A server action called from the chooser would catch only the first of those.
+
+- Name: `keyren_app`. Value: the raw application id from the path.
+- Written only when the path carries an id **and** the cookie does not already hold it, so ordinary
+  navigation inside one application does not rewrite it on every request.
+- `httpOnly`, `sameSite: "lax"`, `secure` outside development, `path: "/dashboard"`.
+- Never written on a path that has no application id. Leaving an application does not clear the
+  memory of it — that is the entire point.
+
+The handler currently returns `void`; it will return `NextResponse.next()` with the cookie set when
+there is something to write, and keep returning `void` otherwise. `auth.protect()` runs first and
+unchanged, so an unauthenticated request is redirected before any cookie logic is reached.
+
+**The cookie is untrusted input.** It is editable by hand, it survives a sign-out, and it can name
+an application belonging to another developer. Nothing about it is trusted: the layout resolves it
+against the list it already fetched — owner-scoped, in SQL — and a value that is not in that list
+falls through to step 3. There is no path where the cookie's value reaches a query. Forging it
+achieves nothing beyond choosing which of *your own* applications the chooser opens on.
+
+### 1.4 Where it is read
+
+`src/app/dashboard/layout.tsx` already fetches the owner's applications for the chooser and the
+command palette. It gains a `cookies()` read and one call to `resolveCurrentApplication`, then
+passes the result down to the chooser and the sidebar as a prop.
+
+`src/app/dashboard/applications/page.tsx` needs the same answer for its "Current" marker, and a
+layout cannot pass props to a page. It resolves it itself, from the same module, against the list it
+already fetched. That is a second call, not a second source of truth — and it is cheaper than a
+context provider that would exist to carry one string through a tree that is otherwise entirely
+server-rendered.
+
+`resolveCurrentApplication` is therefore generic over `{ id: string }` rather than tied to one shape,
+because the layout holds `SwitchableApplication` and the applications page holds
+`ApplicationListItem`, and neither should have to convert to satisfy the other.
+
+---
+
+## 2. The chooser
+
+`src/components/dashboard/application-switcher.tsx`. Its contract changes: it is handed
+`current: SwitchableApplication | null` instead of deriving identity from the pathname. It keeps
+reading the pathname for one thing only — which *section* is open — because that is genuinely a
+property of the URL and nothing else.
+
+- **"All applications" is removed** from the menu. It was the only entry that meant "no application
+  in scope", and there is no such state any more.
+- **The trigger always names an application**, on every dashboard page, including the three that
+  have no id in their path.
+- **Picking one from inside an application keeps the section.** `/licenses` stays `/licenses`.
+  This is existing behaviour and its tests survive intact.
+- **Picking one from a workspace page** — Overview, Applications, Settings — goes to that
+  application's overview, `/dashboard/applications/<id>`. A pick is a navigation; a chooser that
+  changed a label and left you where you were would be a chooser that appeared to do nothing.
+- **The disabled mark stays** on both the trigger and the menu rows. A disabled application is still
+  pickable, and must be: re-enabling it means going there.
+- **Zero applications:** the trigger reads "No applications" and is not a menu of things to pick.
+  The only entry is "New application".
+
+`aria-label` follows the same rule it does today — it names the current application and says the
+control switches applications, rather than describing the menu.
+
+## 3. Overview and Applications stop being choosers
+
+Both pages stay. Neither is a way into an application any more.
+
+### 3.1 `src/app/dashboard/applications/page.tsx`
+
+- The stretched row link comes off, in both the desktop table and the narrow-screen cards. The
+  `relative`/`after:absolute inset-0` pairing that made the whole row clickable goes with it, along
+  with the `relative` wrappers that existed only to lift real controls above it.
+- The name is text, not a link.
+- **New: a Status column.** Live or Disabled. This is the defect in the user's report that I could
+  confirm directly — the application header and the Overview both badge a disabled application, and
+  this table, the one place a developer goes to see all of them at once, badges nothing. A disabled
+  application currently looks identical to a live one here.
+- **New: a "Current" marker** on the row the chooser is pointing at, so the two surfaces agree about
+  what is in scope and the table explains where the header's value came from.
+- The `⋯` menu is unchanged in purpose and keeps Rename, Disable/Enable and Delete.
+- Search, sort and the empty states are untouched.
+
+### 3.2 `src/app/dashboard/page.tsx`
+
+- The Applications section's rows stop being links. The `ChevronRight` goes with the link — it
+  promises a destination.
+- The `Disabled` badge, the key glyph and the active/total counts stay. The section becomes a
+  read-only census.
+- **The "Expiring soon" rows stay clickable.** They open one named license, pre-filtered, and that
+  section exists precisely to be acted on before a customer writes in. Following one is not browsing
+  for an application, and the middleware makes that application current on arrival, as it would for
+  any other route in.
+
+### 3.3 What is deliberately left alone
+
+- **The command palette** keeps its application entries. It is a keyboard chooser, not a list you
+  browse — the same act as using the header control, performed faster.
+- **The "← Applications" back link** in the application header stays. It goes to the list, which is
+  not the same as picking from it.
+- **The sidebar** gains one behaviour: its "Application" group renders on every dashboard page,
+  pointing at the current application, instead of appearing only when the URL contains an id. If an
+  application is always in scope, the navigation that belongs to it is always applicable.
+
+---
+
+## 4. The kill switch
+
+### 4.1 The confirmed defect
+
+`ApplicationStatusSetting` renders `<Button type="submit">` wrapping `<Switch>`. Radix's `Switch`
+root **is a `<button>`**, so this is a button inside a button — invalid HTML. Verified in a real
+browser's parser rather than assumed: given that markup, `innerHTML` yields
+
+```
+form
+├── input[hidden name=applicationId]
+├── input[hidden name=disabled]
+├── button[type=submit]              ← empty, zero-sized
+├── button[type=button role=switch]  ← ejected from its parent, and pointer-events-none
+└── input[type=checkbox]             ← Radix's bubble input, also ejected
+```
+
+The parser closes the outer `<button>` when it meets the inner one. Server-rendered, the submit
+button therefore arrives **empty**, and the switch arrives as its *sibling* carrying
+`pointer-events-none` — a control that cannot be clicked, beside a button with nothing in it. React
+then hydrates a tree that does not match, on precisely this subtree.
+
+The client-only render is fine, which is why a component test does not catch it: `appendChild` has
+no such parser rule and nests the buttons happily. This is an SSR-and-hydration defect by
+construction, and the fix is to stop producing the markup, not to work around what the parser does
+with it.
+
+`application-status-setting.tsx:44` is the only place in the codebase where a `Button` wraps a
+`Switch`. The other three `Switch` usages are standalone controls with `onCheckedChange` and are
+correct.
+
+### 4.2 The rebuild
+
+- The wrapping `Button` is deleted. The `Switch` becomes the only interactive element in the row,
+  with no `pointer-events-none` and no `tabIndex={-1}` — it owns its own interaction now, which is
+  what a switch is for, and it becomes reachable by keyboard rather than being skipped.
+- `onCheckedChange` calls `requestSubmit()` on a ref to the form, so the state change is still a
+  server action and the hidden inputs still carry the intended end state. The form and its two
+  hidden inputs are unchanged.
+- The switch is disabled while a submission is in flight, so it cannot be fired twice.
+- **Disabling asks first.** A single stray click currently takes a product's licensing offline for
+  every customer at once; the confirmation names the application and says what will happen.
+  Enabling is immediate — there is nothing to warn about in restoring service.
+- The `⋯` menu's Disable gets the same confirmation, so the two paths to the same consequence
+  behave the same way. Enable stays a single click there too.
+
+### 4.3 The message
+
+`setApplicationDisabledAction` and `deleteApplicationAction` both answer a failed
+`applicationIdSchema.safeParse` with *"That application is no longer available."* That sentence is
+reachable only when the form did not carry a well-formed id — a bug in the page, never a missing
+application — so it describes a state that did not happen and sends the reader to look in the wrong
+place.
+
+Both become an honest report that the submission arrived without an application id and that
+reloading is the remedy. The genuine "not found / not yours" case is unaffected: it comes from
+`notFound("Application")` by way of `safeErrorMessage` and already says the right thing.
+
+---
+
+## 5. Testing
+
+| Test | Project | Asserts |
+|---|---|---|
+| `tests/applications/current.test.ts` (new) | node | URL beats cookie; cookie used when the URL has none; unknown cookie falls back to newest; an id the developer does not own is ignored in both positions; `null` only on an empty list |
+| `tests/components/application-switcher.test.tsx` (rewrite) | dom | No "All applications" entry; the trigger names `current` on a workspace path; picking from a workspace path lands on the application overview; picking inside a section keeps the section; the empty-list state offers only "New application" |
+| `tests/components/application-status-setting.test.tsx` (new) | dom | The **server-rendered markup contains no nested `<button>`** — the regression guard for §4.1, asserted against `renderToStaticMarkup` output rather than the client tree, because the client tree was never the broken one; toggling submits the application id and the intended end state; disabling confirms first and enabling does not |
+| `tests/components/application-actions.test.tsx` (new) | dom | Disable confirms; Enable does not; the submitted form carries the id and the end state |
+
+Every existing test keeps passing. `npm run test`, `npm run typecheck` and `npm run lint` are all
+green before this is called done, and the assertion of green is made from the output rather than
+from the absence of a reason to doubt it.
+
+---
+
+## 6. Files
+
+| File | Change |
+|---|---|
+| `src/lib/applications/current.ts` | New — cookie name and `resolveCurrentApplication` |
+| `src/middleware.ts` | Write `keyren_app` when the path names an application |
+| `src/app/dashboard/layout.tsx` | Read the cookie, resolve, pass `current` down |
+| `src/components/dashboard/application-switcher.tsx` | Takes `current`; loses "All applications"; workspace-page picking |
+| `src/components/dashboard/sidebar.tsx` | Application group always renders, against `current` |
+| `src/app/dashboard/applications/page.tsx` | Inert rows; Status column; Current marker |
+| `src/app/dashboard/page.tsx` | Inert application rows; expiring-soon rows unchanged |
+| `src/components/applications/application-status-setting.tsx` | Rebuilt — no nested button; confirm on disable |
+| `src/components/applications/application-actions.tsx` | Confirm on disable |
+| `src/app/dashboard/applications/actions.ts` | Honest message for a missing id |
+| `README.md`, `PROGRESS.md`, `docs/alpha-v3.md` | Record the navigation model and the defect |
+
+---
+
+## 7. Constraints and non-goals
+
+- No schema change, no migration, no API change.
+- No new dependency.
+- No `any`, no `@ts-expect-error`, no `eslint-disable`, no skipped test.
+- The cookie stores an application id and nothing else. It is not a session, not a preference store,
+  and not a place to put the next thing that needs remembering.
+- Nothing here implies teams, roles, or a workspace concept above the developer. One developer owns
+  applications; that is the whole model and it does not move.
+
+## 8. Acceptance
+
+1. On `/dashboard`, `/dashboard/applications` and `/dashboard/settings`, the chooser names an
+   application rather than "All applications".
+2. The menu has no "All applications" entry at any time.
+3. Picking an application from a workspace page lands on that application's overview; picking one
+   from inside `/licenses` lands on the new application's `/licenses`.
+4. A developer with zero applications sees "No applications" and can only create one.
+5. Clicking an application row on Overview or Applications navigates nowhere.
+6. A disabled application reads as disabled in the Applications table.
+7. The Settings kill switch, viewed in **server-rendered** HTML, contains no `<button>` inside a
+   `<button>`, and toggling it works on first paint without depending on hydration recovery.
+8. Disabling asks for confirmation from both the settings row and the row menu; enabling does not.
+9. `npm run test`, `npm run typecheck`, `npm run lint` all pass.
