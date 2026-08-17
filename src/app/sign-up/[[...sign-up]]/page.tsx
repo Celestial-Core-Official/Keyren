@@ -1,9 +1,10 @@
 import { SignUp } from "@clerk/nextjs";
+import { AuthLayout } from "@/components/marketing/auth-panel";
 
 export default function SignUpPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
+    <AuthLayout statement="Create an application, issue a key, and verify it with one request.">
       <SignUp />
-    </main>
+    </AuthLayout>
   );
 }

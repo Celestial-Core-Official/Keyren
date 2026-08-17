@@ -1,9 +1,10 @@
 import { SignIn } from "@clerk/nextjs";
+import { AuthLayout } from "@/components/marketing/auth-panel";
 
 export default function SignInPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
+    <AuthLayout statement="Licence keys are stored only as an HMAC. Not even we can read one back.">
       <SignIn />
-    </main>
+    </AuthLayout>
   );
 }

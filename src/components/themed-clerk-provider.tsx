@@ -18,6 +18,12 @@ import { SIGN_IN_URL, SIGN_UP_URL } from "@/lib/auth/routes";
  * because Clerk parses these to derive its own shades and cannot be given a
  * `var()`. If a token there changes, change its twin here.
  *
+ * They were read by rasterising each token through a canvas rather than
+ * converted by hand — oklch to sRGB is not an eyeball operation, and the two
+ * border values are the alpha-composited result of `--border` over the
+ * surface behind it, since Clerk needs a solid colour where the app uses a
+ * translucent one.
+ *
  * This must be mounted INSIDE `ThemeProvider`. Mounted outside it, `useTheme`
  * returns an empty context and silently resolves to the light branch — the
  * same failure that produced the Sonner bug, with the same lack of any visible
@@ -25,33 +31,33 @@ import { SIGN_IN_URL, SIGN_UP_URL } from "@/lib/auth/routes";
  */
 
 const DARK = {
-  colorBackground: "#131316", // --card: the modal is a surface, not the page
-  colorForeground: "#fafafa", // --foreground
-  colorPrimary: "#6366f1", // --primary
+  colorBackground: "#0e0e10", // --surface-1: the modal is a surface, not the page
+  colorForeground: "#f3f3f5", // --foreground
+  colorPrimary: "#5d68e3", // --primary
   colorPrimaryForeground: "#fafafa", // --primary-foreground
-  colorInput: "#1a1a1f",
-  colorInputForeground: "#fafafa",
-  colorMuted: "#27272b", // --muted
-  colorMutedForeground: "#a1a1aa", // --muted-foreground
-  colorBorder: "#27272b", // --border
-  colorRing: "#6366f1", // --ring
-  colorDanger: "#ef4444", // --destructive
-  borderRadius: "0.5rem",
+  colorInput: "#141517", // --surface-2
+  colorInputForeground: "#f3f3f5",
+  colorMuted: "#1b1c1e", // --muted
+  colorMutedForeground: "#929399", // --fg-tertiary
+  colorBorder: "#26262a", // --border, composited over --surface-1
+  colorRing: "#7281ff", // --ring
+  colorDanger: "#e64343", // --destructive
+  borderRadius: "0.375rem", // --radius
 } as const;
 
 const LIGHT = {
-  colorBackground: "#ffffff", // --card
-  colorForeground: "#111113", // --foreground
-  colorPrimary: "#4f46e5", // --primary, darkened for contrast on white
+  colorBackground: "#ffffff", // --surface-1
+  colorForeground: "#0b0c0f", // --foreground
+  colorPrimary: "#4a50d1", // --primary, darkened for contrast on white
   colorPrimaryForeground: "#fafafa",
   colorInput: "#ffffff",
-  colorInputForeground: "#111113",
-  colorMuted: "#f4f4f5", // --muted
-  colorMutedForeground: "#65656d", // --muted-foreground
-  colorBorder: "#e4e4e7", // --border
-  colorRing: "#4f46e5", // --ring
-  colorDanger: "#dc2626", // --destructive
-  borderRadius: "0.5rem",
+  colorInputForeground: "#0b0c0f",
+  colorMuted: "#f3f3f5", // --muted
+  colorMutedForeground: "#5d5f65", // --fg-tertiary
+  colorBorder: "#e4e5e7", // --border, composited over white
+  colorRing: "#545ddf", // --ring
+  colorDanger: "#c50220", // --destructive
+  borderRadius: "0.375rem", // --radius
 } as const;
 
 export function ThemedClerkProvider({ children }: { children: React.ReactNode }) {
@@ -72,7 +78,23 @@ export function ThemedClerkProvider({ children }: { children: React.ReactNode })
       // environment variable would silently go back to the portal.
       signInUrl={SIGN_IN_URL}
       signUpUrl={SIGN_UP_URL}
-      appearance={{ variables }}
+      appearance={{
+        variables: {
+          ...variables,
+          // Clerk renders its own DOM, so without this it sets the whole form
+          // in its default stack while the page around it is in Instrument
+          // Sans — the single detail that makes a hosted component read as an
+          // embed from another product.
+          fontFamily: "var(--font-sans-loaded)",
+          fontFamilyButtons: "var(--font-sans-loaded)",
+        },
+        elements: {
+          // The page already supplies the card: a second border and shadow
+          // around the form would be a panel inside a panel.
+          cardBox: { boxShadow: "none", border: "none" },
+          card: { boxShadow: "none", border: "none", background: "transparent" },
+        },
+      }}
     >
       {children}
     </ClerkProvider>
