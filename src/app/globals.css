@@ -5,9 +5,24 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --font-sans: var(--font-sans-loaded), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-loaded), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-heading: var(--font-sans);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-heading: var(--font-sans);
+
+  /* The four-step foreground ramp is the single most load-bearing addition of
+     Alpha_v3. Through Alpha_v2 this palette had --foreground and
+     --muted-foreground and nothing between them, which is why every secondary
+     surface had to choose between shouting and disappearing. */
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-tertiary: var(--fg-tertiary);
+  --color-fg-quaternary: var(--fg-quaternary);
+
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -16,16 +31,32 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
-  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border-strong: var(--border-strong);
+
+  /* Saturation is reserved for meaning. A colour that is not carrying state is
+     a neutral, which is why these are named for what they mean rather than for
+     what hue they happen to be. */
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-border: var(--warning-border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-destructive-border: var(--destructive-border);
+
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -38,13 +69,24 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /*
+   * An explicit scale rather than multiples of --radius.
+   *
+   * Through Alpha_v2 every step was derived by multiplying a 10px base, which
+   * put Card at 14px — larger than any reference product measured (WorkOS 8,
+   * Clerk 12, Linear 4, Stripe 4). Writing the steps out makes each one a
+   * decision. 2xl and 3xl are clamped rather than deleted so that an old
+   * `rounded-2xl` left behind somewhere cannot silently reintroduce a
+   * consumer-app corner on a data surface.
+   */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+  --radius-3xl: 12px;
+  --radius-4xl: 9999px;
 }
 
 /*
@@ -58,6 +100,11 @@
  * That workaround is gone. :root is now genuinely light, .dark genuinely
  * dark, and next-themes decides between them from a blocking inline script
  * that runs before first paint — which is what prevents the flash now.
+ *
+ * Alpha_v3 keeps that structure and rebuilds the values on it: a four-step
+ * foreground ramp, three surfaces, borders as alpha-composited foreground,
+ * and status colours that exist as tokens instead of as Tailwind literals
+ * hardcoded per component.
  */
 :root {
   /*
@@ -70,98 +117,227 @@
    */
   color-scheme: light;
 
-  /* Background sits fractionally off white so that cards, which are pure
-     white, lift off the page — the same figure/ground relationship the dark
-     palette gets by making cards lighter than the page. */
-  --background: oklch(0.99 0.002 285);
-  --foreground: oklch(0.145 0.005 285);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0.005 285);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0.005 285);
-  /* Darker than the dark palette's primary: the same indigo that reads well
-     against near-black is under-contrasted against white. */
-  --primary: oklch(0.55 0.19 275);
+  /*
+   * Chroma sits at 0.002–0.006 on the mark's own hue (275) rather than at
+   * zero. It is far below the threshold where anyone would call these greys
+   * "blue", and it is what stops them reading as stock zinc — the greys belong
+   * to the palette instead of being borrowed from a framework default.
+   *
+   * Background sits fractionally off white so that cards, which are pure
+   * white, lift off the page — the same figure/ground relationship the dark
+   * palette gets by making cards lighter than the page.
+   */
+  --background: oklch(0.993 0.002 275);
+  --surface-1: oklch(1 0 0);
+  --surface-2: oklch(0.975 0.003 275);
+
+  --foreground: oklch(0.155 0.006 275);
+  --fg-secondary: oklch(0.32 0.008 275);
+  /* Held at 0.485 rather than the lighter grey a light theme invites, so
+     tertiary — which carries most of the secondary copy in this UI — clears
+     AA against both --background and --surface-1. */
+  --fg-tertiary: oklch(0.485 0.01 275);
+  /* Placeholder and disabled only. Deliberately below AA: it must never carry
+     copy a reader needs. */
+  --fg-quaternary: oklch(0.63 0.008 275);
+
+  /* Borders are alpha-composited foreground rather than a solid grey, so a
+     single value survives on --background, --surface-1 and --surface-2 alike
+     instead of needing a variant per surface. */
+  --border: oklch(0.145 0.006 275 / 0.11);
+  --border-strong: oklch(0.145 0.006 275 / 0.18);
+
+  /* The mark is #4244CE. Darkened here: the lightness that reads well against
+     near-black is under-contrasted against white. */
+  --primary: oklch(0.505 0.195 275);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.96 0.003 285);
-  --secondary-foreground: oklch(0.205 0.005 285);
-  --muted: oklch(0.96 0.003 285);
-  /* Held at 0.48 rather than the lighter grey a light theme invites, so
-     muted-foreground — which carries most of the secondary copy in this UI —
-     clears AA against both --background and --card. */
-  --muted-foreground: oklch(0.48 0.008 285);
-  --accent: oklch(0.94 0.004 285);
-  --accent-foreground: oklch(0.205 0.005 285);
+  --ring: oklch(0.545 0.195 275);
+
+  --success: oklch(0.52 0.14 152);
+  --success-subtle: oklch(0.955 0.04 152);
+  --success-border: oklch(0.855 0.07 152);
+  --warning: oklch(0.52 0.13 68);
+  --warning-subtle: oklch(0.96 0.05 78);
+  --warning-border: oklch(0.86 0.08 78);
   --destructive: oklch(0.52 0.21 25);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.91 0.004 285);
-  --input: oklch(0.91 0.004 285);
-  --ring: oklch(0.55 0.19 275);
-  --radius: 0.625rem;
-  --chart-1: oklch(0.55 0.19 275);
-  --chart-2: oklch(0.62 0.14 220);
-  --chart-3: oklch(0.68 0.13 160);
-  --chart-4: oklch(0.72 0.15 70);
-  --chart-5: oklch(0.62 0.19 20);
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.145 0.005 285);
-  --sidebar-primary: oklch(0.55 0.19 275);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.94 0.004 285);
-  --sidebar-accent-foreground: oklch(0.205 0.005 285);
-  --sidebar-border: oklch(0.91 0.004 285);
-  --sidebar-ring: oklch(0.55 0.19 275);
+  --destructive-subtle: oklch(0.96 0.03 25);
+  --destructive-border: oklch(0.87 0.07 25);
+
+  /*
+   * shadcn aliases. These are names other components already use; they point
+   * at the roles above rather than carrying independent values.
+   *
+   * --accent here is shadcn's HOVER SURFACE and has nothing to do with the
+   * brand accent. The two must never be conflated: nothing in --accent is
+   * --primary-tinted, because the brand colour has exactly four jobs (primary
+   * fill, focus ring, active nav item, active tab underline) and "tinting a
+   * surface" is not one of them.
+   */
+  --card: var(--surface-1);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-2);
+  --popover-foreground: var(--foreground);
+  --secondary: oklch(0.965 0.003 275);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.965 0.003 275);
+  --muted-foreground: var(--fg-tertiary);
+  --accent: oklch(0.945 0.004 275);
+  --accent-foreground: var(--foreground);
+  --input: var(--border);
+  --radius: 0.375rem;
+
+  --chart-1: oklch(0.505 0.195 275);
+  --chart-2: oklch(0.55 0.14 220);
+  --chart-3: oklch(0.52 0.13 160);
+  --chart-4: oklch(0.58 0.15 70);
+  --chart-5: oklch(0.55 0.19 20);
+
+  /* The sidebar shares the page background and is separated by its rule
+     alone. A second surface behind the navigation would be a third value
+     competing with --background and --surface-1 for no gain. */
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 .dark {
   color-scheme: dark;
 
-  --background: oklch(0.145 0.005 285);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.175 0.005 285);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.175 0.005 285);
-  --popover-foreground: oklch(0.985 0 0);
+  /* Near-black with a trace of the mark's hue, never #000: every dark
+     reference measured lands here (Linear #08090a, Raycast #07080a,
+     Unkey #040406) and none of them is a flat black by accident. */
+  --background: oklch(0.135 0.004 275);
+  --surface-1: oklch(0.165 0.004 275);
+  --surface-2: oklch(0.195 0.005 275);
+
+  /* Not pure white. Vercel's primary text is 93% lightness, Linear's #f7f8f8;
+     #fff against a near-black ground reads as glare rather than as text. */
+  --foreground: oklch(0.965 0.003 275);
+  --fg-secondary: oklch(0.855 0.005 275);
+  --fg-tertiary: oklch(0.665 0.008 275);
+  --fg-quaternary: oklch(0.505 0.008 275);
+
+  --border: oklch(1 0 0 / 0.09);
+  --border-strong: oklch(1 0 0 / 0.15);
+
   /*
-   * 0.56, not the 0.62 this carried through Alpha_v2. Primary is a button
-   * fill, and --primary-foreground is near-white: at 0.62 the label sat at
-   * 3.68:1, under the 4.5:1 floor for normal text, on the most-clicked control
-   * in the app. 0.56 brings it to 4.6:1.
+   * 0.575, not the mark's own lightness. Primary is a button fill and
+   * --primary-foreground is near-white: too dark and the label drops under
+   * the 4.5:1 floor on the most-clicked control in the app.
    *
-   * --ring deliberately does NOT follow it down. A focus ring is measured
-   * against the page behind it, not against text on top of it, so it is better
-   * off staying bright.
+   * --ring deliberately does NOT follow it. A focus ring is measured against
+   * the page behind it, not against text on top of it, so it is better off
+   * staying bright.
    */
-  --primary: oklch(0.56 0.19 275);
+  --primary: oklch(0.575 0.185 275);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.23 0.005 285);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.23 0.005 285);
-  --muted-foreground: oklch(0.68 0.008 285);
-  --accent: oklch(0.25 0.006 285);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.58 0.21 25);
+  --ring: oklch(0.655 0.185 275);
+
+  --success: oklch(0.72 0.16 150);
+  --success-subtle: oklch(0.26 0.05 150);
+  --success-border: oklch(0.36 0.07 150);
+  --warning: oklch(0.8 0.16 78);
+  --warning-subtle: oklch(0.27 0.06 78);
+  --warning-border: oklch(0.38 0.08 78);
+  --destructive: oklch(0.62 0.2 25);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.26 0.005 285);
-  --input: oklch(0.26 0.005 285);
-  --ring: oklch(0.62 0.19 275);
-  /* Lifted off the greyscale ramp these carried while unused, so a chart added
-     later reads as categories rather than as five shades of the same thing.
-     Same hues as the light palette, raised in lightness for a dark ground. */
-  --chart-1: oklch(0.62 0.19 275);
-  --chart-2: oklch(0.68 0.14 220);
-  --chart-3: oklch(0.74 0.13 160);
-  --chart-4: oklch(0.78 0.15 70);
-  --chart-5: oklch(0.68 0.19 20);
-  --sidebar: oklch(0.175 0.005 285);
-  --sidebar-foreground: oklch(0.985 0 0);
-  /* Tracks --primary, for the same reason. */
-  --sidebar-primary: oklch(0.56 0.19 275);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.25 0.006 285);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.26 0.005 285);
-  --sidebar-ring: oklch(0.62 0.19 275);
+  --destructive-subtle: oklch(0.26 0.07 25);
+  --destructive-border: oklch(0.37 0.1 25);
+
+  --card: var(--surface-1);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-2);
+  --popover-foreground: var(--foreground);
+  --secondary: oklch(0.225 0.005 275);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.225 0.005 275);
+  --muted-foreground: var(--fg-tertiary);
+  --accent: oklch(0.25 0.006 275);
+  --accent-foreground: var(--foreground);
+  --input: var(--border);
+
+  /* Same hues as the light palette, raised in lightness for a dark ground, so
+     a chart or a syntax palette reads as categories rather than as five shades
+     of the same thing. */
+  --chart-1: oklch(0.68 0.185 275);
+  --chart-2: oklch(0.72 0.14 220);
+  --chart-3: oklch(0.76 0.13 160);
+  --chart-4: oklch(0.8 0.15 70);
+  --chart-5: oklch(0.7 0.19 20);
+
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+/*
+ * Non-colour tokens. These are theme-independent by nature — a duration does
+ * not change when the lights go out — so they are declared once.
+ */
+:root {
+  /* Two durations and two easings, and nothing else. Motion applied as a
+     global effect rather than per-interaction is a build-step decision, not a
+     design one; capping the vocabulary at four values is what stops it. */
+  --speed-quick: 120ms;
+  --speed-regular: 250ms;
+  --ease-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Tracking is a function of optical size, and only headings receive it.
+     Body, buttons and table cells sit at normal — a 14px label and a 64px
+     headline wanting the same letter-spacing is what announces that nobody
+     looked at the page. */
+  --tracking-display: -0.03em;
+  --tracking-heading: -0.02em;
+  --tracking-label: 0.06em;
+
+  /* Two shadows. The default scale is not used anywhere in this application:
+     elevation is drawn as an outline, and only genuinely floating things
+     (dialog, popover, dropdown, command palette, selection pill) lift. */
+  --shadow-ring: 0 0 0 1px var(--border);
+  --shadow-float: 0 16px 40px -12px oklch(0 0 0 / 0.28);
+
+  /* Syntax palette, built from the --chart-* tokens that have been defined and
+     unused since Alpha_v1. Four hues, which is the discipline the best
+     documentation sites use, for zero dependencies. */
+  --code-plain: var(--foreground);
+  --code-comment: var(--fg-quaternary);
+  --code-keyword: var(--chart-1);
+  --code-string: var(--chart-3);
+  --code-fn: var(--chart-2);
+  --code-punct: color-mix(in oklch, var(--foreground), transparent 35%);
+}
+
+/*
+ * Background images are permitted as STRUCTURE and never as decoration.
+ * A masked hairline grid says "this is a technical surface"; a blurred
+ * gradient blob says nothing at all and is the single fastest read of
+ * "template".
+ */
+@utility texture-grid {
+  background-image: radial-gradient(var(--border) 0.5px, transparent 0.5px);
+  background-size: 24px 24px;
+}
+
+@utility texture-hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--border) 0,
+    var(--border) 1px,
+    transparent 1px,
+    transparent 6px
+  );
 }
 
 @layer base {
@@ -173,5 +349,33 @@
   }
   html {
     @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3 {
+    letter-spacing: var(--tracking-heading);
+  }
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+  }
+}
+
+/*
+ * Every animation in this application is written behind `motion-safe:` or is
+ * caught here. This is the backstop, not the primary mechanism.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
