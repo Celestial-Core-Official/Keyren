@@ -73,7 +73,7 @@ export function CopyButton({
         className={cn("h-7 gap-1.5 px-2 text-xs text-muted-foreground", className)}
       >
         {copied ? (
-          <Check className="size-3.5 text-emerald-400" />
+          <Check className="size-3.5 text-success" />
         ) : (
           <Copy className="size-3.5" />
         )}

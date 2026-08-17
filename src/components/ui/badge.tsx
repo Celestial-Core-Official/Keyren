@@ -16,6 +16,11 @@ const badgeVariants = cva(
           "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
+        // Semantic tones, per theme. These exist so no component has to reach
+        // for a Tailwind palette literal, which is what left the status badge
+        // dark-tuned in both themes through Alpha_v2.
+        success: "border-success-border bg-success-subtle text-success",
+        warning: "border-warning-border bg-warning-subtle text-warning",
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",

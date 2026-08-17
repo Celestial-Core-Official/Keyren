@@ -173,7 +173,7 @@ export function LicenseSelectionToolbar({
       <div
         role="region"
         aria-label="Selected licenses"
-        className="sticky bottom-4 z-20 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 p-3 shadow-lg backdrop-blur"
+        className="sticky bottom-4 z-20 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 p-3 shadow-[var(--shadow-float)] backdrop-blur"
       >
         <span className="text-sm font-medium tabular-nums" aria-live="polite">
           {count} selected

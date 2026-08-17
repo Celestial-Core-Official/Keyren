@@ -169,10 +169,10 @@ export function ApiTester({ applicationId }: { applicationId: string }) {
             </label>
           </div>
 
-          <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-sm">
+          <div className="flex items-start gap-2.5 rounded-lg border border-warning-border bg-warning-subtle p-3 text-sm">
             <AlertTriangle
               aria-hidden="true"
-              className="mt-0.5 size-4 shrink-0 text-amber-500"
+              className="mt-0.5 size-4 shrink-0 text-warning"
             />
             <p className="text-muted-foreground">
               Testing a device-locked license <strong>claims it</strong>. An unactivated
@@ -219,7 +219,7 @@ export function ApiTester({ applicationId }: { applicationId: string }) {
                   className={cn(
                     "rounded-md px-2 py-0.5 font-mono text-xs",
                     result.ok
-                      ? "bg-emerald-500/15 text-emerald-400"
+                      ? "bg-success-subtle text-success"
                       : "bg-destructive/15 text-destructive",
                   )}
                 >
@@ -234,7 +234,7 @@ export function ApiTester({ applicationId }: { applicationId: string }) {
                   </span>
                 ))}
                 {!result.parsed ? (
-                  <span className="text-xs text-amber-400">
+                  <span className="text-xs text-warning">
                     Response was not JSON — shown verbatim
                   </span>
                 ) : null}

@@ -136,7 +136,7 @@ export function OnboardingChecklist({
                 className={cn(
                   "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px]",
                   step.done
-                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-400"
+                    ? "border-success-border bg-success-subtle text-success"
                     : "border-border text-muted-foreground",
                 )}
               >
