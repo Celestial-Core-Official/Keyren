@@ -30,12 +30,18 @@ beforeEach(() => {
 });
 
 describe("OnboardingChecklist — progress", () => {
-  it("shows all three steps to a brand new application", () => {
+  it("shows all three steps to a brand new application, in order", () => {
     renderChecklist();
 
-    expect(screen.getByText(/1\. Generate a license/)).toBeTruthy();
-    expect(screen.getByText(/2\. Copy an integration example/)).toBeTruthy();
-    expect(screen.getByText(/3\. Run one successful verification/)).toBeTruthy();
+    // The step numerals moved out of the titles and into the rail beside them,
+    // so the steps are identified here by title and by their position in the
+    // list rather than by a "1." the title no longer carries.
+    const items = screen.getAllByRole("listitem");
+
+    expect(items).toHaveLength(3);
+    expect(items[0]?.textContent).toContain("Generate a license");
+    expect(items[1]?.textContent).toContain("Copy an integration example");
+    expect(items[2]?.textContent).toContain("Run one successful verification");
     expect(screen.getByText(/0 of 3 done/)).toBeTruthy();
   });
 
@@ -148,6 +154,36 @@ describe("OnboardingChecklist — accessibility", () => {
     // Testing Library trims the trailing space these labels carry for speech.
     expect(screen.getByText("Completed:")).toBeTruthy();
     expect(screen.getAllByText("Not yet done:").length).toBeGreaterThan(0);
+  });
+
+  it("marks a done step with a check rather than striking it out", () => {
+    // Strike-through on a completed setup step reads as "cancelled", not
+    // "done", and the title is still the name of something that happened.
+    const { container } = render(
+      <OnboardingChecklist
+        applicationId={APPLICATION}
+        applicationSlug="seliware-key"
+        hasLicense
+        hasVerification={false}
+      />,
+    );
+
+    expect(container.querySelector(".line-through")).toBeNull();
+  });
+
+  it("spends no accent on tinting the card", () => {
+    // The brand colour has four jobs and a fifth — the progress rail — that
+    // carries meaning. Tinting a surface is none of them.
+    const { container } = render(
+      <OnboardingChecklist
+        applicationId={APPLICATION}
+        applicationSlug="seliware-key"
+        hasLicense={false}
+        hasVerification={false}
+      />,
+    );
+
+    expect(container.innerHTML).not.toMatch(/(border|bg|shadow|ring)-primary\//);
   });
 
   it("is an ordered list, because the steps are in order", () => {

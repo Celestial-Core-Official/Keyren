@@ -9,6 +9,8 @@ import {
   wantsNewApplication,
   type RawSearchParams,
 } from "@/lib/validation/dashboard";
+import { KeyGlyph } from "@/lib/design/key-glyph";
+import { middleTruncate } from "@/lib/design/truncate";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { CopyButton } from "@/components/dashboard/copy-button";
@@ -24,6 +26,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+/**
+ * An application ID is `app_` plus 26 Crockford symbols. Both ends carry
+ * information — the prefix says what kind of thing it is, the tail is the only
+ * part that tells two of them apart — so it is truncated in the middle rather
+ * than at the end. The full value stays behind the copy button and the title.
+ */
+const ID_WIDTH = 18;
+const ID_WIDTH_NARROW = 22;
 
 export default async function ApplicationsPage({
   searchParams,
@@ -56,13 +67,13 @@ export default async function ApplicationsPage({
       {empty && filtering ? (
         <EmptyState
           icon={<SearchX className="size-5" />}
-          title="No applications match that search"
+          title="No Matching Applications"
           description="Nothing here matches by name, slug or application ID. Try a different term."
         />
       ) : empty ? (
         <EmptyState
           icon={<Package className="size-5" />}
-          title="No applications yet"
+          title="No Applications Yet"
           description="An application gives you a permanent application ID. Your software sends that ID with every license check, and it never changes — not even if you rename the application."
           action={<CreateApplicationDialog />}
         />
@@ -73,6 +84,9 @@ export default async function ApplicationsPage({
             <Table>
               <TableHeader>
                 <TableRow>
+                  {/* The glyph column carries no label: it is a mark, not a
+                      value, and a header over it would promise otherwise. */}
+                  <TableHead className="w-14" />
                   <TableHead>Name</TableHead>
                   <TableHead>Application ID</TableHead>
                   <TableHead className="text-right">Licenses</TableHead>
@@ -86,6 +100,12 @@ export default async function ApplicationsPage({
                   // position against; the cells that hold real controls get
                   // their own `relative` to sit above it.
                   <TableRow key={application.id} className="relative">
+                    <TableCell className="pr-0">
+                      {/* Seeded from the public application ID — nothing
+                          secret enters it, and the same application draws the
+                          same mark on every surface that shows it. */}
+                      <KeyGlyph seed={application.id} size={28} />
+                    </TableCell>
                     <TableCell className="max-w-64">
                       {/* The link stretches across the row via a pseudo
                           element, so the whole row is clickable without
@@ -98,12 +118,15 @@ export default async function ApplicationsPage({
                       >
                         <span className="block truncate">{application.name}</span>
                       </Link>
-                      <p className="truncate text-xs text-muted-foreground">{application.slug}</p>
+                      <p className="truncate text-[13px] text-fg-tertiary">{application.slug}</p>
                     </TableCell>
                     <TableCell>
                       <div className="relative flex items-center gap-1">
-                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                          {application.id}
+                        <code
+                          title={application.id}
+                          className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[13px] text-fg-tertiary"
+                        >
+                          {middleTruncate(application.id, ID_WIDTH)}
                         </code>
                         <CopyButton value={application.id} label="" />
                       </div>
@@ -111,7 +134,7 @@ export default async function ApplicationsPage({
                     <TableCell className="text-right tabular-nums">
                       {application.licenseCount}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="text-[13px] text-fg-tertiary">
                       <RelativeTime value={application.createdAt} />
                     </TableCell>
                     <TableCell>
@@ -129,15 +152,16 @@ export default async function ApplicationsPage({
             </Table>
           </div>
 
-          {/* Narrow screens: cards, so the application ID can wrap and the menu
-              stays reachable without horizontal scrolling. */}
+          {/* Narrow screens: cards, so the application ID can sit on its own
+              line and the menu stays reachable without horizontal scrolling. */}
           <ul className="space-y-3 md:hidden">
             {applications.map((application) => (
               <li
                 key={application.id}
                 className="relative rounded-lg border border-border p-4"
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <KeyGlyph seed={application.id} size={28} className="mt-1 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <Link
                       href={`/dashboard/applications/${application.id}`}
@@ -145,27 +169,31 @@ export default async function ApplicationsPage({
                     >
                       <span className="block truncate">{application.name}</span>
                     </Link>
-                    <p className="truncate text-xs text-muted-foreground">{application.slug}</p>
+                    <p className="truncate text-[13px] text-fg-tertiary">{application.slug}</p>
                   </div>
                   <div className="relative shrink-0">
                     <ApplicationActions
-                          applicationId={application.id}
-                          name={application.name}
-                          disabled={application.disabledAt !== null}
-                        />
+                      applicationId={application.id}
+                      name={application.name}
+                      disabled={application.disabledAt !== null}
+                    />
                   </div>
                 </div>
 
                 <div className="relative mt-3 flex flex-wrap items-center gap-2">
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs break-all">
-                    {application.id}
+                  <code
+                    title={application.id}
+                    className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[13px] text-fg-tertiary"
+                  >
+                    {middleTruncate(application.id, ID_WIDTH_NARROW)}
                   </code>
                   <CopyButton value={application.id} label="" />
                 </div>
 
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {application.licenseCount} license{application.licenseCount === 1 ? "" : "s"} ·
-                  created <RelativeTime value={application.createdAt} />
+                <p className="mt-2 text-[13px] text-fg-tertiary">
+                  <span className="tabular-nums">{application.licenseCount}</span> license
+                  {application.licenseCount === 1 ? "" : "s"} · created{" "}
+                  <RelativeTime value={application.createdAt} />
                 </p>
               </li>
             ))}

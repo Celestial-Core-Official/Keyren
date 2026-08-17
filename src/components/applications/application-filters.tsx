@@ -5,6 +5,13 @@ import { Search } from "lucide-react";
 import { useQueryParams } from "@/components/dashboard/use-query-params";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   APPLICATION_SORTS,
   APPLICATION_SORT_LABELS,
   type ApplicationQuery,
@@ -52,7 +59,7 @@ export function ApplicationFilters({
       <div className="relative min-w-0 flex-1 sm:max-w-xs">
         <Search
           aria-hidden="true"
-          className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+          className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-fg-quaternary"
         />
         <Input
           type="search"
@@ -66,23 +73,30 @@ export function ApplicationFilters({
         />
       </div>
 
-      <select
+      {/* A Radix select rather than the native control. The native one cannot
+          be given this application's focus ring — it falls back to the
+          operating system's — and one escape from the focus grammar is enough
+          to make the whole page look assembled rather than designed. The URL
+          contract is unchanged: this writes the same `sort` parameter, and
+          `newest` clears it rather than spelling out the default. */}
+      <Select
         value={query.sort}
-        aria-label="Sort applications"
-        onChange={(event) =>
-          setParams({ sort: event.target.value === "newest" ? null : event.target.value })
-        }
-        className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+        onValueChange={(value) => setParams({ sort: value === "newest" ? null : value })}
       >
-        {APPLICATION_SORTS.map((sort) => (
-          <option key={sort} value={sort}>
-            {APPLICATION_SORT_LABELS[sort]}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger aria-label="Sort applications" className="w-full sm:w-44">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {APPLICATION_SORTS.map((sort) => (
+            <SelectItem key={sort} value={sort}>
+              {APPLICATION_SORT_LABELS[sort]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       {query.q !== "" ? (
-        <span className="text-sm text-muted-foreground" aria-live="polite">
+        <span className="text-[13px] text-fg-tertiary" aria-live="polite">
           {total === 1 ? "1 application matches" : `${total} applications match`}
         </span>
       ) : null}

@@ -4,10 +4,10 @@ import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
 import { getCachedApplication } from "@/lib/applications/cached";
 import { getApplicationLicenseStats } from "@/lib/licenses/query";
+import { MetricStrip, share, type Metric } from "@/components/dashboard/metric-strip";
 import { OnboardingChecklist } from "@/components/applications/onboarding-checklist";
 import { CreateLicenseDialog } from "@/components/licenses/create-license-dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 /**
  * What one application looks like at a glance.
@@ -33,15 +33,22 @@ export default async function ApplicationOverviewPage({
   // One aggregate query rather than loading every license to count them.
   const stats = await getApplicationLicenseStats(db, ownerId, applicationId);
 
-  // Expired and revoked are only shown when they exist: a column of zeroes
-  // teaches the developer to stop reading the row.
-  const cards = [
-    { label: "Licenses", value: stats.total, always: true },
-    { label: "Active", value: stats.active, always: true },
-    { label: "Bound devices", value: stats.boundDevices, always: true },
-    { label: "Expired", value: stats.expired, always: false },
-    { label: "Revoked", value: stats.revoked, always: false },
-  ].filter((card) => card.always || card.value > 0);
+  // Primary counts always render, because `0 licenses` on an application
+  // created a minute ago is the most informative thing the rail can say.
+  // Expired and revoked are dropped when empty: a column of zeroes beside
+  // derived states teaches the developer to stop reading the rail.
+  //
+  // Bound devices deliberately carries no ratio. Its honest denominator is the
+  // number of hwid-locked licenses rather than the total, and a share of the
+  // wrong whole is worse than no share at all.
+  const metrics: Metric[] = [
+    { label: "Licenses", value: stats.total },
+    { label: "Active", value: stats.active, detail: share(stats.active, stats.total) },
+    { label: "Bound devices", value: stats.boundDevices },
+  ];
+
+  if (stats.expired > 0) metrics.push({ label: "Expired", value: stats.expired });
+  if (stats.revoked > 0) metrics.push({ label: "Revoked", value: stats.revoked });
 
   return (
     <div className="space-y-8">
@@ -67,20 +74,7 @@ export default async function ApplicationOverviewPage({
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        {cards.map((stat) => (
-          <Card key={stat.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-semibold tabular-nums">{stat.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <MetricStrip metrics={metrics} />
     </div>
   );
 }

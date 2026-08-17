@@ -70,10 +70,14 @@ export function ApplicationActions({
           <Button
             variant="ghost"
             size="icon"
-            className="size-8"
+            className="group/actions size-8"
             aria-label={`Actions for ${name}`}
           >
-            <MoreHorizontal className="size-4" />
+            {/* Held at 70% until this control is hovered, focused or open —
+                the same discipline every icon in the dashboard chrome
+                follows. An overflow trigger at full contrast competes with
+                the row's own content for attention it has not earned. */}
+            <MoreHorizontal className="size-4 opacity-70 transition-opacity duration-[var(--speed-quick)] group-hover/actions:opacity-100 group-focus-visible/actions:opacity-100 group-aria-expanded/actions:opacity-100" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
