@@ -1,5 +1,10 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 import { SIGN_IN_URL, SIGN_UP_URL } from "@/lib/auth/routes";
+import {
+  CURRENT_APPLICATION_COOKIE,
+  applicationIdFromPath,
+} from "@/lib/applications/current";
 
 /**
  * Everything under /dashboard requires an authenticated developer.
@@ -21,6 +26,30 @@ export default clerkMiddleware(
     if (isProtectedRoute(request)) {
       await auth.protect();
     }
+
+    // Every route into an application passes through here — the chooser, the
+    // command palette, a bookmark, a pasted link, and the redirect that follows
+    // creating one. A server action called from the chooser would catch only
+    // the first of those, which is why this lives in middleware and not there.
+    //
+    // The cookie this writes is not visible to `cookies()` on this same
+    // request, and does not need to be: the client components read the
+    // application out of the path they are already rendering, and the path
+    // outranks the cookie anyway. This is for the next request, the one that
+    // has left the application behind.
+    const applicationId = applicationIdFromPath(request.nextUrl.pathname);
+    if (applicationId === null) return;
+    if (request.cookies.get(CURRENT_APPLICATION_COOKIE)?.value === applicationId) return;
+
+    const response = NextResponse.next();
+    response.cookies.set(CURRENT_APPLICATION_COOKIE, applicationId, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/dashboard",
+      maxAge: 60 * 60 * 24 * 365,
+    });
+    return response;
   },
   {
     // Without these, `auth.protect()` falls through to `redirectToSignIn()`,
