@@ -54,25 +54,41 @@ strongest input to that resolution.
 
 ### 1.2 The resolution order
 
-A new module, `src/lib/applications/current.ts`, owns this and nothing else:
+The order is:
 
-```
-resolveCurrentApplication(pathname, cookieValue, applications) -> Application | null
-```
-
-1. **The URL**, when `pathname` is under `/dashboard/applications/<id>` and `<id>` is in
-   `applications`. A URL you are looking at outranks a cookie from last week.
-2. **The cookie**, when it names an application in `applications`.
-3. **The newest application** — `applications[0]` under the default sort, which is already `newest`.
+1. **The URL**, when the path is under `/dashboard/applications/<id>` and `<id>` is one the
+   developer owns. A URL you are looking at outranks a cookie from last week.
+2. **The cookie**, when it names an application the developer owns.
+3. **The newest application.**
 4. **`null`**, and only when the developer owns no applications at all.
 
 Step 3 is what makes "always has a picked application" true on a fresh browser, and step 4 is the
 one honest exception: there is no application to pick because none exist.
 
-A pure function of three arguments, tested in the `node` project. It performs no I/O, reads no
-cookie itself and does not know what Next.js is, so the interesting behaviour — precedence, a stale
-cookie, a deleted application, an application belonging to someone else — is testable without a
-DOM, a database or a request.
+A new module, `src/lib/applications/current.ts`, owns this — and the work is deliberately split
+across the boundary where the information actually lives:
+
+```
+applicationIdFromPath(pathname)                        -> string | null
+resolveCurrentApplication(cookieValue, applications)   -> T | null      // steps 2-4
+```
+
+**Step 1 is applied by the client components**, each of which already has `usePathname()`. A server
+layout has no pathname at all — Next.js does not give one to a layout — and the alternatives are
+worse than the split: middleware could stamp the path into a request header for the layout to read,
+which is plumbing in service of information the consumer already holds.
+
+**Steps 2–4 are resolved on the server**, once per request, and passed down as the application to
+fall back to when the path names none.
+
+The server half is a pure function of two values, tested in the `node` project. It performs no I/O,
+reads no cookie itself and does not import Next.js — which it also cannot, because middleware
+imports it and middleware runs on the Edge runtime.
+
+The default in step 3 is computed from `createdAt` rather than taken from position 0. The
+applications page sorts by name or by licence count, and a default that depended on the caller's
+ordering would put a different answer in the table than the one already showing in the header. Ties
+break on id ascending, matching `applicationOrderBy`.
 
 ### 1.3 Where the cookie is written
 
@@ -91,6 +107,13 @@ The handler currently returns `void`; it will return `NextResponse.next()` with 
 there is something to write, and keep returning `void` otherwise. `auth.protect()` runs first and
 unchanged, so an unauthenticated request is redirected before any cookie logic is reached.
 
+A cookie set here is **not** visible to `cookies()` on the same request — middleware writes it onto
+the response, while a server component reads the request that came in. That is harmless, and the
+split in §1.2 is why: on the request that first names an application, the client components read
+that application out of the path they are rendering, and the path outranks the cookie anyway. The
+cookie is for the *next* request — the one that has left the application behind. Anyone tempted to
+"fix" the lag by rewriting request headers should read this paragraph first.
+
 **The cookie is untrusted input.** It is editable by hand, it survives a sign-out, and it can name
 an application belonging to another developer. Nothing about it is trusted: the layout resolves it
 against the list it already fetched — owner-scoped, in SQL — and a value that is not in that list
@@ -100,18 +123,23 @@ achieves nothing beyond choosing which of *your own* applications the chooser op
 ### 1.4 Where it is read
 
 `src/app/dashboard/layout.tsx` already fetches the owner's applications for the chooser and the
-command palette. It gains a `cookies()` read and one call to `resolveCurrentApplication`, then
-passes the result down to the chooser and the sidebar as a prop.
+command palette. It gains a `cookies()` read and one call to `resolveCurrentApplication`, and passes
+the resulting id to the three client components that need it — the chooser, the sidebar and the
+mobile navigation. It resolves against the *full* rows, which carry `createdAt`, and trims to the
+three fields the client renders only afterwards.
 
 `src/app/dashboard/applications/page.tsx` needs the same answer for its "Current" marker, and a
-layout cannot pass props to a page. It resolves it itself, from the same module, against the list it
-already fetched. That is a second call, not a second source of truth — and it is cheaper than a
-context provider that would exist to carry one string through a tree that is otherwise entirely
-server-rendered.
+layout cannot pass props to a page. It resolves it itself, from the same module. That is a second
+call, not a second source of truth — and it is cheaper than a context provider existing to carry one
+string through a tree that is otherwise entirely server-rendered.
 
-`resolveCurrentApplication` is therefore generic over `{ id: string }` rather than tied to one shape,
-because the layout holds `SwitchableApplication` and the applications page holds
-`ApplicationListItem`, and neither should have to convert to satisfy the other.
+That page resolves against **every** application the developer owns, not the list it is currently
+displaying. A search narrows what is on screen, and the header does not change its answer because of
+one — so while filtering, and only while filtering, the page pays for a second unfiltered read.
+
+`resolveCurrentApplication` is therefore generic over `{ id: string; createdAt: Date }` rather than
+tied to one shape, because the layout and the applications page hold different rows and neither
+should convert to satisfy the other.
 
 ---
 
