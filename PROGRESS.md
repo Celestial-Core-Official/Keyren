@@ -1,12 +1,17 @@
 # Keyren — Build Progress & Handoff
 
 **Last updated:** 2026-08-15
-**Current release:** `Alpha_v2` (package `0.1.2`) — private/testing release.
+**Current release:** `Alpha_v3` (package `0.1.3`) — private/testing release.
 Never call it "v2" in application UI; `/api/v1/...` is versioned separately and did
 not move.
 
 > **If you are a new assistant picking this up (ChatGPT, a fresh Claude session, a human):**
 >
+> - **`Alpha_v3` is complete.** It is a pure visual redesign — new token layer,
+>   typography, landing page and every dashboard surface — with no change to the
+>   public API, the schema, or the product's capabilities. What it changed is in
+>   [`docs/alpha-v3.md`](docs/alpha-v3.md), its design of record is
+>   [`docs/superpowers/specs/2026-08-17-keyren-alpha-v3-design.md`](docs/superpowers/specs/2026-08-17-keyren-alpha-v3-design.md).
 > - **`Alpha_v2` is complete.** What it changed is in
 >   [`docs/alpha-v2.md`](docs/alpha-v2.md); its security review is in
 >   [`docs/security-review-alpha-v2.md`](docs/security-review-alpha-v2.md).

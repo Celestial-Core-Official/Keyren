@@ -4,7 +4,7 @@ Keyren is a developer SaaS for software licensing and license-key authentication
 
 Sign in, create an application, generate a license key, ship the key to a customer, and your software verifies it with a single HTTP request. Keyren handles key generation, secure storage, device (HWID) binding, expiration, revocation, and rate limiting.
 
-This repository is currently in **`Alpha_v2`** (package version `0.1.2`) — a private, testing release. Do not refer to it as "v2" anywhere user-facing; the public API path (`/api/v1/...`) is a normal semantic-versioned URL and is intentionally decoupled from the marketing name. `Alpha_v2` changed a great deal about the dashboard and **nothing** about that endpoint's request or response contract, which is exactly what the separation is for.
+This repository is currently in **`Alpha_v3`** (package version `0.1.3`) — a private, testing release. Do not refer to it as "v3" anywhere user-facing; the public API path (`/api/v1/...`) is a normal semantic-versioned URL and is intentionally decoupled from the marketing name. `Alpha_v3` is a complete visual redesign and changed **nothing** about that endpoint's request or response contract, which is exactly what the separation is for.
 
 Both names come from `src/lib/release.ts`, which is the only place either is written down. See **[`docs/alpha-v2.md`](docs/alpha-v2.md)** for what this release changed.
 
@@ -156,4 +156,4 @@ These are the properties the codebase is built around. Treat any change that wea
 - **Spreadsheet exports are hardened against formula injection.** A label is free text and frequently carries a customer-supplied order reference. Excel, Sheets and LibreOffice evaluate a cell beginning `=`, `+`, `-` or `@`, so every exported cell starting with one of those (or a tab or carriage return, which parsers strip before deciding) is prefixed with an apostrophe. See `src/lib/licenses/export.ts`.
 - **Dashboard errors never carry driver, SQL, schema or credential detail.** `safeErrorMessage` allow-lists the handful of messages a developer can act on, matched exactly rather than by substring, and replaces everything else with a fixed fallback.
 
-The full public API — including the complete error-code table — is documented in **[`docs/api.md`](docs/api.md)**. What `Alpha_v2` changed is in **[`docs/alpha-v2.md`](docs/alpha-v2.md)**, and the security review covering it is in **[`docs/security-review-alpha-v2.md`](docs/security-review-alpha-v2.md)**.
+The full public API — including the complete error-code table — is documented in **[`docs/api.md`](docs/api.md)**. What `Alpha_v3` changed is in **[`docs/alpha-v3.md`](docs/alpha-v3.md)**; `Alpha_v2` is in **[`docs/alpha-v2.md`](docs/alpha-v2.md)**, with the security review covering it in **[`docs/security-review-alpha-v2.md`](docs/security-review-alpha-v2.md)**.
