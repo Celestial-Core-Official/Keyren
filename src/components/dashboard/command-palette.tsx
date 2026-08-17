@@ -14,6 +14,24 @@ import { cn } from "@/lib/utils";
 /** Marks the palette's own dialog, so the shortcut can still close it. */
 const PALETTE_ATTRIBUTE = "data-keyren-palette";
 
+/**
+ * How anything outside this tree asks the palette to open.
+ *
+ * A custom event rather than lifted state or a context provider: the palette
+ * is mounted once in the dashboard layout, and the only other caller is the
+ * header's search button, which is a sibling. A provider for two components
+ * would be ceremony, and lifting the state would push `"use client"` onto the
+ * layout, which is a server component that fetches the application list.
+ *
+ * The listener routes through the same guard as ⌘K, so this cannot be used to
+ * open the palette over the show-once reveal dialog.
+ */
+export const OPEN_PALETTE_EVENT = "keyren:open-palette";
+
+export function openCommandPalette() {
+  window.dispatchEvent(new CustomEvent(OPEN_PALETTE_EVENT));
+}
+
 type Entry = {
   key: string;
   label: string;
@@ -48,24 +66,43 @@ export function CommandPalette({
   const requestRef = useRef(0);
 
   useEffect(() => {
+    /**
+     * The one path that may open this palette.
+     *
+     * Closing is always allowed; opening it over another modal is not. The
+     * show-once key reveal is the case that decides this: it deliberately
+     * cannot be dismissed by Escape, by a click outside, or by a close
+     * button, because each of those would destroy plaintext keys the
+     * developer has not saved yet. A palette opening on top would hand back
+     * exactly that — a navigation, one keystroke away — and the keys exist
+     * nowhere else once this tree unmounts.
+     *
+     * Both the ⌘K binding and the header's search button route through here,
+     * so a second entry point cannot accidentally acquire a weaker guard.
+     */
+    function toggleIfAllowed(): boolean {
+      const dialog = openDialogElement();
+      if (dialog && dialog.getAttribute(PALETTE_ATTRIBUTE) === null) return false;
+
+      setOpen((current) => !current);
+      return true;
+    }
+
     function onKeyDown(event: KeyboardEvent) {
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
-
-      // Closing the palette is always allowed; opening it over another modal
-      // is not. The show-once key reveal is the case that decides this: it
-      // deliberately cannot be dismissed by Escape, by a click outside, or by
-      // a close button, because each of those would destroy plaintext keys the
-      // developer has not saved yet. A palette opening on top would hand back
-      // exactly that — a navigation, one keystroke away — and the keys exist
-      // nowhere else once this tree unmounts.
-      const dialog = openDialogElement();
-      if (dialog && dialog.getAttribute(PALETTE_ATTRIBUTE) === null) return;
-
-      event.preventDefault();
-      setOpen((current) => !current);
+      if (toggleIfAllowed()) event.preventDefault();
     }
+
+    function onRequestOpen() {
+      toggleIfAllowed();
+    }
+
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    window.addEventListener(OPEN_PALETTE_EVENT, onRequestOpen);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener(OPEN_PALETTE_EVENT, onRequestOpen);
+    };
   }, []);
 
   useEffect(() => {

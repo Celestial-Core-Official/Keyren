@@ -52,12 +52,15 @@ export function CopyButton({
       setStatus("Copied to clipboard");
       setTimeout(() => setCopied(false), 1600);
 
-      if (announce) toast.success(successMessage ?? "Copied to clipboard.");
+      // No trailing period: a single-sentence toast is a label, not prose.
+      if (announce) toast.success(successMessage ?? "Copied to clipboard");
       onCopied?.();
     } catch {
       setStatus("Copy failed");
+      // "Couldn't" for a user-state failure, "Failed to" for infrastructure.
+      // Two sentences, ending in the recovery step.
       toast.error(
-        "Could not copy — your browser blocked clipboard access. Select the text and copy it manually.",
+        "Couldn't copy — your browser blocked clipboard access. Select the text and copy it manually.",
       );
     }
   }

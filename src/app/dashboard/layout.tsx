@@ -5,6 +5,7 @@ import { requireDeveloperId } from "@/lib/auth/require-developer";
 import { listApplications } from "@/lib/applications/service";
 import { ApplicationSwitcher } from "@/components/dashboard/application-switcher";
 import { CommandPalette } from "@/components/dashboard/command-palette";
+import { HeaderSearch } from "@/components/dashboard/header-search";
 import { KeyboardShortcuts } from "@/components/dashboard/keyboard-shortcuts";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
@@ -43,22 +44,30 @@ export default async function DashboardLayout({ children }: { children: React.Re
               {RELEASE.name}
             </span>
           </Link>
-          <span className="text-muted-foreground/40" aria-hidden="true">
+          <span className="text-border" aria-hidden="true">
             /
           </span>
           <ApplicationSwitcher applications={applications} />
         </div>
-        <UserButton />
+        <div className="flex items-center gap-3">
+          <HeaderSearch />
+          <UserButton />
+        </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl">
-        <aside className="hidden w-56 shrink-0 border-r border-border md:block">
+      {/* No container around this row.
+          Through Alpha_v2 the shell sat inside `mx-auto max-w-7xl`, which put
+          the sidebar's right border in the middle of the canvas on any display
+          wider than 1280px, with dead space on both sides. A shell bleeds to
+          the viewport; only the content column is measured. */}
+      <div className="flex">
+        <aside className="hidden w-64 shrink-0 border-r border-border md:block xl:w-[272px]">
           <div className="sticky top-14">
             <DashboardSidebar />
           </div>
         </aside>
         <main id="dashboard-content" className="min-w-0 flex-1 px-4 py-8 sm:px-6">
-          {children}
+          <div className="mx-auto max-w-[1160px]">{children}</div>
         </main>
       </div>
 

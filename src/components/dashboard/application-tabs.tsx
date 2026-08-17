@@ -37,10 +37,13 @@ export function ApplicationTabs({ applicationId }: { applicationId: string }) {
             href={tab.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "rounded-t-md border-b-2 px-3 py-2 text-sm transition-colors",
+              // The underline is an `after:` rule rather than a border, so an
+              // inactive tab is not 2px shorter than an active one and moving
+              // between them doesn't nudge the row.
+              "relative flex h-9 items-center rounded-t-md px-3 text-[13px] transition-colors duration-[var(--speed-quick)] after:absolute after:inset-x-0 after:-bottom-px after:h-px after:transition-colors after:duration-[var(--speed-quick)]",
               active
-                ? "border-primary font-medium text-foreground"
-                : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
+                ? "font-medium text-foreground after:bg-primary"
+                : "text-fg-tertiary after:bg-transparent hover:text-foreground hover:after:bg-border-strong",
             )}
           >
             {tab.label}
