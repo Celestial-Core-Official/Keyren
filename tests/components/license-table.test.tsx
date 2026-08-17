@@ -36,11 +36,28 @@ function license(overrides: Partial<LicenseListItem> = {}): LicenseListItem {
 }
 
 describe("LicenseTable — identity", () => {
-  it("shows the label as the primary line and the masked key beneath", () => {
+  it("shows the label and a middle-truncated key, with the whole key in the tooltip", () => {
+    // End-truncation would be useless here: every key in the table shares the
+    // "KEYREN-" head, so the tail is the only part that tells two rows apart.
     render(<LicenseTable licenses={[license()]} applicationId="app_abc" />);
 
     expect(screen.getByText("Acme Corp")).toBeTruthy();
-    expect(screen.getByText("KEYREN-••••-••••-••••-WXYZ")).toBeTruthy();
+
+    const key = screen.getByText("KEYREN-••••…-••••-WXYZ");
+    expect(key.getAttribute("title")).toBe("KEYREN-••••-••••-••••-WXYZ");
+    expect(key.textContent).toContain("…");
+  });
+
+  it("draws a key mark seeded from the masked key, and nothing else", () => {
+    // The glyph is decorative and derives only from a string already on the
+    // screen — never the plaintext key, never the stored HMAC.
+    const { container } = render(
+      <LicenseTable licenses={[license()]} applicationId="app_abc" />,
+    );
+
+    const glyph = container.querySelector("tbody svg[aria-hidden='true']");
+    expect(glyph).toBeTruthy();
+    expect(glyph?.getAttribute("width")).toBe("20");
   });
 
   it("falls back to 'Unlabeled license' rather than a blank cell", () => {
@@ -110,7 +127,7 @@ describe("LicenseTable — status", () => {
 describe("LicenseTable — dates", () => {
   /**
    * `RelativeTime` reads the clock itself, and the fixture's `createdAt` is a
-   * fixed instant — so "1 day ago" was only true for the 24 hours after `NOW`
+   * fixed instant — so "1d ago" was only true for the 24 hours after `NOW`
    * and this assertion started failing on its own once the calendar passed it.
    *
    * Only `Date` is faked. Stubbing timers wholesale would take `setTimeout`
@@ -128,7 +145,7 @@ describe("LicenseTable — dates", () => {
   it("renders a relative label with the exact UTC instant behind it", () => {
     render(<LicenseTable licenses={[license()]} applicationId="app_abc" />);
 
-    const created = screen.getByText("1 day ago");
+    const created = screen.getByText("1d ago");
     expect(created.tagName).toBe("TIME");
     expect(created.getAttribute("title")).toMatch(/UTC$/);
     expect(created.getAttribute("dateTime")).toMatch(/^\d{4}-\d{2}-\d{2}T/);

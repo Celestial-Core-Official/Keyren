@@ -5,7 +5,8 @@
  * same expression again in the applications table, and a third variant in the
  * activation column. They agreed by coincidence rather than by construction.
  *
- * Two forms are used throughout: a relative label for scanning ("3 days ago"),
+ * Two forms are used throughout: a compact relative label for scanning
+ * ("3d ago"),
  * and an exact UTC timestamp behind it for when the answer actually matters.
  * Everything is formatted in UTC, never the viewer's timezone — a license
  * expiring "Dec 31" must not read as Jan 1 to a developer in Sydney, because
@@ -18,25 +19,28 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 const WEEK = 7 * DAY;
-const MONTH = 30 * DAY;
-const YEAR = 365 * DAY;
 
-function plural(count: number, unit: string): string {
-  return `${count} ${unit}${count === 1 ? "" : "s"}`;
-}
-
+/**
+ * The compact unit, or null when the value is outside the relative window.
+ *
+ * Alpha_v3 shortened these from "3 days ago" to "3d ago". A licence table is a
+ * dense column of timestamps, and at that density the unit word is the part
+ * carrying the least information per pixel — every reference console writes
+ * `2m`, `5h`, `3d`.
+ */
 function magnitude(elapsed: number): string | null {
   if (elapsed < MINUTE) return null;
-  if (elapsed < HOUR) return plural(Math.floor(elapsed / MINUTE), "minute");
-  if (elapsed < DAY) return plural(Math.floor(elapsed / HOUR), "hour");
-  if (elapsed < WEEK) return plural(Math.floor(elapsed / DAY), "day");
-  if (elapsed < MONTH) return plural(Math.floor(elapsed / WEEK), "week");
-  if (elapsed < YEAR) return plural(Math.floor(elapsed / MONTH), "month");
-  return plural(Math.floor(elapsed / YEAR), "year");
+  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)}m`;
+  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)}h`;
+  if (elapsed < WEEK) return `${Math.floor(elapsed / DAY)}d`;
+  // Beyond a week a relative label stops being useful — "7 weeks ago" is
+  // arithmetic the reader has to undo. Past that boundary the caller falls
+  // back to the calendar date.
+  return null;
 }
 
 /**
- * "3 days ago" or "in 3 days".
+ * "3d ago" or "in 3d", falling back to a calendar date beyond a week.
  *
  * Future values read forwards rather than as a negative past, because expiry
  * dates are routinely ahead of now and "-3 days ago" is not English.
@@ -45,9 +49,15 @@ export function formatRelative(value: Date | null, now: Date = new Date()): stri
   if (!value) return ABSENT;
 
   const difference = now.getTime() - value.getTime();
-  const size = magnitude(Math.abs(difference));
+  const elapsed = Math.abs(difference);
 
-  if (size === null) return difference >= 0 ? "just now" : "in a moment";
+  if (elapsed < MINUTE) return difference >= 0 ? "just now" : "in a moment";
+
+  const size = magnitude(elapsed);
+  // Outside the week-long relative window, the calendar date is the more
+  // useful answer and does not go stale on the next render.
+  if (size === null) return formatDayUtc(value);
+
   return difference >= 0 ? `${size} ago` : `in ${size}`;
 }
 

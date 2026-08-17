@@ -8,7 +8,18 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      /*
+       * `overflow-x: auto` forces `overflow-y` to compute to `auto` as well,
+       * which makes this element a scrollport — and a `position: sticky`
+       * `<thead>` inside it then sticks to a container that never scrolls
+       * vertically, so it silently does nothing.
+       *
+       * `overflow-x: clip` does not force the other axis, so sticky survives.
+       * It is applied only from `xl`, where every table in this application
+       * fits its column widths: below that the columns genuinely can overflow,
+       * and reachable content beats a sticky header.
+       */
+      className="relative w-full overflow-x-auto xl:overflow-x-clip"
     >
       <table
         data-slot="table"

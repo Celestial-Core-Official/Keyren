@@ -16,34 +16,39 @@ describe("formatRelative — the past", () => {
     expect(formatRelative(ago(59 * SECOND), NOW)).toBe("just now");
   });
 
-  it("counts minutes, singular and plural", () => {
-    expect(formatRelative(ago(MINUTE), NOW)).toBe("1 minute ago");
-    expect(formatRelative(ago(42 * MINUTE), NOW)).toBe("42 minutes ago");
+  // Alpha_v3 shortened these from "3 days ago" to "3d ago". A licence table is
+  // a dense column of timestamps, and the unit word carries the least
+  // information per pixel of anything in it.
+  it("counts minutes compactly", () => {
+    expect(formatRelative(ago(MINUTE), NOW)).toBe("1m ago");
+    expect(formatRelative(ago(42 * MINUTE), NOW)).toBe("42m ago");
   });
 
-  it("counts hours", () => {
-    expect(formatRelative(ago(HOUR), NOW)).toBe("1 hour ago");
-    expect(formatRelative(ago(5 * HOUR), NOW)).toBe("5 hours ago");
+  it("counts hours compactly", () => {
+    expect(formatRelative(ago(HOUR), NOW)).toBe("1h ago");
+    expect(formatRelative(ago(5 * HOUR), NOW)).toBe("5h ago");
   });
 
-  it("counts days", () => {
-    expect(formatRelative(ago(DAY), NOW)).toBe("1 day ago");
-    expect(formatRelative(ago(6 * DAY), NOW)).toBe("6 days ago");
+  it("counts days compactly", () => {
+    expect(formatRelative(ago(DAY), NOW)).toBe("1d ago");
+    expect(formatRelative(ago(6 * DAY), NOW)).toBe("6d ago");
   });
 
-  it("counts weeks, then months, then years", () => {
-    expect(formatRelative(ago(8 * DAY), NOW)).toBe("1 week ago");
-    expect(formatRelative(ago(40 * DAY), NOW)).toBe("1 month ago");
-    expect(formatRelative(ago(400 * DAY), NOW)).toBe("1 year ago");
+  it("falls back to the calendar date beyond a week", () => {
+    // "7 weeks ago" is arithmetic the reader has to undo, and it goes stale on
+    // the next render. A date does neither.
+    expect(formatRelative(ago(8 * DAY), NOW)).toBe(formatDayUtc(ago(8 * DAY)));
+    expect(formatRelative(ago(40 * DAY), NOW)).toBe(formatDayUtc(ago(40 * DAY)));
+    expect(formatRelative(ago(400 * DAY), NOW)).toBe(formatDayUtc(ago(400 * DAY)));
   });
 });
 
 describe("formatRelative — the future", () => {
   it("reads forwards rather than as a negative past", () => {
-    // Expiry dates are routinely in the future; "in 3 days" is the only
-    // sensible reading of one.
-    expect(formatRelative(ahead(3 * DAY), NOW)).toBe("in 3 days");
-    expect(formatRelative(ahead(2 * HOUR), NOW)).toBe("in 2 hours");
+    // Expiry dates are routinely in the future; "in 3d" is the only sensible
+    // reading of one.
+    expect(formatRelative(ahead(3 * DAY), NOW)).toBe("in 3d");
+    expect(formatRelative(ahead(2 * HOUR), NOW)).toBe("in 2h");
   });
 
   it("treats the next minute as 'in a moment'", () => {
@@ -57,9 +62,11 @@ describe("formatRelative — edges", () => {
   });
 
   it("crosses each boundary exactly once", () => {
-    expect(formatRelative(ago(60 * SECOND), NOW)).toBe("1 minute ago");
-    expect(formatRelative(ago(60 * MINUTE), NOW)).toBe("1 hour ago");
-    expect(formatRelative(ago(24 * HOUR), NOW)).toBe("1 day ago");
+    expect(formatRelative(ago(60 * SECOND), NOW)).toBe("1m ago");
+    expect(formatRelative(ago(60 * MINUTE), NOW)).toBe("1h ago");
+    expect(formatRelative(ago(24 * HOUR), NOW)).toBe("1d ago");
+    // The week boundary is where relative stops and the calendar starts.
+    expect(formatRelative(ago(7 * DAY), NOW)).toBe(formatDayUtc(ago(7 * DAY)));
   });
 });
 
