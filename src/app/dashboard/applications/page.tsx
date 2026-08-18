@@ -1,9 +1,13 @@
-import Link from "next/link";
 import { Package, SearchX } from "lucide-react";
+import { cookies } from "next/headers";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
 import { listApplications } from "@/lib/applications/service";
 import { isApplicationFiltered } from "@/lib/applications/types";
+import {
+  CURRENT_APPLICATION_COOKIE,
+  resolveCurrentApplication,
+} from "@/lib/applications/current";
 import {
   parseApplicationQuery,
   wantsNewApplication,
@@ -18,6 +22,7 @@ import { RelativeTime } from "@/components/dashboard/relative-time";
 import { CreateApplicationDialog } from "@/components/applications/create-application-dialog";
 import { ApplicationActions } from "@/components/applications/application-actions";
 import { ApplicationFilters } from "@/components/applications/application-filters";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -36,6 +41,12 @@ import {
 const ID_WIDTH = 18;
 const ID_WIDTH_NARROW = 22;
 
+/**
+ * This page lists applications; it does not choose one. Rows are inert on
+ * purpose — the header chooser is the single control that changes the
+ * dashboard's subject, and two ways to do that is how the chooser ended up
+ * feeling like a shortcut nobody used.
+ */
 export default async function ApplicationsPage({
   searchParams,
 }: {
@@ -49,6 +60,15 @@ export default async function ApplicationsPage({
 
   const filtering = isApplicationFiltered(query);
   const empty = applications.length === 0;
+
+  // Resolved against every application the developer owns, not the filtered
+  // list: a search narrows what is on screen, and the header does not change
+  // its answer because of one. The second read is paid for only while
+  // filtering, which is the only time the two lists differ.
+  const cookieStore = await cookies();
+  const all = filtering ? await listApplications(db, ownerId) : applications;
+  const currentId =
+    resolveCurrentApplication(cookieStore.get(CURRENT_APPLICATION_COOKIE)?.value, all)?.id ?? null;
 
   // Where the switcher's and the command palette's "New application" entries
   // land. Only the header's dialog is told, so an empty list does not open two.
@@ -89,6 +109,7 @@ export default async function ApplicationsPage({
                   <TableHead className="w-14" />
                   <TableHead>Name</TableHead>
                   <TableHead>Application ID</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Licenses</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="w-12" />
@@ -96,10 +117,7 @@ export default async function ApplicationsPage({
               </TableHeader>
               <TableBody>
                 {applications.map((application) => (
-                  // `relative` so the stretched link below has something to
-                  // position against; the cells that hold real controls get
-                  // their own `relative` to sit above it.
-                  <TableRow key={application.id} className="relative">
+                  <TableRow key={application.id}>
                     <TableCell className="pr-0">
                       {/* Seeded from the public application ID — nothing
                           secret enters it, and the same application draws the
@@ -107,21 +125,21 @@ export default async function ApplicationsPage({
                       <KeyGlyph seed={application.id} size={28} />
                     </TableCell>
                     <TableCell className="max-w-64">
-                      {/* The link stretches across the row via a pseudo
-                          element, so the whole row is clickable without
-                          nesting the copy button or the menu inside an anchor
-                          — which would be invalid and would swallow their
-                          clicks. */}
-                      <Link
-                        href={`/dashboard/applications/${application.id}`}
-                        className="font-medium after:absolute after:inset-0 after:content-[''] hover:underline"
-                      >
-                        <span className="block truncate">{application.name}</span>
-                      </Link>
+                      {/* Not a link. This table is an inventory, not a way in
+                          — the header chooser is the only thing that changes
+                          which application the dashboard is looking at. */}
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate font-medium">{application.name}</span>
+                        {application.id === currentId ? (
+                          <Badge variant="outline" className="shrink-0">
+                            Current
+                          </Badge>
+                        ) : null}
+                      </div>
                       <p className="truncate text-[13px] text-fg-tertiary">{application.slug}</p>
                     </TableCell>
                     <TableCell>
-                      <div className="relative flex items-center gap-1">
+                      <div className="flex items-center gap-1">
                         <code
                           title={application.id}
                           className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[13px] text-fg-tertiary"
@@ -131,6 +149,16 @@ export default async function ApplicationsPage({
                         <CopyButton value={application.id} label="" />
                       </div>
                     </TableCell>
+                    <TableCell>
+                      {/* Only the off state gets a badge. A column of green
+                          pills saying Live teaches the eye to skip the column
+                          that exists to catch the one row that is not. */}
+                      {application.disabledAt ? (
+                        <Badge variant="destructive">Disabled</Badge>
+                      ) : (
+                        <span className="text-[13px] text-fg-tertiary">Live</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {application.licenseCount}
                     </TableCell>
@@ -138,13 +166,11 @@ export default async function ApplicationsPage({
                       <RelativeTime value={application.createdAt} />
                     </TableCell>
                     <TableCell>
-                      <div className="relative">
-                        <ApplicationActions
-                          applicationId={application.id}
-                          name={application.name}
-                          disabled={application.disabledAt !== null}
-                        />
-                      </div>
+                      <ApplicationActions
+                        applicationId={application.id}
+                        name={application.name}
+                        disabled={application.disabledAt !== null}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -156,22 +182,26 @@ export default async function ApplicationsPage({
               line and the menu stays reachable without horizontal scrolling. */}
           <ul className="space-y-3 md:hidden">
             {applications.map((application) => (
-              <li
-                key={application.id}
-                className="relative rounded-lg border border-border p-4"
-              >
+              <li key={application.id} className="rounded-lg border border-border p-4">
                 <div className="flex items-start gap-3">
                   <KeyGlyph seed={application.id} size={28} className="mt-1 shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <Link
-                      href={`/dashboard/applications/${application.id}`}
-                      className="font-medium after:absolute after:inset-0 after:content-['']"
-                    >
-                      <span className="block truncate">{application.name}</span>
-                    </Link>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-medium">{application.name}</span>
+                      {application.id === currentId ? (
+                        <Badge variant="outline" className="shrink-0">
+                          Current
+                        </Badge>
+                      ) : null}
+                      {application.disabledAt ? (
+                        <Badge variant="destructive" className="shrink-0">
+                          Disabled
+                        </Badge>
+                      ) : null}
+                    </div>
                     <p className="truncate text-[13px] text-fg-tertiary">{application.slug}</p>
                   </div>
-                  <div className="relative shrink-0">
+                  <div className="shrink-0">
                     <ApplicationActions
                       applicationId={application.id}
                       name={application.name}
@@ -180,7 +210,7 @@ export default async function ApplicationsPage({
                   </div>
                 </div>
 
-                <div className="relative mt-3 flex flex-wrap items-center gap-2">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <code
                     title={application.id}
                     className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[13px] text-fg-tertiary"

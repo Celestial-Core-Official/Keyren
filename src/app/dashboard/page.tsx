@@ -141,31 +141,22 @@ export default async function OverviewPage() {
 
       <section className="space-y-3">
         <h2 className="text-[13px] font-semibold">Applications</h2>
+        {/* A census, not a menu. Picking an application happens in the header
+            chooser and nowhere else; these rows report. */}
         <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
           {breakdown.map((application) => (
-            <li key={application.id}>
-              <Link
-                href={`/dashboard/applications/${application.id}`}
-                className="group flex h-14 items-center gap-3 px-4 transition-colors duration-[var(--speed-quick)] hover:bg-accent/60"
-              >
-                {/* The same mark this application wears everywhere else, drawn
-                    from its public ID. Two applications are told apart at a
-                    glance by it before either name has been read. */}
-                <KeyGlyph seed={application.id} size={28} className="shrink-0" />
-                <span className="flex min-w-0 flex-1 items-center gap-2">
-                  <span className="truncate text-sm">{application.name}</span>
-                  {application.disabled ? (
-                    <Badge variant="destructive">Disabled</Badge>
-                  ) : null}
-                </span>
-                <span className="shrink-0 text-[13px] tabular-nums text-fg-tertiary">
-                  {application.active} active / {application.total}
-                </span>
-                <ChevronRight
-                  aria-hidden="true"
-                  className="size-4 shrink-0 text-fg-quaternary opacity-0 transition-opacity duration-[var(--speed-quick)] group-hover:opacity-100 group-focus-visible:opacity-100"
-                />
-              </Link>
+            <li key={application.id} className="flex h-14 items-center gap-3 px-4">
+              {/* The same mark this application wears everywhere else, drawn
+                  from its public ID. Two applications are told apart at a
+                  glance by it before either name has been read. */}
+              <KeyGlyph seed={application.id} size={28} className="shrink-0" />
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                <span className="truncate text-sm">{application.name}</span>
+                {application.disabled ? <Badge variant="destructive">Disabled</Badge> : null}
+              </span>
+              <span className="shrink-0 text-[13px] tabular-nums text-fg-tertiary">
+                {application.active} active / {application.total}
+              </span>
             </li>
           ))}
         </ul>
