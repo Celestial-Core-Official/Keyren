@@ -160,6 +160,14 @@ Do not remove `!.env.example` and do not rename the file, or it silently stops b
 - Vitest prints an *"ESM syntax in a file loaded as CommonJS"* warning on every run. Cosmetic — `package.json` has no `"type": "module"`. Not worth fixing mid-build; it could ripple into the `.mjs` configs.
 - `npm audit` reports **4 moderate** esbuild advisories, transitive via `drizzle-kit@0.31.10`'s bundled dev-server tooling. **Dev-only, not exploitable in production.** `npm audit fix --force` downgrades drizzle-kit to 0.18.1, which would break the schema/migration tasks. Left as-is deliberately.
 
+### Radix primitives that render a `<button>` may not be nested
+
+`Switch`, `AlertDialogAction`, `AlertDialogCancel`, `DropdownMenuTrigger` and `Button` each render a `<button>`. Nesting any of them inside another produces invalid HTML, and the browser's parser resolves it by closing the outer element and re-parenting the inner one as a sibling — so the server-rendered DOM does not match what React sent, and hydration recovers a tree the markup never had.
+
+Only server-rendered markup shows the damage. A component test renders through `appendChild`, which has no such rule and nests the two happily, so this class of defect passes every test that renders and clicks. Assert on `renderToStaticMarkup` output when a control could plausibly be nesting one.
+
+To attach a form submission to a Radix control, give the form a ref and call `requestSubmit()` from the control's own handler. The form then lives outside any menu or dialog that closes on select, so closing cannot take the submission with it.
+
 ### Not available on this machine
 
 `psql` and `docker` are **not installed**. This is why the entire test suite runs on **PGlite** (real Postgres compiled to WASM, in-memory) — no Docker, no local Postgres, no network required. Tasks 1–23 need nothing external.

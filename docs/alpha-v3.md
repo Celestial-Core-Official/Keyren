@@ -132,3 +132,53 @@ Grep gates: no Tailwind palette literal, no `rounded-2xl`/`3xl`, no default shad
 the build, so every dashboard surface is verified by typecheck, lint and the test suite rather than
 by eye. A pass through all of them in both themes at 375 / 768 / 1440 is the remaining acceptance
 step.
+
+---
+
+## Application scope
+
+The dashboard now has exactly one application in scope at all times, and the header
+chooser is the only control that changes it. "All applications" is gone — it was the one
+entry meaning "no application in scope", and there is no such state left. Overview and
+Applications keep existing and stop being ways in: their rows report, and nothing in them
+navigates into an application.
+
+Which application is current resolves in three steps — the URL when it names one, then the
+`keyren_app` cookie, then the newest application — and the split is deliberate. The URL
+half is applied in the client components, because `usePathname()` is theirs and a server
+layout has no pathname. The rest is resolved server-side and handed down. Middleware
+writes the cookie whenever a URL names an application, which is the one place that sees
+every route in: chooser, command palette, bookmark, and the redirect after creating one.
+
+A `<Link>` prefetches once it is merely in the viewport, and that request reaches
+middleware like any other — so the write is skipped on both of Next's prefetch headers.
+Without that, looking at a page which links into applications was enough to rewrite the
+remembered one, to whichever prefetch landed last, with nobody having clicked anything.
+
+The cookie is a hint about the interface and never an authorization input. It is resolved
+against the developer's own applications — already scoped by `owner_id` in SQL — before it
+is used, so a stale, hand-edited, or someone-else's value matches nothing and falls
+through to the default.
+
+The applications table also gained a Status column. A disabled application was badged in
+the application header and on the overview, and badged nowhere in the one table that lists
+every application at once.
+
+## The kill switch was built on invalid HTML
+
+`ApplicationStatusSetting` rendered a submit `Button` wrapping a `Switch`. Radix's `Switch`
+root is itself a `<button>`, so the markup nested one button inside another, and the HTML
+parser resolves that by closing the outer one: server-rendered, the row arrived as an empty
+zero-sized submit button beside a switch that had been ejected to be its sibling and
+carried `pointer-events-none`. React then hydrated a tree that did not match the one it had
+sent.
+
+A component test could not see this, which is why it survived a release. The client-rendered
+tree was never the broken one — `appendChild` has no such parser rule and nests the two
+happily. Verified by handing the exact markup to a real browser's parser and reading back
+the result. The regression guard therefore asserts on `renderToStaticMarkup` output rather
+than on a rendered DOM, and fails on the old markup with "expected 2 to be less than or
+equal to 1".
+
+Disabling now asks first, from both the settings row and the row menu. One click took
+licensing offline for every customer of that application at once.

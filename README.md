@@ -54,6 +54,20 @@ Keyren has two authentication paths that are never conflated:
 
 ---
 
+## Choosing an application
+
+The dashboard always has exactly one application in scope, and the chooser in the header
+is the only control that changes it. Overview and Applications report on every application
+you own; neither is a way into one.
+
+Which application is current resolves in three steps: the URL when it names one, then the
+`keyren_app` cookie, then your newest application. The cookie is written by middleware
+whenever a URL names an application, and is a hint about the interface only — it is
+resolved against your own applications before it is used, so a stale or hand-edited value
+selects nothing.
+
+---
+
 ## Architecture
 
 **Tech stack:** Next.js 16 (App Router), React 19, TypeScript (strict), Tailwind CSS 4, shadcn/ui, Clerk 7, PostgreSQL, Drizzle ORM, Zod 4, Vitest 4 with PGlite for tests.
