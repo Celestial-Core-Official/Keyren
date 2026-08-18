@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { MoreHorizontal, Pencil, Power, PowerOff, Trash2 } from "lucide-react";
 import {
   deleteApplicationAction,
@@ -9,6 +9,16 @@ import {
   type ApplicationActionState,
 } from "@/app/dashboard/applications/actions";
 import { FieldError, SubmitButton, useActionFeedback } from "@/components/dashboard/feedback";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,15 +52,20 @@ export function ApplicationActions({
 }) {
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [disabling, setDisabling] = useState(false);
   const [confirmation, setConfirmation] = useState("");
+  const statusForm = useRef<HTMLFormElement>(null);
 
   const [renameState, renameAction] = useActionState(renameApplicationAction, INITIAL);
   const [deleteState, deleteAction] = useActionState(deleteApplicationAction, INITIAL);
-  const [statusState, statusAction] = useActionState(setApplicationDisabledAction, INITIAL);
+  const [statusState, statusAction, statusPending] = useActionState(
+    setApplicationDisabledAction,
+    INITIAL,
+  );
 
   useActionFeedback(renameState, { onSuccess: () => setRenaming(false) });
   useActionFeedback(deleteState);
-  useActionFeedback(statusState);
+  useActionFeedback(statusState, { onSuccess: () => setDisabling(false) });
 
   // Every dialog opens clean. Carrying a typed confirmation across a close is
   // how a developer ends up one keystroke from deleting something they only
@@ -86,19 +101,19 @@ export function ApplicationActions({
             Rename
           </DropdownMenuItem>
 
-          {/* A form rather than an onSelect handler: the menu item posts the
-              intended end state, so two tabs open on the same application
-              cannot race to opposite answers. */}
-          <form action={statusAction}>
-            <input type="hidden" name="applicationId" value={applicationId} />
-            <input type="hidden" name="disabled" value={disabled ? "false" : "true"} />
-            <DropdownMenuItem asChild>
-              <button type="submit" className="w-full">
-                {disabled ? <Power className="size-4" /> : <PowerOff className="size-4" />}
-                {disabled ? "Enable" : "Disable"}
-              </button>
-            </DropdownMenuItem>
-          </form>
+          <DropdownMenuItem
+            disabled={statusPending}
+            onSelect={() => {
+              // Off asks first; on restores service and does not. Submitting a
+              // form that lives outside this menu, so the menu closing on
+              // select cannot take the submission down with it.
+              if (disabled) statusForm.current?.requestSubmit();
+              else setDisabling(true);
+            }}
+          >
+            {disabled ? <Power className="size-4" /> : <PowerOff className="size-4" />}
+            {disabled ? "Enable" : "Disable"}
+          </DropdownMenuItem>
 
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}>
@@ -107,6 +122,36 @@ export function ApplicationActions({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* The end state is posted rather than a toggle instruction, so two tabs
+          open on the same application cannot race to opposite answers. */}
+      <form ref={statusForm} action={statusAction} className="hidden">
+        <input type="hidden" name="applicationId" value={applicationId} />
+        <input type="hidden" name="disabled" value={disabled ? "false" : "true"} />
+      </form>
+
+      <AlertDialog open={disabling} onOpenChange={setDisabling}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable {name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Every license check for this application will be rejected with
+              APPLICATION_DISABLED until you turn it back on. Nothing is destroyed: no
+              license is revoked, no activation is released, and enabling it restores
+              exactly the state that is there now.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => statusForm.current?.requestSubmit()}
+            >
+              Disable application
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={renaming} onOpenChange={setRenaming}>
         <DialogContent>
