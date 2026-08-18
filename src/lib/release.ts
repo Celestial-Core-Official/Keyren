@@ -8,13 +8,13 @@
  *
  * `name` is the marketing release. `apiVersion` is the URL segment of the
  * public verification endpoint, and the two are deliberately independent:
- * the application can advance to Alpha_v3 or Beta_v1 without breaking a single
+ * the application can advance to Beta_v1 without breaking a single
  * deployed client, because `/api/v1/...` is versioned on ordinary semantic
  * grounds and only moves when the response contract actually breaks.
  */
 export const RELEASE = {
-  name: "Alpha_v2",
-  version: "0.1.2",
+  name: "Alpha_v3",
+  version: "0.1.3",
   apiVersion: "v1",
 } as const;
 

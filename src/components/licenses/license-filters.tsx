@@ -6,6 +6,13 @@ import { useQueryParams } from "@/components/dashboard/use-query-params";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   ACTIVATION_FILTERS,
   ACTIVATION_FILTER_LABELS,
   LICENSE_SORTS,
@@ -21,6 +28,17 @@ import {
 
 const SEARCH_DEBOUNCE_MS = 300;
 
+/**
+ * A filter control, on the application's own focus ring rather than the
+ * operating system's.
+ *
+ * Through Alpha_v2 these were native `<select>` elements. A native control
+ * cannot be given the `ring-3 ring-ring/50` every other control in the app
+ * uses, so tabbing across the filter row moved between two different
+ * applications' worth of focus styling — which is the whole reason this is a
+ * Radix `Select` now. The behaviour is unchanged: it still reports a value and
+ * the caller still writes it to the URL.
+ */
 function FilterSelect<T extends string>({
   label,
   value,
@@ -35,18 +53,31 @@ function FilterSelect<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <select
+    <Select
       value={value}
-      aria-label={label}
-      onChange={(event) => onChange(event.target.value as T)}
-      className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+      onValueChange={(next) => {
+        // Narrowed by lookup rather than asserted: `onValueChange` hands back a
+        // bare string, and the only strings this control can produce are the
+        // ones it rendered.
+        const match = options.find((option) => option === next);
+        if (match !== undefined) onChange(match);
+      }}
     >
-      {options.map((option) => (
-        <option key={option} value={option}>
-          {labels[option]}
-        </option>
-      ))}
-    </select>
+      {/* No height or radius override: the trigger's own defaults are the 32px
+          and 8px the search Input beside it already uses, and a filter row
+          where one control is a different size than its neighbour is the sort
+          of thing nobody can name but everybody sees. */}
+      <SelectTrigger aria-label={label}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option} value={option}>
+            {labels[option]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -96,7 +127,7 @@ export function LicenseFilters({
         <div className="relative min-w-0 flex-1 sm:max-w-xs">
           <Search
             aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-fg-tertiary"
           />
           <Input
             id={searchId}
@@ -154,7 +185,7 @@ export function LicenseFilters({
           aria-label="Active filters"
           className="flex flex-wrap items-center gap-2 text-sm"
         >
-          <span className="text-muted-foreground" aria-live="polite">
+          <span className="text-fg-tertiary tabular-nums" aria-live="polite">
             {total === 1 ? "1 license matches" : `${total} licenses match`}
           </span>
 
@@ -189,7 +220,7 @@ export function LicenseFilters({
 
 function Chip({ label }: { label: string }) {
   return (
-    <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground">
+    <span className="rounded-4xl border border-border bg-muted/40 px-2 py-0.5 text-xs text-fg-tertiary">
       {label}
     </span>
   );

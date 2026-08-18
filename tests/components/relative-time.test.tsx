@@ -27,7 +27,7 @@ describe("RelativeTime", () => {
   it("shows the exact UTC instant behind the relative label", () => {
     render(<RelativeTime value={new Date(NOW.getTime() - 3 * 86_400_000)} />);
 
-    const label = screen.getByText("3 days ago");
+    const label = screen.getByText("3d ago");
     expect(label.getAttribute("title")).toBe("Aug 13, 2026 at 12:00 UTC");
   });
 
@@ -36,7 +36,7 @@ describe("RelativeTime", () => {
 
     render(<RelativeTime value={new Date(NOW.getTime() - 3 * 86_400_000)} />);
 
-    const title = screen.getByText("3 days ago").getAttribute("title") ?? "";
+    const title = screen.getByText("3d ago").getAttribute("title") ?? "";
     const [utc, local] = title.split("\n");
 
     // UTC stays the primary reading; local is strictly the second line.
@@ -49,7 +49,7 @@ describe("RelativeTime", () => {
 
     render(<RelativeTime value={new Date(NOW.getTime() - 3 * 86_400_000)} />);
 
-    expect(screen.getByText("3 days ago")).toBeTruthy();
+    expect(screen.getByText("3d ago")).toBeTruthy();
   });
 });
 

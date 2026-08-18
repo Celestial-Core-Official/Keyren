@@ -66,9 +66,19 @@ export function canResetActivation(
 export function LicenseRowActions({
   license,
   applicationId,
+  compact = false,
 }: {
   license: LicenseListItem;
   applicationId: string;
+  /**
+   * Drops the contextual button and leaves the `⋯` trigger alone.
+   *
+   * The table's action column is 48px wide and its trigger only appears on
+   * hover or focus, so there is no room for a second control — and no loss,
+   * because the menu already holds every verb the button could have offered.
+   * The card list, which has a full row of its own to spend, keeps both.
+   */
+  compact?: boolean;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -111,26 +121,28 @@ export function LicenseRowActions({
   return (
     <div className="flex items-center justify-end gap-1">
       {/* The contextual action, one click away rather than behind a menu. */}
-      <form action={primary === "reset" ? reset : primary === "revoke" ? revoke : restore}>
-        {identity()}
-        <SubmitButton
-          variant="outline"
-          size="sm"
-          className="h-8"
-          pendingLabel="Working…"
-          icon={
-            primary === "reset" ? (
-              <RotateCcw className="size-3.5" />
-            ) : primary === "revoke" ? (
-              <ShieldOff className="size-3.5" />
-            ) : (
-              <ShieldCheck className="size-3.5" />
-            )
-          }
-        >
-          {primary === "reset" ? "Reset" : primary === "revoke" ? "Revoke" : "Restore"}
-        </SubmitButton>
-      </form>
+      {compact ? null : (
+        <form action={primary === "reset" ? reset : primary === "revoke" ? revoke : restore}>
+          {identity()}
+          <SubmitButton
+            variant="outline"
+            size="sm"
+            className="h-8"
+            pendingLabel="Working…"
+            icon={
+              primary === "reset" ? (
+                <RotateCcw className="size-3.5" />
+              ) : primary === "revoke" ? (
+                <ShieldOff className="size-3.5" />
+              ) : (
+                <ShieldCheck className="size-3.5" />
+              )
+            }
+          >
+            {primary === "reset" ? "Reset" : primary === "revoke" ? "Revoke" : "Restore"}
+          </SubmitButton>
+        </form>
+      )}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

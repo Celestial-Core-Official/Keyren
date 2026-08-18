@@ -10,12 +10,12 @@ import { RELEASE, VERIFY_PATH, verifyUrl } from "@/lib/release";
  * agreeing with each other.
  */
 describe("RELEASE", () => {
-  it("names the current release Alpha_v2", () => {
-    expect(RELEASE.name).toBe("Alpha_v2");
+  it("names the current release Alpha_v3", () => {
+    expect(RELEASE.name).toBe("Alpha_v3");
   });
 
-  it("pins the package version to 0.1.2", () => {
-    expect(RELEASE.version).toBe("0.1.2");
+  it("pins the package version to 0.1.3", () => {
+    expect(RELEASE.version).toBe("0.1.3");
   });
 
   it("matches the version in package.json", () => {
@@ -27,8 +27,8 @@ describe("RELEASE", () => {
   });
 
   it("keeps the public API path independent of the release name", () => {
-    // /api/v1 is semver on the URL, not the marketing release. Alpha_v2 must
-    // not have dragged the API to v2.
+    // /api/v1 is semver on the URL, not the marketing release. Alpha_v3 must
+    // not have dragged the API to v3.
     expect(RELEASE.apiVersion).toBe("v1");
     expect(VERIFY_PATH).toBe("/api/v1/licenses/verify");
   });

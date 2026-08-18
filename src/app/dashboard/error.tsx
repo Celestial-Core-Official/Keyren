@@ -16,7 +16,7 @@ export default function DashboardError({
   return (
     <Card>
       <CardContent className="flex flex-col items-center gap-4 px-6 py-12 text-center">
-        <div className="flex size-11 items-center justify-center rounded-full border border-border bg-muted/40 text-amber-500">
+        <div className="flex size-11 items-center justify-center rounded-full border border-border bg-muted/40 text-warning">
           <AlertTriangle className="size-5" />
         </div>
 

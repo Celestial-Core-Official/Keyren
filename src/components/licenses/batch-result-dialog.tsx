@@ -84,7 +84,7 @@ export function BatchResultDialog({
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="size-4 shrink-0 text-amber-500" />
+            <AlertTriangle className="size-4 shrink-0 text-warning" />
             {single ? "Save this key now" : `Save these ${licenses.length} keys now`}
           </DialogTitle>
           <DialogDescription>

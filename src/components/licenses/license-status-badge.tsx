@@ -24,19 +24,21 @@ export function LicenseStatusBadge({
     effectiveStatus ??
     (status === "revoked" ? "revoked" : isExpired(expiresAt) ? "expired" : "active");
 
+  // A filled badge is reserved for the one state that has to interrupt the
+  // reader. Everything else is a dot plus a label, which takes a page from
+  // roughly twenty-five coloured rectangles down to twenty-five two-pixel
+  // dots — the difference between a list that scans and a list that shouts.
+  //
+  // Colour is never the only signal: every state ships its own word.
   if (resolved === "revoked") return <Badge variant="destructive">Revoked</Badge>;
 
-  if (resolved === "expired") {
-    return (
-      <Badge className="border-amber-500/25 bg-amber-500/15 text-amber-400" variant="outline">
-        Expired
-      </Badge>
-    );
-  }
+  const tone = resolved === "expired" ? "bg-warning" : "bg-success";
+  const label = resolved === "expired" ? "Expired" : "Active";
 
   return (
-    <Badge className="border-emerald-500/25 bg-emerald-500/15 text-emerald-400" variant="outline">
-      Active
-    </Badge>
+    <span className="inline-flex items-center gap-1.5 text-[13px] whitespace-nowrap">
+      <span className={`size-1.5 shrink-0 rounded-full ${tone}`} aria-hidden="true" />
+      {label}
+    </span>
   );
 }

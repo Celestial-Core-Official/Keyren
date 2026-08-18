@@ -16,9 +16,13 @@ const APPLICATIONS = [
   { id: "app_beta", name: "Beta Suite", disabled: true },
 ] as const;
 
-function renderSwitcher(at: string) {
+function renderSwitcher(
+  at: string,
+  fallbackId: string | null = "app_alpha",
+  applications: readonly { id: string; name: string; disabled: boolean }[] = APPLICATIONS,
+) {
   pathname = at;
-  render(<ApplicationSwitcher applications={APPLICATIONS} />);
+  render(<ApplicationSwitcher applications={applications} fallbackId={fallbackId} />);
   return userEvent.setup();
 }
 
@@ -32,9 +36,22 @@ describe("ApplicationSwitcher — which application is current", () => {
     expect(screen.getByRole("button", { name: /Beta Suite/ })).toBeTruthy();
   });
 
-  it("reads as All applications outside any one of them", () => {
-    renderSwitcher("/dashboard");
-    expect(screen.getByRole("button", { name: /Choose an application/ })).toBeTruthy();
+  it("names the resolved application on a page with none in the path", () => {
+    // The whole point of this release: there is no "All applications" state to
+    // fall into on the workspace pages.
+    renderSwitcher("/dashboard", "app_beta");
+    expect(screen.getByRole("button", { name: /Beta Suite/ })).toBeTruthy();
+  });
+
+  it("lets the URL outrank the remembered application", () => {
+    renderSwitcher("/dashboard/applications/app_alpha", "app_beta");
+    expect(screen.getByRole("button", { name: /Alpha Tool/ })).toBeTruthy();
+  });
+
+  it("never offers an All applications entry", async () => {
+    const user = renderSwitcher("/dashboard");
+    await user.click(screen.getByRole("button", { name: /Alpha Tool/ }));
+    expect(screen.queryByText("All applications")).toBeNull();
   });
 
   it("marks a disabled application in the list", async () => {
@@ -46,17 +63,26 @@ describe("ApplicationSwitcher — which application is current", () => {
     expect(beta.querySelector('[aria-label="Disabled"]')).toBeTruthy();
   });
 
-  it("does not claim an application the developer does not own", () => {
-    // A hand-typed or stale id resolves to no application rather than being
-    // echoed back as though it were real.
-    renderSwitcher("/dashboard/applications/app_someone_else");
-    expect(screen.getByRole("button", { name: /Choose an application/ })).toBeTruthy();
+  it("falls back to the resolved application for an id the developer does not own", () => {
+    // A hand-typed or stale id resolves to nothing rather than being echoed
+    // back as though it were real — and there is still an application in scope.
+    renderSwitcher("/dashboard/applications/app_someone_else", "app_alpha");
+    expect(screen.getByRole("button", { name: /Alpha Tool/ })).toBeTruthy();
+  });
+
+  it("says so plainly when the developer owns nothing", async () => {
+    const user = renderSwitcher("/dashboard", null, []);
+    const trigger = screen.getByRole("button", { name: /No applications yet/ });
+    await user.click(trigger);
+
+    expect(screen.getByText("New application")).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /Alpha Tool/ })).toBeNull();
   });
 });
 
 describe("ApplicationSwitcher — switching keeps the section", () => {
   it("stays on licenses when switching application", async () => {
-    // The whole point of the switcher: changing the subject, not the place.
+    // Changing the subject, not the place.
     const user = renderSwitcher("/dashboard/applications/app_alpha/licenses");
 
     await user.click(screen.getByRole("button", { name: /Alpha Tool/ }));
@@ -83,12 +109,23 @@ describe("ApplicationSwitcher — switching keeps the section", () => {
     expect(push).toHaveBeenCalledWith("/dashboard/applications/app_beta/licenses/extra");
   });
 
-  it("sends you to an application overview when switching from outside one", async () => {
-    const user = renderSwitcher("/dashboard/settings");
+  it("opens the application overview when picking from a workspace page", async () => {
+    // There is no section to carry across from /dashboard, and a pick that
+    // changed a label without going anywhere would read as a broken control.
+    const user = renderSwitcher("/dashboard", "app_alpha");
 
-    await user.click(screen.getByRole("button", { name: /Choose an application/ }));
-    await user.click(screen.getByRole("menuitem", { name: /Alpha Tool/ }));
+    await user.click(screen.getByRole("button", { name: /Alpha Tool/ }));
+    await user.click(screen.getByRole("menuitem", { name: /Beta Suite/ }));
 
-    expect(push).toHaveBeenCalledWith("/dashboard/applications/app_alpha");
+    expect(push).toHaveBeenCalledWith("/dashboard/applications/app_beta");
+  });
+
+  it("opens the application overview when picking from the applications list", async () => {
+    const user = renderSwitcher("/dashboard/applications", "app_alpha");
+
+    await user.click(screen.getByRole("button", { name: /Alpha Tool/ }));
+    await user.click(screen.getByRole("menuitem", { name: /Beta Suite/ }));
+
+    expect(push).toHaveBeenCalledWith("/dashboard/applications/app_beta");
   });
 });

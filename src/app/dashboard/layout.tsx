@@ -1,10 +1,16 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { UserButton } from "@clerk/nextjs";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
 import { listApplications } from "@/lib/applications/service";
+import {
+  CURRENT_APPLICATION_COOKIE,
+  resolveCurrentApplication,
+} from "@/lib/applications/current";
 import { ApplicationSwitcher } from "@/components/dashboard/application-switcher";
 import { CommandPalette } from "@/components/dashboard/command-palette";
+import { HeaderSearch } from "@/components/dashboard/header-search";
 import { KeyboardShortcuts } from "@/components/dashboard/keyboard-shortcuts";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
@@ -14,10 +20,22 @@ import { RELEASE } from "@/lib/release";
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const ownerId = await requireDeveloperId();
 
-  // Owner-scoped, and only the fields the switcher renders. The list is
-  // small by nature — one developer's own applications — so this costs a
-  // single indexed query on a layout that was already hitting auth.
-  const applications = (await listApplications(db, ownerId)).map((application) => ({
+  // Owner-scoped, and the only query the shell makes. The list is small by
+  // nature — one developer's own applications — so this costs a single indexed
+  // query on a layout that was already hitting auth.
+  //
+  // The full rows are kept for resolution, which needs `createdAt`, and
+  // trimmed to the three fields the client renders only afterwards.
+  const owned = await listApplications(db, ownerId);
+
+  const cookieStore = await cookies();
+  const current = resolveCurrentApplication(
+    cookieStore.get(CURRENT_APPLICATION_COOKIE)?.value,
+    owned,
+  );
+  const fallbackId = current?.id ?? null;
+
+  const applications = owned.map((application) => ({
     id: application.id,
     name: application.name,
     disabled: application.disabledAt !== null,
@@ -36,29 +54,37 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border bg-background/95 px-2 backdrop-blur sm:px-4">
         <div className="flex min-w-0 items-center gap-1">
-          <MobileNav />
+          <MobileNav applications={applications} fallbackId={fallbackId} />
           <Link href="/dashboard" className="flex items-center gap-2 px-2">
             <span className="font-semibold tracking-tight">Keyren</span>
             <span className="hidden rounded border border-border px-1.5 py-0.5 text-[10px] font-medium tracking-wider text-muted-foreground sm:inline">
               {RELEASE.name}
             </span>
           </Link>
-          <span className="text-muted-foreground/40" aria-hidden="true">
+          <span className="text-border" aria-hidden="true">
             /
           </span>
-          <ApplicationSwitcher applications={applications} />
+          <ApplicationSwitcher applications={applications} fallbackId={fallbackId} />
         </div>
-        <UserButton />
+        <div className="flex items-center gap-3">
+          <HeaderSearch />
+          <UserButton />
+        </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl">
-        <aside className="hidden w-56 shrink-0 border-r border-border md:block">
+      {/* No container around this row.
+          Through Alpha_v2 the shell sat inside `mx-auto max-w-7xl`, which put
+          the sidebar's right border in the middle of the canvas on any display
+          wider than 1280px, with dead space on both sides. A shell bleeds to
+          the viewport; only the content column is measured. */}
+      <div className="flex">
+        <aside className="hidden w-64 shrink-0 border-r border-border md:block xl:w-[272px]">
           <div className="sticky top-14">
-            <DashboardSidebar />
+            <DashboardSidebar fallbackId={fallbackId} />
           </div>
         </aside>
         <main id="dashboard-content" className="min-w-0 flex-1 px-4 py-8 sm:px-6">
-          {children}
+          <div className="mx-auto max-w-[1160px]">{children}</div>
         </main>
       </div>
 

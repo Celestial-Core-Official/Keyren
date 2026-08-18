@@ -95,6 +95,21 @@ function headerCheckbox() {
   return screen.getByRole("checkbox", { name: /select all licenses on this page/i });
 }
 
+/**
+ * Selection is a Radix `Checkbox` rather than a native input as of Alpha_v3,
+ * so tri-state lives in `aria-checked` and `data-state` instead of on a DOM
+ * property. A native checkbox cannot be given the application's focus ring,
+ * which is why it went.
+ */
+function checkedState(element: Element): string | null {
+  return element.getAttribute("data-state");
+}
+
+/** Opens the selection pill's overflow menu. */
+async function openOverflow(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: /more bulk actions/i }));
+}
+
 describe("selection", () => {
   it("shows no toolbar until something is selected", () => {
     renderList();
@@ -120,24 +135,24 @@ describe("selection", () => {
     const { user } = renderList();
     await user.click(rowCheckbox("License lic_aaa1"));
 
-    const header = headerCheckbox() as HTMLInputElement;
-    expect(header.indeterminate).toBe(true);
-    expect(header.checked).toBe(false);
+    const header = headerCheckbox();
+    expect(checkedState(header)).toBe("indeterminate");
+    expect(header.getAttribute("aria-checked")).toBe("mixed");
   });
 
   it("becomes fully checked once every row is selected by hand", async () => {
     const { user } = renderList();
     for (const row of ROWS) await user.click(rowCheckbox(`License ${row.id}`));
 
-    const header = headerCheckbox() as HTMLInputElement;
-    expect(header.checked).toBe(true);
-    expect(header.indeterminate).toBe(false);
+    const header = headerCheckbox();
+    expect(checkedState(header)).toBe("checked");
+    expect(header.getAttribute("aria-checked")).toBe("true");
   });
 
   it("clears the selection from the toolbar", async () => {
     const { user } = renderList();
     await user.click(headerCheckbox());
-    await user.click(screen.getByRole("button", { name: /^clear$/i }));
+    await user.click(screen.getByRole("button", { name: /clear selection/i }));
 
     expect(screen.queryByRole("region", { name: /selected licenses/i })).toBeNull();
   });
@@ -227,22 +242,83 @@ describe("bulk confirmation", () => {
     await openConfirm(user, /^Revoke$/);
     await user.click(screen.getByRole("button", { name: "Revoke" }));
 
-    await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith(
-        "Revoked 1 license — 2 already in that state.",
-      ),
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(toast.success.mock.calls.at(-1)![0]).toBe(
+      "Revoked 1 license — 2 already in that state.",
     );
   });
 });
 
-describe("bulk deletion", () => {
-  async function clickDelete(user: ReturnType<typeof userEvent.setup>) {
+describe("undoing a revoke", () => {
+  async function revokeAll(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(headerCheckbox());
     const toolbar = screen.getByRole("region", { name: /selected licenses/i });
     await user.click(
       [...toolbar.querySelectorAll("button")].find(
-        (button) => button.textContent?.trim() === "Delete",
+        (button) => button.textContent?.trim() === "Revoke",
       )!,
     );
+    await user.click(screen.getByRole("button", { name: "Revoke" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+  }
+
+  /** The options object sonner was handed for the most recent success. */
+  function lastToastOptions(): { action?: { label: string; onClick: () => void } } {
+    return (toast.success.mock.calls.at(-1)![1] ?? {}) as {
+      action?: { label: string; onClick: () => void };
+    };
+  }
+
+  it("offers Undo on the same toast rather than a second one", async () => {
+    // Revoking is reversible through the restore path the toolbar already
+    // has, so withholding the undo would be withholding something free.
+    const { user } = renderList();
+    await revokeAll(user);
+
+    expect(toast.success).toHaveBeenCalledTimes(1);
+    expect(lastToastOptions().action?.label).toBe("Undo");
+  });
+
+  it("restores only the licenses the revoke actually changed", async () => {
+    // A selection can hold rows that were already revoked and were skipped.
+    // Restoring those as well would un-revoke something nobody touched.
+    const rows = [
+      license("lic_aaa1"),
+      license("lic_bbb2", { status: "revoked", effectiveStatus: "revoked" }),
+      license("lic_ccc3"),
+    ];
+    const { user } = renderList(rows);
+    await revokeAll(user);
+
+    bulk.bulkLicenseAction.mockClear();
+    lastToastOptions().action!.onClick();
+
+    await waitFor(() => expect(bulk.bulkLicenseAction).toHaveBeenCalled());
+    const formData = bulk.bulkLicenseAction.mock.calls[0]![1] as FormData;
+    expect(formData.get("action")).toBe("restore");
+    expect(formData.getAll("licenseIds")).toEqual(["lic_aaa1", "lic_ccc3"]);
+  });
+
+  it("offers no Undo on a delete", async () => {
+    const { user } = renderList();
+    await user.click(headerCheckbox());
+    await openOverflow(user);
+    await user.click(await screen.findByRole("menuitem", { name: /delete permanently/i }));
+
+    await user.type(screen.getByLabelText(/type/i), "DELETE 3");
+    await user.click(screen.getByRole("button", { name: "Delete permanently" }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(lastToastOptions().action).toBeUndefined();
+  });
+});
+
+describe("bulk deletion", () => {
+  // Delete lives behind the pill's overflow now: the two verbs a developer
+  // came for are visible and the irreversible one costs an extra click.
+  async function clickDelete(user: ReturnType<typeof userEvent.setup>) {
+    await openOverflow(user);
+    await user.click(await screen.findByRole("menuitem", { name: /delete permanently/i }));
   }
 
   async function openDelete(user: ReturnType<typeof userEvent.setup>) {
@@ -301,7 +377,8 @@ describe("bulk deletion", () => {
 describe("metadata export", () => {
   async function clickExport(user: ReturnType<typeof userEvent.setup>, label: RegExp) {
     await user.click(headerCheckbox());
-    await user.click(screen.getByRole("button", { name: label }));
+    await openOverflow(user);
+    await user.click(await screen.findByRole("menuitem", { name: label }));
   }
 
   it("writes a CSV with no column capable of holding a key", async () => {
@@ -332,7 +409,8 @@ describe("metadata export", () => {
   it("sends only the selected ids", async () => {
     const { user } = renderList();
     await user.click(rowCheckbox("License lic_bbb2"));
-    await user.click(screen.getByRole("button", { name: /export csv/i }));
+    await openOverflow(user);
+    await user.click(await screen.findByRole("menuitem", { name: /export csv/i }));
 
     await waitFor(() => expect(bulk.exportSelectionAction).toHaveBeenCalled());
     const formData = bulk.exportSelectionAction.mock.calls[0]![1] as FormData;

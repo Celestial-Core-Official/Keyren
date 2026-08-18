@@ -2,13 +2,21 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Check, Circle, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { CreateLicenseDialog } from "@/components/licenses/create-license-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { writeUiFlag } from "@/lib/preferences";
 import { useUiFlag } from "@/lib/use-preferences";
 import { cn } from "@/lib/utils";
+
+/**
+ * A title, folded into the middle of a sentence. Only the leading character
+ * changes case, so a proper noun further along keeps its capital.
+ */
+function sentenceCase(title: string): string {
+  return title.charAt(0).toLowerCase() + title.slice(1);
+}
 
 /**
  * The three steps between "I have an application" and "my software is licensed".
@@ -80,14 +88,16 @@ export function OnboardingChecklist({
       ),
     },
     {
-      title: "Run one successful verification",
-      description:
-        "Send a real request from the tester in this application's settings. Once one succeeds, your integration works.",
+      title: "Integrate Keyren into your application",
+      description: "Add license verification to your application, then run it successfully.",
+      // Still `hasVerification`, not "opened the integration page": an
+      // activation row is only ever written by a verification that reached
+      // the API and succeeded. Reading a snippet is not an integration.
       done: hasVerification,
       action: (
         <Button asChild size="sm" variant="outline">
-          <Link href={`/dashboard/applications/${applicationId}/settings`}>
-            Go to the tester
+          <Link href={`/dashboard/applications/${applicationId}/integrate`}>
+            View integration
           </Link>
         </Button>
       ),
@@ -103,60 +113,94 @@ export function OnboardingChecklist({
   const nextStep = steps.find((step) => !step.done);
 
   return (
-    <Card className="border-primary/25 bg-primary/[0.03]">
-      <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 pb-3">
-        <div className="space-y-1">
-          <CardTitle className="text-base">Getting started</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            {completed} of {steps.length} done — next up, {nextStep?.title.toLowerCase()}.
-          </p>
+    // A plain card. The tint this used to carry — border-primary/25 over
+    // bg-primary/[0.03] — spent the brand colour on decoration, and the accent
+    // has four jobs: primary fill, focus ring, active nav item, active tab
+    // underline. The progress rail below is a deliberate fifth, because there
+    // it is carrying meaning rather than mood.
+    <Card>
+      <CardHeader className="gap-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <CardTitle className="text-base">Getting started</CardTitle>
+            <p className="text-[13px] text-fg-tertiary">
+              {/* Only the first letter is dropped, not the whole title: a
+                  `toLowerCase()` over the lot turned "Integrate Keyren into
+                  your application" into a sentence that lowercased the
+                  product's own name. */}
+              Next up, {nextStep ? sentenceCase(nextStep.title) : null}.
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0"
+            aria-label="Dismiss getting started"
+            onClick={() => {
+              writeUiFlag(dismissKey, true);
+              setDismissedHere(true);
+            }}
+          >
+            <X className="size-4" />
+          </Button>
         </div>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8 shrink-0"
-          aria-label="Dismiss getting started"
-          onClick={() => {
-            writeUiFlag(dismissKey, true);
-            setDismissedHere(true);
-          }}
-        >
-          <X className="size-4" />
-        </Button>
+        {/* Two pixels of track. The count beside it is the accessible reading
+            of the same fact — the rail is decoration for it, not a substitute,
+            which is why the track is hidden from assistive technology rather
+            than dressed up as a progressbar with a label nobody wrote. */}
+        <div className="flex items-center gap-3">
+          <div
+            aria-hidden="true"
+            className="h-0.5 min-w-0 flex-1 overflow-hidden rounded-full bg-border"
+          >
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-[var(--speed-regular)] ease-[var(--ease-out-quad)]"
+              style={{ width: `${(completed / steps.length) * 100}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-[13px] tabular-nums text-fg-tertiary">
+            {completed} of {steps.length} done
+          </span>
+        </div>
       </CardHeader>
 
       <CardContent>
         <ol className="space-y-3">
           {steps.map((step, index) => (
             <li key={step.title} className="flex flex-wrap items-start gap-3">
+              {/* The numeral moved out of the title and into a fixed-width
+                  rail, so the three steps have a spatial identity and the
+                  titles align. A finished step trades its numeral for a
+                  filled check: its position in the sequence has stopped being
+                  the useful thing about it. */}
               <span
                 aria-hidden="true"
                 className={cn(
-                  "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px]",
+                  "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium tabular-nums",
                   step.done
-                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-400"
-                    : "border-border text-muted-foreground",
+                    ? "bg-success text-background"
+                    : "border border-border text-fg-tertiary",
                 )}
               >
-                {step.done ? <Check className="size-3" /> : <Circle className="size-2 fill-current" />}
+                {step.done ? <Check className="size-3" strokeWidth={3} /> : index + 1}
               </span>
 
               <div className="min-w-0 flex-1 space-y-0.5">
-                <p
-                  className={cn(
-                    "text-sm font-medium",
-                    step.done && "text-muted-foreground line-through",
-                  )}
-                >
+                {/* No strike-through. A line through a completed setup step
+                    reads as "cancelled", not "done" — the check is what says
+                    done, and the title stays at full colour because it is
+                    still the name of a thing that happened. */}
+                <p className="text-sm font-medium">
                   <span className="sr-only">
                     {step.done ? "Completed: " : "Not yet done: "}
                   </span>
-                  {index + 1}. {step.title}
+                  {step.title}
                 </p>
                 {!step.done ? (
-                  <p className="text-sm text-muted-foreground">{step.description}</p>
+                  <p className="text-[13px] text-fg-tertiary">{step.description}</p>
                 ) : null}
               </div>
 

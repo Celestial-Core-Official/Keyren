@@ -30,12 +30,18 @@ beforeEach(() => {
 });
 
 describe("OnboardingChecklist — progress", () => {
-  it("shows all three steps to a brand new application", () => {
+  it("shows all three steps to a brand new application, in order", () => {
     renderChecklist();
 
-    expect(screen.getByText(/1\. Generate a license/)).toBeTruthy();
-    expect(screen.getByText(/2\. Copy an integration example/)).toBeTruthy();
-    expect(screen.getByText(/3\. Run one successful verification/)).toBeTruthy();
+    // The step numerals moved out of the titles and into the rail beside them,
+    // so the steps are identified here by title and by their position in the
+    // list rather than by a "1." the title no longer carries.
+    const items = screen.getAllByRole("listitem");
+
+    expect(items).toHaveLength(3);
+    expect(items[0]?.textContent).toContain("Generate a license");
+    expect(items[1]?.textContent).toContain("Copy an integration example");
+    expect(items[2]?.textContent).toContain("Integrate Keyren into your application");
     expect(screen.getByText(/0 of 3 done/)).toBeTruthy();
   });
 
@@ -49,6 +55,32 @@ describe("OnboardingChecklist — progress", () => {
     // nothing has to be marked complete by hand.
     renderChecklist({ hasLicense: true, hasVerification: true });
     expect(screen.getByText(/2 of 3 done/)).toBeTruthy();
+  });
+
+  it("asks the developer to integrate Keyren, and sends them to the snippets", () => {
+    // Steps one and two done, so the third is the one carrying an action.
+    writeUiFlag(`copied-snippet:${APPLICATION}`, true);
+    renderChecklist({ hasLicense: true });
+
+    expect(
+      screen.getByText("Add license verification to your application, then run it successfully."),
+    ).toBeTruthy();
+
+    const action = screen.getByRole("link", { name: /view integration/i });
+    expect(action.getAttribute("href")).toBe(
+      `/dashboard/applications/${APPLICATION}/integrate`,
+    );
+  });
+
+  it("does not call the integration done because the snippets were read", () => {
+    // The third step points at the same page as the second one. Opening it, or
+    // copying from it, is not a verification — only the API can report that,
+    // and it does so by writing an activation row.
+    writeUiFlag(`copied-snippet:${APPLICATION}`, true);
+    renderChecklist({ hasLicense: true, hasVerification: false });
+
+    expect(screen.getByText(/2 of 3 done/)).toBeTruthy();
+    expect(screen.getAllByText("Not yet done:").length).toBe(1);
   });
 
   it("reads the copied-snippet step from the stored flag", () => {
@@ -148,6 +180,36 @@ describe("OnboardingChecklist — accessibility", () => {
     // Testing Library trims the trailing space these labels carry for speech.
     expect(screen.getByText("Completed:")).toBeTruthy();
     expect(screen.getAllByText("Not yet done:").length).toBeGreaterThan(0);
+  });
+
+  it("marks a done step with a check rather than striking it out", () => {
+    // Strike-through on a completed setup step reads as "cancelled", not
+    // "done", and the title is still the name of something that happened.
+    const { container } = render(
+      <OnboardingChecklist
+        applicationId={APPLICATION}
+        applicationSlug="seliware-key"
+        hasLicense
+        hasVerification={false}
+      />,
+    );
+
+    expect(container.querySelector(".line-through")).toBeNull();
+  });
+
+  it("spends no accent on tinting the card", () => {
+    // The brand colour has four jobs and a fifth — the progress rail — that
+    // carries meaning. Tinting a surface is none of them.
+    const { container } = render(
+      <OnboardingChecklist
+        applicationId={APPLICATION}
+        applicationSlug="seliware-key"
+        hasLicense={false}
+        hasVerification={false}
+      />,
+    );
+
+    expect(container.innerHTML).not.toMatch(/(border|bg|shadow|ring)-primary\//);
   });
 
   it("is an ordered list, because the steps are in order", () => {

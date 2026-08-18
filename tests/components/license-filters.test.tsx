@@ -30,6 +30,22 @@ function lastHref(): string {
   return nav.replace.mock.calls.at(-1)![0] as string;
 }
 
+/**
+ * Picks a value from one of the filter controls.
+ *
+ * These were native `<select>` elements through Alpha_v2 and are Radix now, so
+ * the interaction is open-then-choose rather than `selectOptions`, and the
+ * option is named by its label rather than by its value.
+ */
+async function chooseFilter(
+  user: ReturnType<typeof userEvent.setup>,
+  control: string,
+  option: string,
+): Promise<void> {
+  await user.click(screen.getByLabelText(control));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
 describe("LicenseFilters — search", () => {
   it("does not navigate on every keystroke", async () => {
     const user = renderFilters();
@@ -83,7 +99,7 @@ describe("LicenseFilters — filters preserve one another", () => {
     nav.search = "sort=label&status=revoked";
     const user = renderFilters({ sort: "label", status: "revoked" });
 
-    await user.selectOptions(screen.getByLabelText("Filter by device lock"), "locked");
+    await chooseFilter(user, "Filter by device lock", "Locked to a device");
 
     expect(lastHref()).toContain("sort=label");
     expect(lastHref()).toContain("status=revoked");
@@ -96,7 +112,7 @@ describe("LicenseFilters — filters preserve one another", () => {
     nav.search = "page=4";
     const user = renderFilters({ page: 4 });
 
-    await user.selectOptions(screen.getByLabelText("Filter by status"), "revoked");
+    await chooseFilter(user, "Filter by status", "Revoked");
     expect(lastHref()).not.toContain("page=");
   });
 
@@ -104,7 +120,7 @@ describe("LicenseFilters — filters preserve one another", () => {
     nav.search = "status=revoked";
     const user = renderFilters({ status: "revoked" });
 
-    await user.selectOptions(screen.getByLabelText("Filter by status"), "all");
+    await chooseFilter(user, "Filter by status", "Any status");
     expect(lastHref()).not.toContain("status=");
   });
 
@@ -113,7 +129,7 @@ describe("LicenseFilters — filters preserve one another", () => {
     nav.search = "pageSize=100";
     const user = renderFilters({ pageSize: 100 });
 
-    await user.selectOptions(screen.getByLabelText("Filter by status"), "active");
+    await chooseFilter(user, "Filter by status", "Active");
     expect(lastHref()).toContain("pageSize=100");
   });
 });

@@ -88,7 +88,13 @@ export async function deleteApplicationAction(
   const ownerId = await requireDeveloperId();
 
   const parsed = applicationIdSchema.safeParse(formData.get("applicationId"));
-  if (!parsed.success) return actionFailure("That application is no longer available.");
+  // Reachable only when the form arrived without a well-formed application id,
+  // which is a bug in the page rather than a missing application. Saying "no
+  // longer available" sent the reader to look for a deletion that never
+  // happened.
+  if (!parsed.success) {
+    return actionFailure("That submission arrived without an application. Reload and try again.");
+  }
 
   try {
     await deleteApplication(db, ownerId, parsed.data);
@@ -116,7 +122,13 @@ export async function setApplicationDisabledAction(
   const ownerId = await requireDeveloperId();
 
   const parsed = applicationIdSchema.safeParse(formData.get("applicationId"));
-  if (!parsed.success) return actionFailure("That application is no longer available.");
+  // Reachable only when the form arrived without a well-formed application id,
+  // which is a bug in the page rather than a missing application. Saying "no
+  // longer available" sent the reader to look for a deletion that never
+  // happened.
+  if (!parsed.success) {
+    return actionFailure("That submission arrived without an application. Reload and try again.");
+  }
 
   // The form states the intended end state rather than asking the server to
   // flip whatever it finds. Two tabs open on the same application then agree

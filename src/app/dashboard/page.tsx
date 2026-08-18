@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Package } from "lucide-react";
+import { ChevronRight, Package } from "lucide-react";
 import { db } from "@/db";
 import { requireDeveloperId } from "@/lib/auth/require-developer";
 import {
@@ -8,21 +8,26 @@ import {
   getExpiringSoon,
   getOverviewStats,
 } from "@/lib/licenses/query";
+import { KeyGlyph } from "@/lib/design/key-glyph";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { MetricStrip, share, type Metric } from "@/components/dashboard/metric-strip";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { RelativeTime } from "@/components/dashboard/relative-time";
 import { CreateApplicationDialog } from "@/components/applications/create-application-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 /**
  * The page you land on after signing in.
  *
  * Through Alpha_v1 this was two numbers — applications and licenses — and
- * nothing else, which gave nobody a reason to come back to it. It now leads
- * with the one thing worth acting on before a customer writes in: what is
- * about to expire.
+ * nothing else, which gave nobody a reason to come back to it. Alpha_v2 grew
+ * that into six equally-weighted stat cards, which is the same problem wearing
+ * more chrome: six facts of identical visual weight tell a reader nothing
+ * about which one to look at.
+ *
+ * The numbers are now a reference rail, and the page leads with the one thing
+ * worth acting on before a customer writes in: what is about to expire.
  */
 export default async function OverviewPage() {
   const ownerId = await requireDeveloperId();
@@ -40,7 +45,7 @@ export default async function OverviewPage() {
         <PageHeader title="Overview" />
         <EmptyState
           icon={<Package className="size-5" />}
-          title="Create your first application"
+          title="No Applications Yet"
           description="An application gives you a permanent ID. Your software sends it with every license check, and it never changes — not even if you rename the application."
           action={<CreateApplicationDialog />}
         />
@@ -48,16 +53,25 @@ export default async function OverviewPage() {
     );
   }
 
-  // Zeroes are dropped rather than shown: a row of them teaches the developer
-  // to stop reading the row. Same convention as the application overview.
-  const tiles = [
-    { label: "Applications", value: stats.applications, always: true },
-    { label: "Licenses", value: stats.total, always: true },
-    { label: "Active", value: stats.active, always: true },
-    { label: "Expiring soon", value: stats.expiringSoon, always: false },
-    { label: "Expired", value: stats.expired, always: false },
-    { label: "Revoked", value: stats.revoked, always: false },
-  ].filter((tile) => tile.always || tile.value > 0);
+  // Primary counts always render: `0 licenses` is informative, and a developer
+  // who has just created an application needs to see that the count is zero.
+  // Derived states are dropped when empty — a column of zeroes beside Expired
+  // and Revoked teaches the reader to stop reading the rail.
+  const metrics: Metric[] = [
+    { label: "Applications", value: stats.applications },
+    { label: "Licenses", value: stats.total },
+    { label: "Active", value: stats.active, detail: share(stats.active, stats.total) },
+  ];
+
+  if (stats.expiringSoon > 0) {
+    metrics.push({
+      label: `Expiring ${EXPIRING_SOON_DAYS}d`,
+      value: stats.expiringSoon,
+      tone: "warning",
+    });
+  }
+  if (stats.expired > 0) metrics.push({ label: "Expired", value: stats.expired });
+  if (stats.revoked > 0) metrics.push({ label: "Revoked", value: stats.revoked });
 
   return (
     <div className="space-y-8">
@@ -70,47 +84,55 @@ export default async function OverviewPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        {tiles.map((tile) => (
-          <Card key={tile.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {tile.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-semibold tabular-nums">{tile.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <MetricStrip metrics={metrics} />
 
       {expiring.length > 0 ? (
         <section className="space-y-3">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-sm font-medium">Expiring soon</h2>
-            <span className="text-xs text-muted-foreground">
-              Next {EXPIRING_SOON_DAYS} days
+            <h2 className="text-[13px] font-semibold">
+              Expiring soon{" "}
+              <span className="font-normal tabular-nums text-fg-tertiary">
+                · {stats.expiringSoon}
+              </span>
+            </h2>
+            <span className="text-[13px] text-fg-tertiary">
+              {/* The query returns the soonest handful rather than everything
+                  in the window, and the heading counts the whole window. Say
+                  which is which rather than letting the two numbers disagree
+                  silently. */}
+              {stats.expiringSoon > expiring.length
+                ? `Soonest ${expiring.length}, next ${EXPIRING_SOON_DAYS} days`
+                : `Next ${EXPIRING_SOON_DAYS} days`}
             </span>
           </div>
-          <ul className="divide-y divide-border rounded-lg border border-border">
+          <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
             {expiring.map((license) => (
-              <li
-                key={license.id}
-                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3"
-              >
-                <div className="min-w-0">
-                  {/* Straight into that application's licenses, pre-filtered to
-                      this key — the point of surfacing it is to act on it. */}
-                  <Link
-                    href={`/dashboard/applications/${license.applicationId}/licenses?q=${license.keyLast4}`}
-                    className="text-sm hover:underline"
-                  >
-                    {license.label ?? `Unlabeled license ••••${license.keyLast4}`}
-                  </Link>
-                  <p className="text-xs text-muted-foreground">{license.applicationName}</p>
-                </div>
-                <RelativeTime value={license.expiresAt} />
+              <li key={license.id}>
+                {/* Straight into that application's licenses, pre-filtered to
+                    this key — the point of surfacing it is to act on it. */}
+                <Link
+                  href={`/dashboard/applications/${license.applicationId}/licenses?q=${license.keyLast4}`}
+                  className="group flex h-14 items-center gap-4 px-4 transition-colors duration-[var(--speed-quick)] hover:bg-accent/60"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm">
+                      {license.label ?? `Unlabeled license ••••${license.keyLast4}`}
+                    </span>
+                    <span className="block truncate text-[13px] text-fg-tertiary">
+                      {license.applicationName}
+                    </span>
+                  </span>
+                  {/* Amber is the counter-signal and it is carrying meaning
+                      here: this date is the reason the row is on the page. */}
+                  <RelativeTime
+                    value={license.expiresAt}
+                    className="shrink-0 text-[13px] text-warning"
+                  />
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="size-4 shrink-0 text-fg-quaternary opacity-0 transition-opacity duration-[var(--speed-quick)] group-hover:opacity-100 group-focus-visible:opacity-100"
+                  />
+                </Link>
               </li>
             ))}
           </ul>
@@ -118,24 +140,23 @@ export default async function OverviewPage() {
       ) : null}
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium">Applications</h2>
-        <ul className="divide-y divide-border rounded-lg border border-border">
+        <h2 className="text-[13px] font-semibold">Applications</h2>
+        {/* A census, not a menu. Picking an application happens in the header
+            chooser and nowhere else; these rows report. */}
+        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
           {breakdown.map((application) => (
-            <li key={application.id}>
-              <Link
-                href={`/dashboard/applications/${application.id}`}
-                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 hover:bg-accent/50"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="truncate text-sm">{application.name}</span>
-                  {application.disabled ? (
-                    <Badge variant="destructive">Disabled</Badge>
-                  ) : null}
-                </span>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {application.active} active / {application.total}
-                </span>
-              </Link>
+            <li key={application.id} className="flex h-14 items-center gap-3 px-4">
+              {/* The same mark this application wears everywhere else, drawn
+                  from its public ID. Two applications are told apart at a
+                  glance by it before either name has been read. */}
+              <KeyGlyph seed={application.id} size={28} className="shrink-0" />
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                <span className="truncate text-sm">{application.name}</span>
+                {application.disabled ? <Badge variant="destructive">Disabled</Badge> : null}
+              </span>
+              <span className="shrink-0 text-[13px] tabular-nums text-fg-tertiary">
+                {application.active} active / {application.total}
+              </span>
             </li>
           ))}
         </ul>

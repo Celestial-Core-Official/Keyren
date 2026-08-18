@@ -1,12 +1,17 @@
 # Keyren — Build Progress & Handoff
 
 **Last updated:** 2026-08-15
-**Current release:** `Alpha_v2` (package `0.1.2`) — private/testing release.
+**Current release:** `Alpha_v3` (package `0.1.3`) — private/testing release.
 Never call it "v2" in application UI; `/api/v1/...` is versioned separately and did
 not move.
 
 > **If you are a new assistant picking this up (ChatGPT, a fresh Claude session, a human):**
 >
+> - **`Alpha_v3` is complete.** It is a pure visual redesign — new token layer,
+>   typography, landing page and every dashboard surface — with no change to the
+>   public API, the schema, or the product's capabilities. What it changed is in
+>   [`docs/alpha-v3.md`](docs/alpha-v3.md), its design of record is
+>   [`docs/superpowers/specs/2026-08-17-keyren-alpha-v3-design.md`](docs/superpowers/specs/2026-08-17-keyren-alpha-v3-design.md).
 > - **`Alpha_v2` is complete.** What it changed is in
 >   [`docs/alpha-v2.md`](docs/alpha-v2.md); its security review is in
 >   [`docs/security-review-alpha-v2.md`](docs/security-review-alpha-v2.md).
@@ -154,6 +159,14 @@ Do not remove `!.env.example` and do not rename the file, or it silently stops b
 
 - Vitest prints an *"ESM syntax in a file loaded as CommonJS"* warning on every run. Cosmetic — `package.json` has no `"type": "module"`. Not worth fixing mid-build; it could ripple into the `.mjs` configs.
 - `npm audit` reports **4 moderate** esbuild advisories, transitive via `drizzle-kit@0.31.10`'s bundled dev-server tooling. **Dev-only, not exploitable in production.** `npm audit fix --force` downgrades drizzle-kit to 0.18.1, which would break the schema/migration tasks. Left as-is deliberately.
+
+### Radix primitives that render a `<button>` may not be nested
+
+`Switch`, `AlertDialogAction`, `AlertDialogCancel`, `DropdownMenuTrigger` and `Button` each render a `<button>`. Nesting any of them inside another produces invalid HTML, and the browser's parser resolves it by closing the outer element and re-parenting the inner one as a sibling — so the server-rendered DOM does not match what React sent, and hydration recovers a tree the markup never had.
+
+Only server-rendered markup shows the damage. A component test renders through `appendChild`, which has no such rule and nests the two happily, so this class of defect passes every test that renders and clicks. Assert on `renderToStaticMarkup` output when a control could plausibly be nesting one.
+
+To attach a form submission to a Radix control, give the form a ref and call `requestSubmit()` from the control's own handler. The form then lives outside any menu or dialog that closes on select, so closing cannot take the submission with it.
 
 ### Not available on this machine
 

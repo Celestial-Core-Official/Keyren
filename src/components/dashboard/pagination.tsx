@@ -3,6 +3,13 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useQueryParams } from "@/components/dashboard/use-query-params";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PAGE_SIZES, type PageSize } from "@/lib/licenses/types";
 
 /**
@@ -34,12 +41,15 @@ export function Pagination({
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-      <p className="text-sm text-muted-foreground" aria-live="polite">
+      {/* `21–40 of 142`, with an en dash and without "Showing". The verb was
+          doing no work: a readout beneath a list is self-evidently describing
+          the list. */}
+      <p className="text-sm text-fg-tertiary" aria-live="polite">
         {total === 0 ? (
           "No licenses"
         ) : (
           <>
-            Showing <span className="tabular-nums text-foreground">{first}</span>–
+            <span className="tabular-nums text-foreground">{first}</span>–
             <span className="tabular-nums text-foreground">{last}</span> of{" "}
             <span className="tabular-nums text-foreground">{total}</span>
           </>
@@ -47,24 +57,33 @@ export function Pagination({
       </p>
 
       <div className="flex items-center gap-3">
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="hidden sm:inline">Per page</span>
-          <select
-            value={pageSize}
+        {/* A <label> cannot label a Radix trigger — the trigger is a button,
+            which is not a labelable element — so the visible words are a plain
+            caption and the accessible name lives on the trigger itself, where
+            it is also there for the viewport that hides the caption. */}
+        <div className="flex items-center gap-2 text-sm text-fg-tertiary">
+          <span aria-hidden="true" className="hidden sm:inline">
+            Per page
+          </span>
+          <Select
+            value={String(pageSize)}
             // Back to page one: page 4 of a 25-per-page list frequently does
             // not exist at 100 per page, and landing on an empty page reads
             // as data loss.
-            onChange={(event) => setParams({ pageSize: event.target.value, page: null })}
-            className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
-            aria-label="Licenses per page"
+            onValueChange={(next) => setParams({ pageSize: next, page: null })}
           >
-            {PAGE_SIZES.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger aria-label="Licenses per page" className="tabular-nums">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZES.map((size) => (
+                <SelectItem key={size} value={String(size)} className="tabular-nums">
+                  {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         <div className="flex items-center gap-1">
           <Button
@@ -79,8 +98,10 @@ export function Pagination({
             <span className="hidden sm:inline">Previous</span>
           </Button>
 
-          <span className="px-1 text-sm whitespace-nowrap text-muted-foreground tabular-nums">
-            {page} / {pageCount}
+          {/* `Page 2 of 7`, not `2 / 7`: a bare fraction beside two arrows
+              reads as a ratio until you work out that it is not one. */}
+          <span className="px-1 text-sm whitespace-nowrap text-fg-tertiary tabular-nums">
+            Page {page} of {pageCount}
           </span>
 
           <Button

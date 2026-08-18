@@ -59,12 +59,26 @@ export default async function LicensesPage({
       {(!empty || filtering) && <LicenseFilters query={query} total={page.total} />}
 
       {empty && filtering ? (
-        <EmptyState
-          icon={<SearchX className="size-5" />}
-          title="No licenses match these filters"
-          description="Nothing here fits the current search and filters. Widen them, or clear them to see every license for this application."
-          action={<ClearFiltersLink />}
-        />
+        // Wrapped in the same shell the table would have occupied, so the
+        // block sits where the rows were rather than floating in the gap, and
+        // announced politely because it replaces content that was there a
+        // keystroke ago.
+        <div aria-live="polite" className="rounded-lg border border-border">
+          <EmptyState
+            variant="no-results"
+            icon={<SearchX className="size-5" />}
+            title="No matching licenses"
+            // The query is quoted back verbatim: a developer who typed a
+            // trailing space or a stray character finds it here rather than
+            // concluding the licence is gone.
+            description={
+              query.q === ""
+                ? "Nothing here fits the current filters. Widen them, or clear them to see every license for this application."
+                : `No licenses match “${query.q}”. Clear the filters to see every license for this application.`
+            }
+            action={<ClearFiltersLink />}
+          />
+        </div>
       ) : empty ? (
         <EmptyState
           icon={<KeyRound className="size-5" />}

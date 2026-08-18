@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Kbd } from "@/components/ui/kbd";
 import { Label } from "@/components/ui/label";
 import { idleAction } from "@/lib/actions/state";
 
@@ -137,9 +138,14 @@ export function CreateApplicationDialog({
           <Button size="sm" className="gap-1.5" data-keyren-create="application">
             <Plus className="size-4" />
             New application
-            <kbd className="ml-1 hidden rounded border border-primary-foreground/25 px-1 font-mono text-[10px] sm:inline">
+            {/* The shared chip rather than a bespoke one: sans, 12px, 4px
+                radius, one height everywhere the product shows a binding.
+                Recoloured for a primary fill, which is the only surface in
+                the app where a Kbd sits on the accent rather than on a
+                page. */}
+            <Kbd className="ml-1 hidden border-primary-foreground/30 bg-transparent text-primary-foreground/80 sm:inline-flex">
               N
-            </kbd>
+            </Kbd>
           </Button>
         </DialogTrigger>
       ) : null}

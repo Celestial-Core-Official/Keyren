@@ -1,8 +1,6 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -12,17 +10,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { SettingRow, SettingSection } from "@/components/settings/setting-row";
 import { DURATION_OPTIONS, type DurationValue } from "@/lib/licenses/expiration";
 import {
@@ -32,7 +19,6 @@ import {
   type PageSize,
 } from "@/lib/licenses/types";
 import {
-  clearStoredPreferences,
   getDisplayServerSnapshot,
   getDisplaySnapshot,
   getGlobalDefaultsServerSnapshot,
@@ -55,8 +41,7 @@ export function PreferencesSettings() {
   // Storage is external mutable state, so it is subscribed to rather than
   // copied into component state. React renders the server snapshot during
   // hydration and swaps to the stored values immediately after, and a write
-  // anywhere — including the reset below — re-renders this without any of it
-  // being wired up by hand.
+  // anywhere re-renders this without any of it being wired up by hand.
   const defaults = useSyncExternalStore(
     subscribePreferences,
     getGlobalDefaultsSnapshot,
@@ -78,10 +63,7 @@ export function PreferencesSettings() {
 
   return (
     <>
-      <SettingSection
-        title="New license defaults"
-        description="Applied to an application that has not issued a license yet. An application keeps whatever it was last used with."
-      >
+      <SettingSection title="New license defaults">
         <SettingRow label="Expiration" htmlFor="default-mode">
           <Select
             value={defaults.mode}
@@ -176,51 +158,13 @@ export function PreferencesSettings() {
 
         <SettingRow
           label="Show local time"
-          hint="Adds your timezone beneath each UTC timestamp. UTC stays the primary reading."
+          hint="Adds your timezone beneath each timestamp."
         >
           <Switch
             checked={display.showLocalTime}
             onCheckedChange={(checked) => updateDisplay({ showLocalTime: checked })}
             aria-label="Show local time alongside UTC"
           />
-        </SettingRow>
-      </SettingSection>
-
-      <SettingSection title="Stored data">
-        <SettingRow
-          label="Remembered settings"
-          hint="Per-application creation settings and dismissed cards, kept in this browser."
-        >
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm">
-                Reset
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Reset remembered settings?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Clears creation settings for every application, these defaults, and any
-                  dismissed onboarding card. No license or application is affected.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => {
-                    // No local state to resync: the store notifies every
-                    // subscriber, so this component and any other reading
-                    // preferences both re-render on their own.
-                    clearStoredPreferences();
-                    toast.success("Remembered settings cleared");
-                  }}
-                >
-                  Reset
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </SettingRow>
       </SettingSection>
     </>

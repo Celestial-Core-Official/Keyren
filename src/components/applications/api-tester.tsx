@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, FlaskConical, RefreshCw } from "lucide-react";
+import { FlaskConical, RefreshCw } from "lucide-react";
 import { SubmitButton } from "@/components/dashboard/feedback";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Note } from "@/components/ui/note";
 import { VERIFY_PATH } from "@/lib/release";
 import { cn } from "@/lib/utils";
 
@@ -169,17 +170,11 @@ export function ApiTester({ applicationId }: { applicationId: string }) {
             </label>
           </div>
 
-          <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-sm">
-            <AlertTriangle
-              aria-hidden="true"
-              className="mt-0.5 size-4 shrink-0 text-amber-500"
-            />
-            <p className="text-muted-foreground">
-              Testing a device-locked license <strong>claims it</strong>. An unactivated
-              key binds to this test, and the customer gets DEVICE_MISMATCH until you
-              reset it.
-            </p>
-          </div>
+          <Note tone="warning" label="This is the real endpoint">
+            Testing a device-locked license <strong className="font-medium">claims it</strong>.
+            An unactivated key binds to this test, and the customer gets DEVICE_MISMATCH
+            until you reset it.
+          </Note>
 
           <div className="flex items-center gap-2">
             <SubmitButton disabled={running || licenseKey.trim() === ""} pendingLabel="Sending…">
@@ -214,35 +209,41 @@ export function ApiTester({ applicationId }: { applicationId: string }) {
 
           {result ? (
             <>
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <span
-                  className={cn(
-                    "rounded-md px-2 py-0.5 font-mono text-xs",
-                    result.ok
-                      ? "bg-emerald-500/15 text-emerald-400"
-                      : "bg-destructive/15 text-destructive",
-                  )}
-                >
-                  HTTP {result.status}
-                </span>
-                <span className="text-muted-foreground tabular-nums">
-                  {result.durationMs} ms
-                </span>
-                {result.headers.map((header) => (
-                  <span key={header.name} className="font-mono text-xs text-muted-foreground">
-                    {header.name}: {header.value}
+              {/* One container: a response header bar over the body, matching
+                  the shape of the code card on the Integrate page so the two
+                  surfaces rhyme. */}
+              <div className="overflow-hidden rounded-lg border border-border bg-surface-2">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-3 py-2 font-mono text-[12px]">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        result.ok ? "bg-success" : "bg-destructive",
+                      )}
+                      aria-hidden="true"
+                    />
+                    <span className={result.ok ? "text-success" : "text-destructive"}>
+                      HTTP {result.status}
+                    </span>
                   </span>
-                ))}
-                {!result.parsed ? (
-                  <span className="text-xs text-amber-400">
-                    Response was not JSON — shown verbatim
+                  <span className="text-fg-quaternary" aria-hidden="true">
+                    ·
                   </span>
-                ) : null}
-              </div>
+                  <span className="text-fg-tertiary tabular-nums">{result.durationMs} ms</span>
+                  {result.headers.map((header) => (
+                    <span key={header.name} className="truncate text-fg-quaternary">
+                      {header.name}: {header.value}
+                    </span>
+                  ))}
+                  {!result.parsed ? (
+                    <span className="text-warning">Not JSON — shown verbatim</span>
+                  ) : null}
+                </div>
 
-              <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-muted/40 p-3 text-xs leading-relaxed">
-                <code>{result.body}</code>
-              </pre>
+                <pre className="max-h-72 overflow-auto px-3 py-2.5 font-mono text-[13px] leading-5">
+                  <code>{result.body}</code>
+                </pre>
+              </div>
 
               {result.status === 403 && result.body.includes("DEVICE_MISMATCH") ? (
                 <p className="text-sm text-muted-foreground">

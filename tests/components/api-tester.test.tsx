@@ -194,7 +194,10 @@ describe("ApiTester — results", () => {
     await sendRequest();
 
     expect(await screen.findByText("HTTP 502")).toBeTruthy();
-    expect(screen.getByText(/was not JSON/i)).toBeTruthy();
+    // The warning is still shown; Alpha_v3 shortened its wording to fit the
+    // response header bar. What matters is that a non-JSON body is flagged
+    // rather than silently rendered as if it had parsed.
+    expect(screen.getByText(/not JSON/i)).toBeTruthy();
     expect(document.body.textContent).toContain("502 Bad Gateway");
   });
 
