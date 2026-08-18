@@ -51,6 +51,7 @@ export default async function ApplicationSettingsPage({
 
       <ApplicationStatusSetting
         applicationId={application.id}
+        name={application.name}
         disabled={application.disabledAt !== null}
       />
 
