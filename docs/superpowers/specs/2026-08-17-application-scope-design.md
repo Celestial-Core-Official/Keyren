@@ -99,6 +99,8 @@ A server action called from the chooser would catch only the first of those.
 - Name: `keyren_app`. Value: the raw application id from the path.
 - Written only when the path carries an id **and** the cookie does not already hold it, so ordinary
   navigation inside one application does not rewrite it on every request.
+- Also skipped when the request carries Next's `next-router-prefetch` or `next-router-segment-prefetch`
+  header — a `<Link>` prefetches once it is merely in the viewport, and that request is not a visit.
 - `httpOnly`, `sameSite: "lax"`, `secure` outside development, `path: "/dashboard"`.
 - Never written on a path that has no application id. Leaving an application does not clear the
   memory of it — that is the entire point.

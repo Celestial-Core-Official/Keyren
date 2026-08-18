@@ -41,10 +41,29 @@ export default clerkMiddleware(
     if (applicationId === null) return;
     if (request.cookies.get(CURRENT_APPLICATION_COOKIE)?.value === applicationId) return;
 
+    // A `<Link>` sitting in the viewport, or merely hovered, fires this same
+    // request before anyone has clicked anything — Next's router tags it with
+    // one of these headers depending on which prefetch path it took. Treating a
+    // real visit as a prefetch by mistake only costs one skipped write: the URL
+    // still wins for that render, and the next ordinary request into the
+    // application writes the cookie anyway. Treating a prefetch as a real visit
+    // is the actual bug — nothing downstream corrects it, and the header ends
+    // up naming an application nobody chose. So on any doubt, this treats the
+    // request as a prefetch.
+    if (
+      request.headers.get("next-router-prefetch") ||
+      request.headers.get("next-router-segment-prefetch")
+    ) {
+      return;
+    }
+
     const response = NextResponse.next();
     response.cookies.set(CURRENT_APPLICATION_COOKIE, applicationId, {
       httpOnly: true,
       sameSite: "lax",
+      // Not `env.ts`: that module eagerly validates its whole schema
+      // (DATABASE_URL, the license secret, Clerk's key) at import, which would
+      // run on the Edge runtime on every dashboard request for one build-time flag.
       secure: process.env.NODE_ENV === "production",
       path: "/dashboard",
       maxAge: 60 * 60 * 24 * 365,
