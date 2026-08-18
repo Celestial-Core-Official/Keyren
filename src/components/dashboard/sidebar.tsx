@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Code2, KeyRound, LayoutGrid, Package, Settings, SlidersHorizontal } from "lucide-react";
+import { applicationIdFromPath } from "@/lib/applications/current";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -32,12 +33,14 @@ const SECTION =
 const ROW =
   "flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] transition-colors duration-[var(--speed-quick)]";
 
-/** Matches /dashboard/applications/<id>, capturing the id and nothing deeper. */
-const APPLICATION_PATH = /^\/dashboard\/applications\/([^/]+)/;
-
-export function DashboardSidebar() {
+export function DashboardSidebar({ fallbackId }: { fallbackId: string | null }) {
   const pathname = usePathname();
-  const applicationId = APPLICATION_PATH.exec(pathname)?.[1];
+
+  // The application group used to appear only inside an application. An
+  // application is now always in scope, so the navigation that belongs to one
+  // is always applicable — and a sidebar whose second half appears and
+  // disappears is a sidebar that moves under the cursor.
+  const applicationId = applicationIdFromPath(pathname) ?? fallbackId;
 
   function rowClass(active: boolean) {
     return cn(

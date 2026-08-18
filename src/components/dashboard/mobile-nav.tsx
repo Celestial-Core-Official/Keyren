@@ -12,6 +12,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import type { SwitchableApplication } from "@/components/dashboard/application-switcher";
+import { applicationIdFromPath } from "@/lib/applications/current";
 import { cn } from "@/lib/utils";
 
 const PRIMARY = [
@@ -21,25 +23,19 @@ const PRIMARY = [
 ] as const;
 
 /**
- * Extracts the application being viewed from the path.
- *
- * Read from the URL rather than threaded down as a prop: this component lives
- * in the dashboard layout, which sits above the application layout that knows the
- * application, and inverting that just to label two links would be a lot of
- * plumbing for a string already present in the address bar.
- */
-export function currentApplicationId(pathname: string): string | null {
-  return /^\/dashboard\/applications\/(app_[0-9A-Za-z]+)(\/|$)/.exec(pathname)?.[1] ?? null;
-}
-
-/**
  * Navigation for screens too narrow for the sidebar.
  *
  * Built on Radix's Dialog rather than a hand-rolled drawer, which brings the
  * focus trap, the Escape handling and — the part usually forgotten — focus
  * restoration back to the trigger on close.
  */
-export function MobileNav() {
+export function MobileNav({
+  applications,
+  fallbackId,
+}: {
+  applications: readonly SwitchableApplication[];
+  fallbackId: string | null;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -56,7 +52,10 @@ export function MobileNav() {
     setOpen(false);
   }
 
-  const applicationId = currentApplicationId(pathname);
+  // Always in scope now, so the panel names it rather than leaving the reader
+  // to infer which application these two links belong to.
+  const applicationId = applicationIdFromPath(pathname) ?? fallbackId;
+  const application = applications.find((candidate) => candidate.id === applicationId) ?? null;
 
   function isActive(href: string, exact: boolean): boolean {
     return exact ? pathname === href : pathname.startsWith(href);
@@ -107,7 +106,7 @@ export function MobileNav() {
           {applicationId ? (
             <>
               <p className="mt-4 px-3 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                This application
+                {application?.name ?? "This application"}
               </p>
 
               <Link

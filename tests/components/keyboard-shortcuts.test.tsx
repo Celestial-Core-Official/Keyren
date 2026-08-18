@@ -5,7 +5,6 @@ import {
   KeyboardShortcuts,
   isTypingInFormField,
 } from "@/components/dashboard/keyboard-shortcuts";
-import { currentApplicationId } from "@/components/dashboard/mobile-nav";
 
 function Page({ onCreate = vi.fn() }: { onCreate?: () => void } = {}) {
   return (
@@ -160,27 +159,3 @@ describe("isTypingInFormField", () => {
   });
 });
 
-describe("currentApplicationId", () => {
-  it("finds the application on an overview path", () => {
-    expect(currentApplicationId("/dashboard/applications/app_abc123")).toBe("app_abc123");
-  });
-
-  it("finds the application on a nested path", () => {
-    expect(currentApplicationId("/dashboard/applications/app_abc123/licenses")).toBe(
-      "app_abc123",
-    );
-  });
-
-  it("returns nothing on the applications list itself", () => {
-    expect(currentApplicationId("/dashboard/applications")).toBeNull();
-  });
-
-  it("returns nothing elsewhere in the dashboard", () => {
-    expect(currentApplicationId("/dashboard")).toBeNull();
-    expect(currentApplicationId("/dashboard/settings")).toBeNull();
-  });
-
-  it("ignores a path that only looks like an application id", () => {
-    expect(currentApplicationId("/dashboard/applications/not-a-application")).toBeNull();
-  });
-});
