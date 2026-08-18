@@ -11,6 +11,14 @@ import { useUiFlag } from "@/lib/use-preferences";
 import { cn } from "@/lib/utils";
 
 /**
+ * A title, folded into the middle of a sentence. Only the leading character
+ * changes case, so a proper noun further along keeps its capital.
+ */
+function sentenceCase(title: string): string {
+  return title.charAt(0).toLowerCase() + title.slice(1);
+}
+
+/**
  * The three steps between "I have an application" and "my software is licensed".
  *
  * Two of the three are derived from real data rather than remembered: a
@@ -80,14 +88,16 @@ export function OnboardingChecklist({
       ),
     },
     {
-      title: "Run one successful verification",
-      description:
-        "Send a real request from the tester in this application's settings. Once one succeeds, your integration works.",
+      title: "Integrate Keyren into your application",
+      description: "Add license verification to your application, then run it successfully.",
+      // Still `hasVerification`, not "opened the integration page": an
+      // activation row is only ever written by a verification that reached
+      // the API and succeeded. Reading a snippet is not an integration.
       done: hasVerification,
       action: (
         <Button asChild size="sm" variant="outline">
-          <Link href={`/dashboard/applications/${applicationId}/settings`}>
-            Go to the tester
+          <Link href={`/dashboard/applications/${applicationId}/integrate`}>
+            View integration
           </Link>
         </Button>
       ),
@@ -114,7 +124,11 @@ export function OnboardingChecklist({
           <div className="space-y-1">
             <CardTitle className="text-base">Getting started</CardTitle>
             <p className="text-[13px] text-fg-tertiary">
-              Next up, {nextStep?.title.toLowerCase()}.
+              {/* Only the first letter is dropped, not the whole title: a
+                  `toLowerCase()` over the lot turned "Integrate Keyren into
+                  your application" into a sentence that lowercased the
+                  product's own name. */}
+              Next up, {nextStep ? sentenceCase(nextStep.title) : null}.
             </p>
           </div>
 

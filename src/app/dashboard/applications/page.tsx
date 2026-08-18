@@ -94,7 +94,6 @@ export default async function ApplicationsPage({
         <EmptyState
           icon={<Package className="size-5" />}
           title="No Applications Yet"
-          description="An application gives you a permanent application ID. Your software sends that ID with every license check, and it never changes — not even if you rename the application."
           action={<CreateApplicationDialog />}
         />
       ) : (

@@ -42,7 +42,8 @@ export function EmptyState({
 }: {
   icon?: React.ReactNode;
   title: string;
-  description: string;
+  /** Optional: a title that already says everything needs no second sentence. */
+  description?: string;
   action?: React.ReactNode;
   secondary?: React.ReactNode;
   variant?: EmptyStateVariant;
@@ -73,9 +74,11 @@ export function EmptyState({
             weight inside a 48px-padded card was the quietest thing on the
             screen at the moment it had the most to say. */}
         <p className="text-base font-semibold">{title}</p>
-        <p className="mx-auto max-w-md text-sm text-balance text-fg-tertiary">
-          {description}
-        </p>
+        {description ? (
+          <p className="mx-auto max-w-md text-sm text-balance text-fg-tertiary">
+            {description}
+          </p>
+        ) : null}
       </div>
 
       {action || secondary ? (

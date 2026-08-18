@@ -41,7 +41,7 @@ describe("OnboardingChecklist — progress", () => {
     expect(items).toHaveLength(3);
     expect(items[0]?.textContent).toContain("Generate a license");
     expect(items[1]?.textContent).toContain("Copy an integration example");
-    expect(items[2]?.textContent).toContain("Run one successful verification");
+    expect(items[2]?.textContent).toContain("Integrate Keyren into your application");
     expect(screen.getByText(/0 of 3 done/)).toBeTruthy();
   });
 
@@ -55,6 +55,32 @@ describe("OnboardingChecklist — progress", () => {
     // nothing has to be marked complete by hand.
     renderChecklist({ hasLicense: true, hasVerification: true });
     expect(screen.getByText(/2 of 3 done/)).toBeTruthy();
+  });
+
+  it("asks the developer to integrate Keyren, and sends them to the snippets", () => {
+    // Steps one and two done, so the third is the one carrying an action.
+    writeUiFlag(`copied-snippet:${APPLICATION}`, true);
+    renderChecklist({ hasLicense: true });
+
+    expect(
+      screen.getByText("Add license verification to your application, then run it successfully."),
+    ).toBeTruthy();
+
+    const action = screen.getByRole("link", { name: /view integration/i });
+    expect(action.getAttribute("href")).toBe(
+      `/dashboard/applications/${APPLICATION}/integrate`,
+    );
+  });
+
+  it("does not call the integration done because the snippets were read", () => {
+    // The third step points at the same page as the second one. Opening it, or
+    // copying from it, is not a verification — only the API can report that,
+    // and it does so by writing an activation row.
+    writeUiFlag(`copied-snippet:${APPLICATION}`, true);
+    renderChecklist({ hasLicense: true, hasVerification: false });
+
+    expect(screen.getByText(/2 of 3 done/)).toBeTruthy();
+    expect(screen.getAllByText("Not yet done:").length).toBe(1);
   });
 
   it("reads the copied-snippet step from the stored flag", () => {
